@@ -2,8 +2,9 @@ const { createApp, ref, computed, onMounted, nextTick } = Vue;
 const { createRouter, createWebHashHistory } = VueRouter;
 
 // 版本控制
-const APP_VERSION = '1.0.0';
-const GITHUB_REPO = 'https://api.github.com/repos/yourusername/mymoney888/releases/latest';
+const APP_VERSION = '1.1.0';
+const GITHUB_REPO = 'https://api.github.com/repos/srcuman/mymoney888/releases/latest';
+const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/srcuman/mymoney888/main';
 
 // 检查版本更新
 const checkForUpdates = async () => {
@@ -16,7 +17,9 @@ const checkForUpdates = async () => {
         return {
           hasUpdate: true,
           version: latestVersion,
-          url: data.html_url
+          url: data.html_url,
+          releaseNotes: data.body || '暂无更新说明',
+          publishDate: data.published_at
         };
       }
     }
@@ -24,6 +27,38 @@ const checkForUpdates = async () => {
     console.log('版本检查失败:', error);
   }
   return { hasUpdate: false };
+};
+
+// 下载并更新应用文件
+const downloadUpdate = async (version) => {
+  try {
+    // 下载最新的app.js
+    const appJsUrl = `${GITHUB_RAW_URL}/dist/app.js`;
+    const response = await fetch(appJsUrl);
+    if (response.ok) {
+      const newCode = await response.text();
+      // 存储新版本代码到localStorage
+      localStorage.setItem('pendingUpdate', JSON.stringify({
+        version: version,
+        code: newCode,
+        timestamp: Date.now()
+      }));
+      return { success: true };
+    }
+  } catch (error) {
+    console.log('下载更新失败:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// 应用更新
+const applyUpdate = () => {
+  const pendingUpdate = localStorage.getItem('pendingUpdate');
+  if (pendingUpdate) {
+    const update = JSON.parse(pendingUpdate);
+    // 刷新页面以应用更新
+    window.location.reload();
+  }
 };
 
 // 版本比较函数
@@ -3418,19 +3453,48 @@ const App = {
       
       <!-- 版本升级提示模态框 -->
       <div v-if="showUpdateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-6 w-96">
+        <div class="bg-white rounded-lg p-6 w-[500px] max-h-[80vh] overflow-y-auto">
           <div class="flex items-center mb-4">
             <i class="fas fa-bell text-yellow-500 text-2xl mr-3"></i>
             <h3 class="text-lg font-bold text-gray-900">发现新版本</h3>
           </div>
-          <p class="text-gray-600 mb-4">当前版本: {{ currentVersion }}</p>
-          <p class="text-gray-600 mb-4">最新版本: {{ latestVersion }}</p>
+          <div class="space-y-3 mb-4">
+            <div class="flex justify-between">
+              <span class="text-gray-600">当前版本:</span>
+              <span class="font-medium">{{ currentVersion }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">最新版本:</span>
+              <span class="font-medium text-primary">{{ latestVersion }}</span>
+            </div>
+            <div v-if="updatePublishDate" class="flex justify-between">
+              <span class="text-gray-600">发布日期:</span>
+              <span class="font-medium">{{ formatDate(updatePublishDate) }}</span>
+            </div>
+          </div>
+          <div v-if="releaseNotes" class="mb-4">
+            <h4 class="text-sm font-medium text-gray-700 mb-2">更新内容:</h4>
+            <div class="bg-gray-50 p-3 rounded-md text-sm text-gray-600 max-h-32 overflow-y-auto whitespace-pre-line">
+              {{ releaseNotes }}
+            </div>
+          </div>
+          <div v-if="updateStatus" class="mb-4">
+            <div class="bg-blue-50 p-3 rounded-md text-sm text-blue-700">
+              <i class="fas fa-info-circle mr-2"></i>{{ updateStatus }}
+            </div>
+          </div>
           <div class="flex justify-end space-x-3">
             <button @click="showUpdateModal = false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-sm font-medium">
               稍后再说
             </button>
-            <button @click="downloadUpdate" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-blue-700">
-              立即升级
+            <button v-if="!updateDownloaded" @click="startDownloadUpdate" :disabled="isDownloading"
+              class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              <i v-if="isDownloading" class="fas fa-spinner fa-spin mr-2"></i>
+              {{ isDownloading ? '下载中...' : '立即升级' }}
+            </button>
+            <button v-else @click="applyDownloadedUpdate"
+              class="px-4 py-2 bg-secondary text-white rounded-md text-sm font-medium hover:bg-green-600">
+              <i class="fas fa-check mr-2"></i>应用更新
             </button>
           </div>
         </div>
@@ -3452,6 +3516,11 @@ const App = {
     const latestVersion = ref('');
     const showUpdateModal = ref(false);
     const updateUrl = ref('');
+    const releaseNotes = ref('');
+    const updatePublishDate = ref('');
+    const isDownloading = ref(false);
+    const updateDownloaded = ref(false);
+    const updateStatus = ref('');
     
     // 获取当前账套的localStorage key
     const getBookKey = (key) => `${key}_${currentBookId.value}`;
@@ -3496,6 +3565,8 @@ const App = {
           if (compareVersions(latestVersionStr, APP_VERSION) > 0) {
             latestVersion.value = latestVersionStr;
             updateUrl.value = data.html_url;
+            releaseNotes.value = data.body || '暂无更新说明';
+            updatePublishDate.value = data.published_at;
             showUpdateModal.value = true;
           }
         }
@@ -3504,10 +3575,33 @@ const App = {
       }
     };
     
-    // 下载更新
-    const downloadUpdate = () => {
-      window.open(updateUrl.value, '_blank');
-      showUpdateModal.value = false;
+    // 开始下载更新
+    const startDownloadUpdate = async () => {
+      isDownloading.value = true;
+      updateStatus.value = '正在下载更新...';
+      
+      const result = await downloadUpdate(latestVersion.value);
+      
+      if (result.success) {
+        updateDownloaded.value = true;
+        updateStatus.value = '下载完成！点击"应用更新"按钮完成升级。';
+      } else {
+        updateStatus.value = '下载失败: ' + (result.error || '未知错误');
+      }
+      
+      isDownloading.value = false;
+    };
+    
+    // 应用已下载的更新
+    const applyDownloadedUpdate = () => {
+      applyUpdate();
+    };
+    
+    // 格式化日期
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('zh-CN');
     };
     
     const checkAuth = () => {
@@ -3639,7 +3733,14 @@ const App = {
       currentVersion,
       latestVersion,
       showUpdateModal,
-      downloadUpdate
+      releaseNotes,
+      updatePublishDate,
+      isDownloading,
+      updateDownloaded,
+      updateStatus,
+      startDownloadUpdate,
+      applyDownloadedUpdate,
+      formatDate
     };
   }
 };
@@ -3648,4 +3749,3 @@ const App = {
 const app = createApp(App);
 app.use(router);
 app.mount('#app');
-
