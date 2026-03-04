@@ -14,12 +14,14 @@ services:
     image: mymoney888:latest
     container_name: mymoney888
     ports:
-      - "8888:8888"
+      - "0.0.0.0:8888:8888"
     restart: always
     environment:
       - NODE_ENV=production
       # 使用淘宝npm镜像源
       - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+    # 网络配置 - 使用bridge模式确保外部可访问
+    network_mode: bridge
     # 健康检查
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
@@ -36,3 +38,11 @@ services:
         reservations:
           cpus: '0.5'
           memory: 256M
+
+# 网络配置 - 显式定义桥接网络
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
