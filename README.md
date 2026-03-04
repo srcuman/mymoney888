@@ -1,5 +1,5 @@
 # MyMoney888 - 个人记账软件
-- 特别申明：本项目是一个十几年个人记账的CPA用AI创建的个人项目，关注个人使用、隐私、数据安全问题。不做他用。
+
 一个功能强大的个人记账软件，支持多维度分类、账套管理、数据导入导出等功能。
 
 ## 版本信息
@@ -50,6 +50,39 @@
 
 ### 方法一：Docker部署（推荐）
 
+#### 从GitHub仓库构建（推荐）
+```bash
+# 创建docker-compose.yml文件
+cat > docker-compose.yml << 'EOF'
+version: '3.8'
+
+services:
+  mymoney888:
+    # 从GitHub仓库构建
+    build:
+      context: https://github.com/srcuman/mymoney888.git
+      dockerfile: Dockerfile
+    ports:
+      - "8888:8888"
+    restart: always
+    environment:
+      - NODE_ENV=production
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+EOF
+
+# 启动服务
+docker-compose up -d
+
+# 访问 http://localhost:8888
+```
+
+#### 克隆仓库后部署
 ```bash
 # 克隆仓库
 git clone https://github.com/srcuman/mymoney888.git
