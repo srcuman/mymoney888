@@ -30,4 +30,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
 
 # 启动服务器
-CMD ["node", "dist/server.cjs"]
+CMD ["node", "dist/server.mjs"]
