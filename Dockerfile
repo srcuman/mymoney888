@@ -1,9 +1,9 @@
-# 使用Node.js 18 LTS版本（更稳定）
+# 使用Node.js 25.8.0-alpine版本
 # 国内用户可使用以下镜像源（取消注释即可）：
-# FROM docker.mirrors.sjtug.sjtu.edu.cn/library/node:18-alpine
-# FROM registry.cn-hangzhou.aliyuncs.com/library/node:18-alpine
-# FROM docker.mirrors.ustc.edu.cn/library/node:18-alpine
-FROM node:18-alpine
+# FROM docker.mirrors.sjtug.sjtu.edu.cn/library/node:25.8.0-alpine
+# FROM registry.cn-hangzhou.aliyuncs.com/library/node:25.8.0-alpine
+# FROM docker.mirrors.ustc.edu.cn/library/node:25.8.0-alpine
+FROM node:25.8.0-alpine
 
 # 设置工作目录
 WORKDIR /app
