@@ -2,9 +2,12 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// 获取当前脚本所在目录的绝对路径
+const __dirname = path.dirname(require.main.filename);
+
 const server = http.createServer((req, res) => {
-  let filePath = '.' + req.url;
-  if (filePath === './') filePath = './index.html';
+  let filePath = path.join(__dirname, req.url);
+  if (req.url === '/') filePath = path.join(__dirname, 'index.html');
   
   const extname = String(path.extname(filePath)).toLowerCase();
   const mimeTypes = {
