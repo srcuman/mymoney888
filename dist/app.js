@@ -55,9 +55,20 @@ const downloadUpdate = async (version) => {
 const applyUpdate = () => {
   const pendingUpdate = localStorage.getItem('pendingUpdate');
   if (pendingUpdate) {
-    const update = JSON.parse(pendingUpdate);
+    // 设置标记表示需要应用更新
+    localStorage.setItem('applyUpdateFlag', 'true');
     // 刷新页面以应用更新
     window.location.reload();
+  }
+};
+
+// 检查是否需要应用更新（页面加载时调用）
+const checkAndApplyUpdate = () => {
+  const applyFlag = localStorage.getItem('applyUpdateFlag');
+  if (applyFlag === 'true') {
+    localStorage.removeItem('applyUpdateFlag');
+    // 页面已经刷新，更新会在index.html中自动应用
+    console.log('正在应用更新...');
   }
 };
 
@@ -3712,6 +3723,9 @@ const App = {
     };
 
     onMounted(() => {
+      // 检查是否需要应用更新
+      checkAndApplyUpdate();
+      
       checkAuth();
       window.addEventListener('hashchange', checkAuth);
       // 检查版本更新
