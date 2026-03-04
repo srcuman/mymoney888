@@ -8,7 +8,7 @@ services:
       dockerfile: Dockerfile
       # 国内用户如遇到镜像拉取问题，可取消注释以下配置使用镜像源
       # args:
-      #   - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:18-alpine
+      #   - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:25.8.0-alpine
     image: mymoney888:latest
     container_name: mymoney888
     ports:
