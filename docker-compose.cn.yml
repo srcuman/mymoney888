@@ -20,8 +20,6 @@ services:
       - NODE_ENV=production
       # 使用淘宝npm镜像源
       - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
-    # 网络配置 - 使用bridge模式确保外部可访问
-    network_mode: bridge
     # 健康检查
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
