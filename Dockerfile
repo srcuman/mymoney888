@@ -1,13 +1,16 @@
 # 使用Node.js 18 LTS版本（更稳定）
-# 如遇到镜像拉取问题，可使用以下替代镜像源：
+# 国内用户可使用以下镜像源（取消注释即可）：
 # FROM docker.mirrors.sjtug.sjtu.edu.cn/library/node:18-alpine
 # FROM registry.cn-hangzhou.aliyuncs.com/library/node:18-alpine
+# FROM docker.mirrors.ustc.edu.cn/library/node:18-alpine
 FROM node:18-alpine
 
 # 设置工作目录
 WORKDIR /app
 
-# 设置npm镜像源（加速依赖安装）
+# 设置npm镜像源（国内用户取消注释以下行）
+# RUN npm config set registry https://registry.npmmirror.com
+# 或使用淘宝镜像
 RUN npm config set registry https://registry.npmmirror.com
 
 # 复制package.json和package-lock.json
