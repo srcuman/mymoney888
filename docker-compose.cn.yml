@@ -1,0 +1,38 @@
+# 国内网络环境专用Docker Compose配置
+# 使用国内镜像源加速构建和部署
+
+version: '3.8'
+
+services:
+  mymoney888:
+    build:
+      context: https://github.com/srcuman/mymoney888.git
+      dockerfile: Dockerfile
+      args:
+        # 使用国内Node.js镜像源
+        - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:18-alpine
+    image: mymoney888:latest
+    container_name: mymoney888
+    ports:
+      - "8888:8888"
+    restart: always
+    environment:
+      - NODE_ENV=production
+      # 使用淘宝npm镜像源
+      - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
