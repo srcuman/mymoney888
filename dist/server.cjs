@@ -26,5 +26,5 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(8888);
-console.log('Server running at http://localhost:8888/');
+server.listen(8888, '0.0.0.0');
+console.log('Server running at http://0.0.0.0:8888/');
