@@ -6,7 +6,7 @@ services:
     build:
       context: https://github.com/srcuman/mymoney888.git
       dockerfile: Dockerfile
-      # 如遇到镜像拉取问题，可取消注释以下配置使用镜像源
+      # 国内用户如遇到镜像拉取问题，可取消注释以下配置使用镜像源
       # args:
       #   - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:18-alpine
     image: mymoney888:latest
@@ -16,7 +16,7 @@ services:
     restart: always
     environment:
       - NODE_ENV=production
-      # 设置npm镜像源（加速依赖安装）
+      # npm镜像源配置（国内用户已默认使用淘宝镜像）
       - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
     # 健康检查
     healthcheck:
