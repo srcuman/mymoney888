@@ -6,15 +6,36 @@ services:
     build:
       context: https://github.com/srcuman/mymoney888.git
       dockerfile: Dockerfile
+      # 如遇到镜像拉取问题，可取消注释以下配置使用镜像源
+      # args:
+      #   - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:18-alpine
+    image: mymoney888:latest
+    container_name: mymoney888
     ports:
       - "8888:8888"
     restart: always
     environment:
       - NODE_ENV=production
+      # 设置npm镜像源（加速依赖安装）
+      - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
     # 健康检查
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+# 网络配置（可选）
+# networks:
+#   default:
+#     driver: bridge
