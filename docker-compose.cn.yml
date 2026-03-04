@@ -9,8 +9,8 @@ services:
       context: https://github.com/srcuman/mymoney888.git
       dockerfile: Dockerfile
       args:
-        # 使用国内Node.js镜像源
-        - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:18-alpine
+        # 使用国内Node.js镜像源（25.8.0-alpine版本）
+        - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:25.8.0-alpine
     image: mymoney888:latest
     container_name: mymoney888
     ports:
