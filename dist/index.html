@@ -26,6 +26,50 @@
 </head>
 <body class="bg-gray-50">
     <div id="app"></div>
-    <script type="module" src="./app.js"></script>
+    <script>
+        // 在线更新功能：检查并应用更新
+        (function() {
+            const pendingUpdate = localStorage.getItem('pendingUpdate');
+            if (pendingUpdate) {
+                try {
+                    const update = JSON.parse(pendingUpdate);
+                    // 检查更新是否过期（7天）
+                    const isExpired = Date.now() - update.timestamp > 7 * 24 * 60 * 60 * 1000;
+                    if (!isExpired && update.code) {
+                        // 应用更新：将新代码写入app.js
+                        const blob = new Blob([update.code], { type: 'application/javascript' });
+                        const url = URL.createObjectURL(blob);
+                        
+                        // 创建script标签加载更新后的代码
+                        const script = document.createElement('script');
+                        script.type = 'module';
+                        script.src = url;
+                        document.body.appendChild(script);
+                        
+                        // 清除pendingUpdate标记
+                        localStorage.removeItem('pendingUpdate');
+                        
+                        // 记录已应用的版本
+                        localStorage.setItem('appliedVersion', update.version);
+                        
+                        console.log('已应用更新版本:', update.version);
+                        return; // 跳过后续的默认加载
+                    } else {
+                        // 更新已过期，清除
+                        localStorage.removeItem('pendingUpdate');
+                    }
+                } catch (error) {
+                    console.error('应用更新失败:', error);
+                    localStorage.removeItem('pendingUpdate');
+                }
+            }
+            
+            // 默认加载方式
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.src = './app.js';
+            document.body.appendChild(script);
+        })();
+    </script>
 </body>
 </html>
