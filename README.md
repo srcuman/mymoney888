@@ -12,6 +12,7 @@
 - ✅ **发布日期显示**：显示新版本的发布日期
 - ✅ **下载进度提示**：显示下载状态和进度
 - ✅ **一键应用更新**：下载完成后一键应用更新
+- ✅ **Docker部署优化**：添加镜像源配置，解决镜像拉取问题
 
 ### v1.0.0 初始功能
 - ✅ 交易记账（收入、支出、转账）
@@ -50,7 +51,7 @@
 
 ### 方法一：Docker部署（推荐）
 
-#### 从GitHub仓库构建（推荐）
+#### 从GitHub仓库构建（最简单）
 ```bash
 # 创建docker-compose.yml文件
 cat > docker-compose.yml << 'EOF'
@@ -62,18 +63,28 @@ services:
     build:
       context: https://github.com/srcuman/mymoney888.git
       dockerfile: Dockerfile
+    image: mymoney888:latest
+    container_name: mymoney888
     ports:
       - "8888:8888"
     restart: always
     environment:
       - NODE_ENV=production
-    # 健康检查
+      - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 EOF
 
 # 启动服务
@@ -126,6 +137,7 @@ mymoney888/
 ├── src/               # 源代码（开发用）
 ├── Dockerfile         # Docker构建文件
 ├── docker-compose.yml # Docker Compose配置
+├── .dockerignore      # Docker忽略文件
 ├── package.json       # 项目配置
 └── README.md          # 项目说明
 ```
@@ -172,6 +184,71 @@ mymoney888/
 4. 下载完成后点击"应用更新"
 5. 系统自动刷新并应用新版本
 
+## 故障排除
+
+### Docker镜像拉取失败
+
+如果遇到镜像拉取失败（如 `401 Authorization Required`），可以尝试以下方法：
+
+#### 方法1：配置Docker镜像源
+```bash
+# 编辑Docker配置文件
+sudo vim /etc/docker/daemon.json
+
+# 添加以下内容
+{
+  "registry-mirrors": [
+    "https://docker.mirrors.sjtug.sjtu.edu.cn",
+    "https://registry.cn-hangzhou.aliyuncs.com",
+    "https://docker.mirrors.ustc.edu.cn"
+  ]
+}
+
+# 重启Docker服务
+sudo systemctl restart docker
+```
+
+#### 方法2：修改Dockerfile使用镜像源
+```dockerfile
+# 使用国内镜像源
+FROM docker.mirrors.sjtug.sjtu.edu.cn/library/node:18-alpine
+# 或
+FROM registry.cn-hangzhou.aliyuncs.com/library/node:18-alpine
+```
+
+#### 方法3：使用docker-compose的build args
+```yaml
+services:
+  mymoney888:
+    build:
+      context: https://github.com/srcuman/mymoney888.git
+      dockerfile: Dockerfile
+      args:
+        - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:18-alpine
+```
+
+### 端口被占用
+
+如果8888端口被占用，可以修改docker-compose.yml中的端口映射：
+```yaml
+ports:
+  - "8889:8888"  # 将主机的8889端口映射到容器的8888端口
+```
+
+### 内存不足
+
+如果遇到内存不足问题，可以调整docker-compose.yml中的资源限制：
+```yaml
+deploy:
+  resources:
+    limits:
+      cpus: '0.5'
+      memory: 256M
+    reservations:
+      cpus: '0.25'
+      memory: 128M
+```
+
 ## 技术栈
 
 - **前端**：Vue 3, Tailwind CSS, Chart.js
@@ -205,6 +282,7 @@ npm run build
 1. 数据存储在浏览器本地，建议定期导出备份
 2. 支持主流浏览器：Chrome、Firefox、Safari、Edge
 3. 推荐使用Docker部署以获得最佳体验
+4. 如遇到镜像拉取问题，请参考故障排除部分
 
 ## 许可证
 
@@ -216,7 +294,7 @@ MIT License
 
 ## 版本历史
 
-- **v1.1.0** (2026-03-03) - 增强在线更新功能
+- **v1.1.0** (2026-03-04) - 增强在线更新功能，优化Docker部署
 - **v1.0.0** (2026-03-03) - 初始版本发布
 
 ---
