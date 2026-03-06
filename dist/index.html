@@ -29,15 +29,43 @@
 <body class="bg-gray-50">
     <div id="app"></div>
     <script>
+        // IndexedDB初始化
+        const initDB = () => {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('mymoney888', 1);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('updates')) {
+                        db.createObjectStore('updates', { keyPath: 'version' });
+                    }
+                };
+            });
+        };
+
         // 在线更新功能：检查并应用更新
-        (function() {
-            const pendingUpdate = localStorage.getItem('pendingUpdate');
-            if (pendingUpdate) {
-                try {
-                    const update = JSON.parse(pendingUpdate);
-                    // 检查更新是否过期（7天）
-                    const isExpired = Date.now() - update.timestamp > 7 * 24 * 60 * 60 * 1000;
-                    if (!isExpired && update.code) {
+        (async function() {
+            try {
+                const db = await initDB();
+                const transaction = db.transaction(['updates'], 'readonly');
+                const store = transaction.objectStore('updates');
+                const request = store.get('pending');
+                
+                request.onsuccess = () => {
+                    const update = request.result;
+                    if (update && update.code) {
+                        // 检查更新是否过期（7天）
+                        const isExpired = Date.now() - update.timestamp > 7 * 24 * 60 * 60 * 1000;
+                        if (isExpired) {
+                            // 删除过期更新
+                            const deleteTx = db.transaction(['updates'], 'readwrite');
+                            deleteTx.objectStore('updates').delete('pending');
+                            console.log('更新已过期');
+                            loadDefaultApp();
+                            return;
+                        }
+                        
                         // 应用更新：将新代码写入app.js
                         const blob = new Blob([update.code], { type: 'application/javascript' });
                         const url = URL.createObjectURL(blob);
@@ -46,32 +74,39 @@
                         const script = document.createElement('script');
                         script.type = 'module';
                         script.src = url;
+                        script.onload = () => {
+                            console.log('已应用更新版本:', update.version);
+                            // 删除已应用的更新
+                            const deleteTx = db.transaction(['updates'], 'readwrite');
+                            deleteTx.objectStore('updates').delete('pending');
+                        };
+                        script.onerror = () => {
+                            console.error('应用更新失败，加载默认版本');
+                            loadDefaultApp();
+                        };
                         document.body.appendChild(script);
-                        
-                        // 清除pendingUpdate标记
-                        localStorage.removeItem('pendingUpdate');
-                        
-                        // 记录已应用的版本
-                        localStorage.setItem('appliedVersion', update.version);
-                        
-                        console.log('已应用更新版本:', update.version);
-                        return; // 跳过后续的默认加载
                     } else {
-                        // 更新已过期，清除
-                        localStorage.removeItem('pendingUpdate');
+                        loadDefaultApp();
                     }
-                } catch (error) {
-                    console.error('应用更新失败:', error);
-                    localStorage.removeItem('pendingUpdate');
-                }
+                };
+                
+                request.onerror = () => {
+                    console.error('获取更新信息失败，加载默认版本');
+                    loadDefaultApp();
+                };
+            } catch (error) {
+                console.error('更新检查失败，加载默认版本:', error);
+                loadDefaultApp();
             }
-            
-            // 默认加载方式
+        })();
+
+        // 加载默认app.js
+        function loadDefaultApp() {
             const script = document.createElement('script');
             script.type = 'module';
             script.src = './app.js';
             document.body.appendChild(script);
-        })();
+        }
     </script>
 </body>
 </html>
