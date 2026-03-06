@@ -2,7 +2,7 @@ const { createApp, ref, computed, onMounted, nextTick } = Vue;
 const { createRouter, createWebHashHistory } = VueRouter;
 
 // 版本控制
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 const GITHUB_REPO = 'https://api.github.com/repos/srcuman/mymoney888/releases/latest';
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/srcuman/mymoney888/main';
 
@@ -591,6 +591,20 @@ const HomeView = {
             </div>
           </div>
 
+          <!-- 第五行：交易日期时间 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">交易日期</label>
+              <input type="date" v-model="transactionDate" 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">交易时间</label>
+              <input type="time" v-model="transactionTime" 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+          </div>
+
           <!-- 备注 -->
           <div>
             <label class="block mb-2 text-sm font-medium text-gray-700">备注</label>
@@ -685,6 +699,10 @@ const HomeView = {
       memberId: '',
       description: '' 
     });
+
+    // 交易日期时间
+    const transactionDate = ref(new Date().toISOString().split('T')[0]);
+    const transactionTime = ref(new Date().toISOString().split('T')[1].substring(0, 5));
 
     // 金额计算器
     const amountInput = ref('');
@@ -949,7 +967,7 @@ const HomeView = {
               projectId: null,
               memberId: null,
               description: transaction.value.description || '账户转账',
-              date: new Date().toISOString().split('T')[0]
+              date: transactionDate.value + ' ' + transactionTime.value
             };
             
             accounts.value[fromAccountIndex].balance -= transaction.value.amount;
@@ -965,7 +983,7 @@ const HomeView = {
               projectId: transaction.value.projectId ? parseInt(transaction.value.projectId) : null,
               memberId: transaction.value.memberId ? parseInt(transaction.value.memberId) : null,
               description: transaction.value.description,
-              date: new Date().toISOString().split('T')[0]
+              date: transactionDate.value + ' ' + transactionTime.value
             };
             
             const accountIndex = accounts.value.findIndex(a => a.id === transaction.value.accountId);
@@ -1022,7 +1040,7 @@ const HomeView = {
             projectId: null,
             memberId: null,
             description: transaction.value.description || '账户转账',
-            date: new Date().toISOString().split('T')[0]
+            date: transactionDate.value + ' ' + transactionTime.value
           };
           
           transactions.value.push(newTransaction);
@@ -1040,7 +1058,7 @@ const HomeView = {
             projectId: transaction.value.projectId ? parseInt(transaction.value.projectId) : null,
             memberId: transaction.value.memberId ? parseInt(transaction.value.memberId) : null,
             description: transaction.value.description,
-            date: new Date().toISOString().split('T')[0]
+            date: transactionDate.value + ' ' + transactionTime.value
           };
           
           transactions.value.push(newTransaction);
@@ -1133,6 +1151,12 @@ const HomeView = {
         memberId: t.memberId || '',
         description: t.description || ''
       };
+      // 解析日期时间
+      if (t.date) {
+        const dateParts = t.date.split(' ');
+        transactionDate.value = dateParts[0] || new Date().toISOString().split('T')[0];
+        transactionTime.value = dateParts[1] || new Date().toISOString().split('T')[1].substring(0, 5);
+      }
       amountInput.value = t.amount.toString();
       calculatedAmount.value = null;
       calcError.value = '';
@@ -1151,6 +1175,9 @@ const HomeView = {
         memberId: '',
         description: ''
       };
+      // 重置日期时间为当前时间
+      transactionDate.value = new Date().toISOString().split('T')[0];
+      transactionTime.value = new Date().toISOString().split('T')[1].substring(0, 5);
       amountInput.value = '';
       calculatedAmount.value = null;
       calcError.value = '';
@@ -1160,6 +1187,8 @@ const HomeView = {
     return { 
       transactionType, 
       transaction, 
+      transactionDate, 
+      transactionTime, 
       amountInput,
       calculatedAmount,
       calcError,
@@ -2220,9 +2249,14 @@ const DimensionsView = {
             <i class="fas fa-tags text-primary mr-2"></i>
             分类管理
           </h2>
-          <button @click="showCategoryModal = true" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
-            <i class="fas fa-plus mr-2"></i> 添加分类
-          </button>
+          <div class="flex space-x-2">
+            <button @click="showCategoryImportModal = true" class="px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 rounded-lg hover:from-gray-300 hover:to-gray-400 transition-all shadow-md">
+              <i class="fas fa-file-import mr-2"></i> 批量导入
+            </button>
+            <button @click="showCategoryModal = true" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
+              <i class="fas fa-plus mr-2"></i> 添加分类
+            </button>
+          </div>
         </div>
         
         <div class="space-y-4">
@@ -2265,9 +2299,14 @@ const DimensionsView = {
             <i class="fas fa-store text-primary mr-2"></i>
             商家管理
           </h2>
-          <button @click="showMerchantModal = true" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
-            <i class="fas fa-plus mr-2"></i> 添加商家
-          </button>
+          <div class="flex space-x-2">
+            <button @click="showMerchantImportModal = true" class="px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 rounded-lg hover:from-gray-300 hover:to-gray-400 transition-all shadow-md">
+              <i class="fas fa-file-import mr-2"></i> 批量导入
+            </button>
+            <button @click="showMerchantModal = true" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
+              <i class="fas fa-plus mr-2"></i> 添加商家
+            </button>
+          </div>
         </div>
         
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -2287,9 +2326,14 @@ const DimensionsView = {
             <i class="fas fa-project-diagram text-primary mr-2"></i>
             项目管理
           </h2>
-          <button @click="showProjectModal = true" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
-            <i class="fas fa-plus mr-2"></i> 添加项目
-          </button>
+          <div class="flex space-x-2">
+            <button @click="showProjectImportModal = true" class="px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 rounded-lg hover:from-gray-300 hover:to-gray-400 transition-all shadow-md">
+              <i class="fas fa-file-import mr-2"></i> 批量导入
+            </button>
+            <button @click="showProjectModal = true" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
+              <i class="fas fa-plus mr-2"></i> 添加项目
+            </button>
+          </div>
         </div>
         
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -2309,9 +2353,14 @@ const DimensionsView = {
             <i class="fas fa-users text-primary mr-2"></i>
             成员管理
           </h2>
-          <button @click="showMemberModal = true" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
-            <i class="fas fa-plus mr-2"></i> 添加成员
-          </button>
+          <div class="flex space-x-2">
+            <button @click="showMemberImportModal = true" class="px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 rounded-lg hover:from-gray-300 hover:to-gray-400 transition-all shadow-md">
+              <i class="fas fa-file-import mr-2"></i> 批量导入
+            </button>
+            <button @click="showMemberModal = true" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
+              <i class="fas fa-plus mr-2"></i> 添加成员
+            </button>
+          </div>
         </div>
         
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -2441,6 +2490,170 @@ const DimensionsView = {
           </form>
         </div>
       </div>
+
+      <!-- 分类批量导入模态框 -->
+      <div v-if="showCategoryImportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <h3 class="text-lg font-bold text-gray-900 mb-4">批量导入分类</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">导入格式</label>
+              <div class="bg-blue-50 p-3 rounded-lg text-sm text-gray-600 mb-3">
+                <p class="font-medium mb-1">CSV格式：分类名称,类型</p>
+                <p class="text-xs">每行一个分类，类型为"收入"或"支出"</p>
+                <p class="text-xs mt-2">示例：</p>
+                <p class="text-xs bg-white p-2 rounded mt-1">餐饮,支出</p>
+                <p class="text-xs bg-white p-2 rounded mt-1">工资,收入</p>
+              </div>
+              <button @click="downloadCategorySample" class="px-3 py-2 bg-blue-100 text-blue-800 rounded-md text-sm font-medium hover:bg-blue-200 transition-all">
+                <i class="fas fa-download mr-1"></i> 下载示例文件
+              </button>
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">选择文件</label>
+              <input type="file" ref="categoryImportFile" accept=".csv,.txt" @change="handleCategoryImport" 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div v-if="categoryImportPreview.length > 0" class="bg-gray-50 p-3 rounded-lg max-h-40 overflow-y-auto">
+              <p class="text-sm font-medium text-gray-700 mb-2">预览（前5条）：</p>
+              <div v-for="(item, index) in categoryImportPreview.slice(0, 5)" :key="index" class="text-xs text-gray-600 mb-1 pb-1 border-b border-gray-200">
+                {{ item.name }} - {{ item.type }}
+              </div>
+            </div>
+            <div class="flex justify-end space-x-3">
+              <button type="button" @click="showCategoryImportModal = false; categoryImportPreview = []" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-sm font-medium transition-all">
+                取消
+              </button>
+              <button type="button" @click="confirmCategoryImport" :disabled="categoryImportPreview.length === 0" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                确认导入
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 商家批量导入模态框 -->
+      <div v-if="showMerchantImportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <h3 class="text-lg font-bold text-gray-900 mb-4">批量导入商家</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">导入格式</label>
+              <div class="bg-blue-50 p-3 rounded-lg text-sm text-gray-600 mb-3">
+                <p class="font-medium mb-1">CSV格式：商家名称</p>
+                <p class="text-xs">每行一个商家</p>
+                <p class="text-xs mt-2">示例：</p>
+                <p class="text-xs bg-white p-2 rounded mt-1">沃尔玛</p>
+                <p class="text-xs bg-white p-2 rounded mt-1">星巴克</p>
+              </div>
+              <button @click="downloadMerchantSample" class="px-3 py-2 bg-blue-100 text-blue-800 rounded-md text-sm font-medium hover:bg-blue-200 transition-all">
+                <i class="fas fa-download mr-1"></i> 下载示例文件
+              </button>
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">选择文件</label>
+              <input type="file" ref="merchantImportFile" accept=".csv,.txt" @change="handleMerchantImport" 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div v-if="merchantImportPreview.length > 0" class="bg-gray-50 p-3 rounded-lg max-h-40 overflow-y-auto">
+              <p class="text-sm font-medium text-gray-700 mb-2">预览（前5条）：</p>
+              <div v-for="(item, index) in merchantImportPreview.slice(0, 5)" :key="index" class="text-xs text-gray-600 mb-1 pb-1 border-b border-gray-200">
+                {{ item.name }}
+              </div>
+            </div>
+            <div class="flex justify-end space-x-3">
+              <button type="button" @click="showMerchantImportModal = false; merchantImportPreview = []" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-sm font-medium transition-all">
+                取消
+              </button>
+              <button type="button" @click="confirmMerchantImport" :disabled="merchantImportPreview.length === 0" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                确认导入
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 项目批量导入模态框 -->
+      <div v-if="showProjectImportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <h3 class="text-lg font-bold text-gray-900 mb-4">批量导入项目</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">导入格式</label>
+              <div class="bg-blue-50 p-3 rounded-lg text-sm text-gray-600 mb-3">
+                <p class="font-medium mb-1">CSV格式：项目名称</p>
+                <p class="text-xs">每行一个项目</p>
+                <p class="text-xs mt-2">示例：</p>
+                <p class="text-xs bg-white p-2 rounded mt-1">家庭开支</p>
+                <p class="text-xs bg-white p-2 rounded mt-1">工作报销</p>
+              </div>
+              <button @click="downloadProjectSample" class="px-3 py-2 bg-blue-100 text-blue-800 rounded-md text-sm font-medium hover:bg-blue-200 transition-all">
+                <i class="fas fa-download mr-1"></i> 下载示例文件
+              </button>
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">选择文件</label>
+              <input type="file" ref="projectImportFile" accept=".csv,.txt" @change="handleProjectImport" 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div v-if="projectImportPreview.length > 0" class="bg-gray-50 p-3 rounded-lg max-h-40 overflow-y-auto">
+              <p class="text-sm font-medium text-gray-700 mb-2">预览（前5条）：</p>
+              <div v-for="(item, index) in projectImportPreview.slice(0, 5)" :key="index" class="text-xs text-gray-600 mb-1 pb-1 border-b border-gray-200">
+                {{ item.name }}
+              </div>
+            </div>
+            <div class="flex justify-end space-x-3">
+              <button type="button" @click="showProjectImportModal = false; projectImportPreview = []" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-sm font-medium transition-all">
+                取消
+              </button>
+              <button type="button" @click="confirmProjectImport" :disabled="projectImportPreview.length === 0" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                确认导入
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 成员批量导入模态框 -->
+      <div v-if="showMemberImportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <h3 class="text-lg font-bold text-gray-900 mb-4">批量导入成员</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">导入格式</label>
+              <div class="bg-blue-50 p-3 rounded-lg text-sm text-gray-600 mb-3">
+                <p class="font-medium mb-1">CSV格式：成员名称</p>
+                <p class="text-xs">每行一个成员</p>
+                <p class="text-xs mt-2">示例：</p>
+                <p class="text-xs bg-white p-2 rounded mt-1">本人</p>
+                <p class="text-xs bg-white p-2 rounded mt-1">配偶</p>
+              </div>
+              <button @click="downloadMemberSample" class="px-3 py-2 bg-blue-100 text-blue-800 rounded-md text-sm font-medium hover:bg-blue-200 transition-all">
+                <i class="fas fa-download mr-1"></i> 下载示例文件
+              </button>
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">选择文件</label>
+              <input type="file" ref="memberImportFile" accept=".csv,.txt" @change="handleMemberImport" 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div v-if="memberImportPreview.length > 0" class="bg-gray-50 p-3 rounded-lg max-h-40 overflow-y-auto">
+              <p class="text-sm font-medium text-gray-700 mb-2">预览（前5条）：</p>
+              <div v-for="(item, index) in memberImportPreview.slice(0, 5)" :key="index" class="text-xs text-gray-600 mb-1 pb-1 border-b border-gray-200">
+                {{ item.name }}
+              </div>
+            </div>
+            <div class="flex justify-end space-x-3">
+              <button type="button" @click="showMemberImportModal = false; memberImportPreview = []" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-sm font-medium transition-all">
+                取消
+              </button>
+              <button type="button" @click="confirmMemberImport" :disabled="memberImportPreview.length === 0" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                确认导入
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   `,
   setup() {
@@ -2468,12 +2681,24 @@ const DimensionsView = {
     const showMerchantModal = ref(false);
     const showProjectModal = ref(false);
     const showMemberModal = ref(false);
+    const showCategoryImportModal = ref(false);
+    const showMerchantImportModal = ref(false);
+    const showProjectImportModal = ref(false);
+    const showMemberImportModal = ref(false);
 
     const categoryForm = ref({ id: null, name: '', type: 'expense', isEditing: false });
     const childForm = ref({ parentId: null, name: '' });
     const merchantForm = ref({ name: '' });
     const projectForm = ref({ name: '' });
     const memberForm = ref({ name: '' });
+    const categoryImportFile = ref(null);
+    const merchantImportFile = ref(null);
+    const projectImportFile = ref(null);
+    const memberImportFile = ref(null);
+    const categoryImportPreview = ref([]);
+    const merchantImportPreview = ref([]);
+    const projectImportPreview = ref([]);
+    const memberImportPreview = ref([]);
 
     const closeCategoryModal = () => {
       showCategoryModal.value = false;
@@ -2599,6 +2824,238 @@ const DimensionsView = {
       }
     };
 
+    const handleCategoryImport = (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target.result;
+          const lines = content.split('\n');
+          const items = [];
+          
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            
+            const parts = trimmed.split(',');
+            if (parts.length >= 2) {
+              const name = parts[0].trim();
+              const type = parts[1].trim();
+              
+              if (name && (type === '收入' || type === '支出')) {
+                items.push({
+                  id: Date.now() + items.length,
+                  name: name,
+                  type: type === '收入' ? 'income' : 'expense',
+                  children: []
+                });
+              }
+            }
+          }
+          
+          categoryImportPreview.value = items;
+        } catch (error) {
+          alert('文件解析失败：' + error.message);
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    const confirmCategoryImport = () => {
+      if (categoryImportPreview.value.length === 0) return;
+      
+      if (!confirm('确定要导入 ' + categoryImportPreview.value.length + ' 条分类吗？')) return;
+      
+      categories.value = [...categories.value, ...categoryImportPreview.value];
+      localStorage.setItem(getBookKey('categories'), JSON.stringify(categories.value));
+      
+      showCategoryImportModal.value = false;
+      categoryImportPreview.value = [];
+      alert('导入成功！');
+    };
+
+    const handleMerchantImport = (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target.result;
+          const lines = content.split('\n');
+          const items = [];
+          
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            
+            const name = trimmed;
+            if (name) {
+              items.push({
+                id: Date.now() + items.length,
+                name: name
+              });
+            }
+          }
+          
+          merchantImportPreview.value = items;
+        } catch (error) {
+          alert('文件解析失败：' + error.message);
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    const confirmMerchantImport = () => {
+      if (merchantImportPreview.value.length === 0) return;
+      
+      if (!confirm('确定要导入 ' + merchantImportPreview.value.length + ' 条商家吗？')) return;
+      
+      merchants.value = [...merchants.value, ...merchantImportPreview.value];
+      localStorage.setItem(getBookKey('merchants'), JSON.stringify(merchants.value));
+      
+      showMerchantImportModal.value = false;
+      merchantImportPreview.value = [];
+      alert('导入成功！');
+    };
+
+    const handleProjectImport = (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target.result;
+          const lines = content.split('\n');
+          const items = [];
+          
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            
+            const name = trimmed;
+            if (name) {
+              items.push({
+                id: Date.now() + items.length,
+                name: name
+              });
+            }
+          }
+          
+          projectImportPreview.value = items;
+        } catch (error) {
+          alert('文件解析失败：' + error.message);
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    const confirmProjectImport = () => {
+      if (projectImportPreview.value.length === 0) return;
+      
+      if (!confirm('确定要导入 ' + projectImportPreview.value.length + ' 条项目吗？')) return;
+      
+      projects.value = [...projects.value, ...projectImportPreview.value];
+      localStorage.setItem(getBookKey('projects'), JSON.stringify(projects.value));
+      
+      showProjectImportModal.value = false;
+      projectImportPreview.value = [];
+      alert('导入成功！');
+    };
+
+    const handleMemberImport = (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target.result;
+          const lines = content.split('\n');
+          const items = [];
+          
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            
+            const name = trimmed;
+            if (name) {
+              items.push({
+                id: Date.now() + items.length,
+                name: name
+              });
+            }
+          }
+          
+          memberImportPreview.value = items;
+        } catch (error) {
+          alert('文件解析失败：' + error.message);
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    const confirmMemberImport = () => {
+      if (memberImportPreview.value.length === 0) return;
+      
+      if (!confirm('确定要导入 ' + memberImportPreview.value.length + ' 条成员吗？')) return;
+      
+      members.value = [...members.value, ...memberImportPreview.value];
+      localStorage.setItem(getBookKey('members'), JSON.stringify(members.value));
+      
+      showMemberImportModal.value = false;
+      memberImportPreview.value = [];
+      alert('导入成功！');
+    };
+
+    // 下载示例文件
+    const downloadCategorySample = () => {
+      const sampleContent = '分类名称,类型\n餐饮,支出\n交通,支出\n购物,支出\n娱乐,支出\n工资,收入\n投资,收入\n礼金,收入\n其他,收入';
+      const dataBlob = new Blob([sampleContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'categories_sample.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+
+    const downloadMerchantSample = () => {
+      const sampleContent = '商家名称\n沃尔玛\n星巴克\n滴滴出行\n美团\n肯德基\n麦当劳\n淘宝\n京东';
+      const dataBlob = new Blob([sampleContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'merchants_sample.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+
+    const downloadProjectSample = () => {
+      const sampleContent = '项目名称\n家庭开支\n工作报销\n旅游基金\n教育基金\n医疗基金\n购房基金\n创业基金\n其他项目';
+      const dataBlob = new Blob([sampleContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'projects_sample.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+
+    const downloadMemberSample = () => {
+      const sampleContent = '成员名称\n本人\n配偶\n孩子\n父母\n朋友\n同事\n其他';
+      const dataBlob = new Blob([sampleContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'members_sample.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+
     return {
       categories,
       merchants,
@@ -2609,11 +3066,23 @@ const DimensionsView = {
       showMerchantModal,
       showProjectModal,
       showMemberModal,
+      showCategoryImportModal,
+      showMerchantImportModal,
+      showProjectImportModal,
+      showMemberImportModal,
       categoryForm,
       childForm,
       merchantForm,
       projectForm,
       memberForm,
+      categoryImportFile,
+      merchantImportFile,
+      projectImportFile,
+      memberImportFile,
+      categoryImportPreview,
+      merchantImportPreview,
+      projectImportPreview,
+      memberImportPreview,
       closeCategoryModal,
       editCategory,
       saveCategory,
@@ -2627,7 +3096,19 @@ const DimensionsView = {
       saveProject,
       deleteProject,
       saveMember,
-      deleteMember
+      deleteMember,
+      handleCategoryImport,
+      confirmCategoryImport,
+      handleMerchantImport,
+      confirmMerchantImport,
+      handleProjectImport,
+      confirmProjectImport,
+      handleMemberImport,
+      confirmMemberImport,
+      downloadCategorySample,
+      downloadMerchantSample,
+      downloadProjectSample,
+      downloadMemberSample
     };
   }
 };
@@ -2807,26 +3288,51 @@ const AdminView = {
     };
 
     const exportAllData = () => {
-      const allData = {
-        users: JSON.parse(localStorage.getItem('users') || '[]'),
-        books: {
-          default: {
-            accounts: JSON.parse(localStorage.getItem('accounts_default') || '[]'),
-            transactions: JSON.parse(localStorage.getItem('transactions_default') || '[]'),
-            categories: JSON.parse(localStorage.getItem('categories_default') || '[]'),
-            merchants: JSON.parse(localStorage.getItem('merchants_default') || '[]'),
-            projects: JSON.parse(localStorage.getItem('projects_default') || '[]'),
-            members: JSON.parse(localStorage.getItem('members_default') || '[]')
-          }
-        }
-      };
+      const transactions = JSON.parse(localStorage.getItem(getBookKey('transactions')) || '[]');
       
-      const dataStr = JSON.stringify(allData, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      // 生成CSV内容
+      let csvContent = '日期,时间,类型,分类,金额,账户,商家,项目,成员,备注\n';
+      
+      transactions.forEach(transaction => {
+        const date = new Date(transaction.date);
+        const dateStr = date.toISOString().split('T')[0];
+        const timeStr = date.toTimeString().split(' ')[0];
+        const type = transaction.type === 'income' ? '收入' : transaction.type === 'expense' ? '支出' : '转账';
+        const category = transaction.categoryName || '';
+        const amount = transaction.amount || 0;
+        const account = transaction.accountName || '';
+        const merchant = transaction.merchant || '';
+        const project = transaction.project || '';
+        const member = transaction.member || '';
+        const note = transaction.note || '';
+        
+        // 处理CSV特殊字符
+        const escapeCsv = (value) => {
+          if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+            return '"' + value.replace(/"/g, '""') + '"';
+          }
+          return value;
+        };
+        
+        csvContent += [
+          escapeCsv(dateStr),
+          escapeCsv(timeStr),
+          escapeCsv(type),
+          escapeCsv(category),
+          amount,
+          escapeCsv(account),
+          escapeCsv(merchant),
+          escapeCsv(project),
+          escapeCsv(member),
+          escapeCsv(note)
+        ].join(',') + '\n';
+      });
+      
+      const dataBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(dataBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `mymoney888_backup_${new Date().toISOString().split('T')[0]}.json`;
+      link.download = `mymoney888_export_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
       URL.revokeObjectURL(url);
     };
