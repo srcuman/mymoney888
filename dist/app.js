@@ -1628,14 +1628,14 @@ const StatsView = {
                 <!-- 关键指标 -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                   <div v-for="(item, index) in annualReview.highlights" :key="index" 
-                    :class="`p-3 rounded-lg border ${
+                    :class="'p-3 rounded-lg border ' + (
                       item.color === 'green' ? 'bg-green-50 border-green-200' :
                       item.color === 'red' ? 'bg-red-50 border-red-200' :
                       item.color === 'orange' ? 'bg-orange-50 border-orange-200' :
                       'bg-blue-50 border-blue-200'
-                    }`">
+                    )">
                     <p class="text-xs text-gray-600 flex items-center">
-                      <i :class="`fas ${item.icon} mr-1`"></i>
+                      <i :class="'fas ' + item.icon + ' mr-1'"></i>
                       {{ item.title }}
                     </p>
                     <p class="text-sm font-bold text-gray-900 mt-1">{{ item.content }}</p>
@@ -1649,13 +1649,13 @@ const StatsView = {
                   </h5>
                   <div class="space-y-2">
                     <div v-for="(suggestion, index) in annualReview.suggestions" :key="index"
-                      :class="`p-3 rounded-lg border ${
+                      :class="'p-3 rounded-lg border ' + (
                         suggestion.type === 'success' ? 'bg-green-50 border-green-200' :
                         suggestion.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
                         'bg-blue-50 border-blue-200'
-                      }`">
+                      )">
                       <p class="font-medium text-sm text-gray-900 flex items-center">
-                        <i :class="`fas ${suggestion.icon} mr-2`"></i>
+                        <i :class="'fas ' + suggestion.icon + ' mr-2'"></i>
                         {{ suggestion.title }}
                       </p>
                       <p class="text-xs text-gray-600 mt-1">{{ suggestion.content }}</p>
