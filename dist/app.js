@@ -29,6 +29,21 @@ const checkForUpdates = async () => {
   return { hasUpdate: false };
 };
 
+// IndexedDB初始化
+const initDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('mymoney888', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('updates')) {
+        db.createObjectStore('updates', { keyPath: 'version' });
+      }
+    };
+  });
+};
+
 // 下载并更新应用文件
 const downloadUpdate = async (version) => {
   try {
@@ -37,12 +52,18 @@ const downloadUpdate = async (version) => {
     const response = await fetch(appJsUrl);
     if (response.ok) {
       const newCode = await response.text();
-      // 存储新版本代码到localStorage
-      localStorage.setItem('pendingUpdate', JSON.stringify({
-        version: version,
+      
+      // 存储到IndexedDB
+      const db = await initDB();
+      const transaction = db.transaction(['updates'], 'readwrite');
+      const store = transaction.objectStore('updates');
+      store.put({
+        version: 'pending',
+        appVersion: version,
         code: newCode,
         timestamp: Date.now()
-      }));
+      });
+      
       return { success: true };
     }
   } catch (error) {
@@ -52,23 +73,61 @@ const downloadUpdate = async (version) => {
 };
 
 // 应用更新
-const applyUpdate = () => {
-  const pendingUpdate = localStorage.getItem('pendingUpdate');
-  if (pendingUpdate) {
-    // 设置标记表示需要应用更新
-    localStorage.setItem('applyUpdateFlag', 'true');
-    // 刷新页面以应用更新
-    window.location.reload();
-  }
-};
-
-// 检查是否需要应用更新（页面加载时调用）
-const checkAndApplyUpdate = () => {
-  const applyFlag = localStorage.getItem('applyUpdateFlag');
-  if (applyFlag === 'true') {
-    localStorage.removeItem('applyUpdateFlag');
-    // 页面已经刷新，更新会在index.html中自动应用
-    console.log('正在应用更新...');
+const applyUpdate = async () => {
+  try {
+    const db = await initDB();
+    const transaction = db.transaction(['updates'], 'readonly');
+    const store = transaction.objectStore('updates');
+    const request = store.get('pending');
+    
+    request.onsuccess = async () => {
+      const update = request.result;
+      if (update && update.code) {
+        // 检查更新是否过期（7天）
+        const isExpired = Date.now() - update.timestamp > 7 * 24 * 60 * 60 * 1000;
+        if (isExpired) {
+          // 删除过期更新
+          const deleteTx = db.transaction(['updates'], 'readwrite');
+          deleteTx.objectStore('updates').delete('pending');
+          alert('更新已过期，请重新下载');
+          return;
+        }
+        
+        // 直接执行新代码
+        try {
+          const blob = new Blob([update.code], { type: 'application/javascript' });
+          const url = URL.createObjectURL(blob);
+          
+          const script = document.createElement('script');
+          script.type = 'module';
+          script.src = url;
+          script.onload = () => {
+            console.log('更新应用成功，版本:', update.version);
+            // 删除已应用的更新
+            const deleteTx = db.transaction(['updates'], 'readwrite');
+            deleteTx.objectStore('updates').delete('pending');
+            // 刷新页面以应用新版本
+            setTimeout(() => window.location.reload(), 1000);
+          };
+          script.onerror = () => {
+            alert('更新应用失败，请手动刷新页面');
+          };
+          document.body.appendChild(script);
+        } catch (error) {
+          console.error('应用更新失败:', error);
+          alert('更新应用失败，请手动刷新页面');
+        }
+      } else {
+        alert('未找到待应用的更新');
+      }
+    };
+    
+    request.onerror = () => {
+      alert('获取更新信息失败');
+    };
+  } catch (error) {
+    console.error('应用更新失败:', error);
+    alert('应用更新失败: ' + error.message);
   }
 };
 
