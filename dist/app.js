@@ -2,7 +2,7 @@ const { createApp, ref, computed, onMounted, nextTick } = Vue;
 const { createRouter, createWebHashHistory } = VueRouter;
 
 // 版本控制
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 const GITHUB_REPO = 'https://api.github.com/repos/srcuman/mymoney888/releases/latest';
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/srcuman/mymoney888/main';
 
@@ -670,6 +670,11 @@ const HomeView = {
           calculatedAmount.value = null;
         } else {
           calculatedAmount.value = result;
+          calcError.value = '';
+          // 自动应用计算结果
+          transaction.value.amount = result;
+          amountInput.value = result.toString();
+          calculatedAmount.value = null;
           calcError.value = '';
         }
       } catch (e) {
@@ -1555,12 +1560,101 @@ const StatsView = {
             <button @click="generateAnnualReview" class="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all shadow-md">
               <i class="fas fa-magic mr-2"></i> 生成年度回顾
             </button>
-            <div v-if="annualReview" class="mt-4 p-6 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200">
-              <h4 class="font-bold text-xl mb-3 text-gray-900">{{ annualReview.year }}年度回顾</h4>
-              <p class="mb-4 text-gray-700">{{ annualReview.summary }}</p>
-              <div v-for="(item, index) in annualReview.highlights" :key="index" class="mt-3 p-3 bg-white rounded-lg border border-gray-100">
-                <p class="font-medium text-gray-900">{{ item.title }}</p>
-                <p class="text-sm text-gray-600 mt-1">{{ item.content }}</p>
+            <div v-if="annualReview" class="mt-4 space-y-4">
+              <!-- 年度回顾卡片 -->
+              <div class="p-6 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-200">
+                <h4 class="font-bold text-xl mb-3 text-gray-900">{{ annualReview.year }}年度回顾</h4>
+                <p class="mb-4 text-gray-700">{{ annualReview.summary }}</p>
+                
+                <!-- 关键指标 -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <div v-for="(item, index) in annualReview.highlights" :key="index" 
+                    :class="`p-3 rounded-lg border ${
+                      item.color === 'green' ? 'bg-green-50 border-green-200' :
+                      item.color === 'red' ? 'bg-red-50 border-red-200' :
+                      item.color === 'orange' ? 'bg-orange-50 border-orange-200' :
+                      'bg-blue-50 border-blue-200'
+                    }`">
+                    <p class="text-xs text-gray-600 flex items-center">
+                      <i :class="`fas ${item.icon} mr-1`"></i>
+                      {{ item.title }}
+                    </p>
+                    <p class="text-sm font-bold text-gray-900 mt-1">{{ item.content }}</p>
+                  </div>
+                </div>
+                
+                <!-- 智能建议 -->
+                <div v-if="annualReview.suggestions && annualReview.suggestions.length > 0" class="mt-4">
+                  <h5 class="font-medium text-gray-900 mb-2 flex items-center">
+                    <i class="fas fa-lightbulb mr-2 text-yellow-500"></i> 智能建议
+                  </h5>
+                  <div class="space-y-2">
+                    <div v-for="(suggestion, index) in annualReview.suggestions" :key="index"
+                      :class="`p-3 rounded-lg border ${
+                        suggestion.type === 'success' ? 'bg-green-50 border-green-200' :
+                        suggestion.type === 'warning' ? 'bg-yellow-50 border-yellow-200' :
+                        'bg-blue-50 border-blue-200'
+                      }`">
+                      <p class="font-medium text-sm text-gray-900 flex items-center">
+                        <i :class="`fas ${suggestion.icon} mr-2`"></i>
+                        {{ suggestion.title }}
+                      </p>
+                      <p class="text-xs text-gray-600 mt-1">{{ suggestion.content }}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- 分类支出详情 -->
+                <div v-if="annualReview.categoryBreakdown && annualReview.categoryBreakdown.length > 0" class="mt-4">
+                  <h5 class="font-medium text-gray-900 mb-2 flex items-center">
+                    <i class="fas fa-chart-pie mr-2 text-blue-500"></i> 分类支出详情
+                  </h5>
+                  <div class="space-y-2">
+                    <div v-for="(item, index) in annualReview.categoryBreakdown" :key="index" 
+                      class="flex items-center justify-between p-2 bg-white rounded border border-gray-100">
+                      <span class="text-sm text-gray-700">{{ item.category }}</span>
+                      <div class="flex items-center">
+                        <span class="text-sm font-medium text-gray-900 mr-2">¥{{ item.amount.toFixed(2) }}</span>
+                        <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{{ item.percentage }}%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- 大额交易 -->
+                <div v-if="annualReview.largeTransactions && annualReview.largeTransactions.length > 0" class="mt-4">
+                  <h5 class="font-medium text-gray-900 mb-2 flex items-center">
+                    <i class="fas fa-exclamation-circle mr-2 text-red-500"></i> 大额交易提醒
+                  </h5>
+                  <div class="space-y-2">
+                    <div v-for="(item, index) in annualReview.largeTransactions" :key="index" 
+                      class="flex items-center justify-between p-2 bg-red-50 rounded border border-red-100">
+                      <div>
+                        <p class="text-sm text-gray-700">{{ item.description }}</p>
+                        <p class="text-xs text-gray-500">{{ item.date }}</p>
+                      </div>
+                      <span class="text-sm font-bold text-red-600">¥{{ item.amount.toFixed(2) }}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- 统计数据 -->
+                <div v-if="annualReview.stats" class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <div class="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <p class="text-xs text-gray-600">总交易笔数</p>
+                      <p class="text-sm font-bold text-gray-900">{{ annualReview.stats.totalTransactions }}</p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-gray-600">日均支出</p>
+                      <p class="text-sm font-bold text-gray-900">¥{{ annualReview.stats.avgDailyExpense }}</p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-gray-600">周末消费占比</p>
+                      <p class="text-sm font-bold text-gray-900">{{ annualReview.stats.weekendExpenseRate }}%</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1829,15 +1923,23 @@ const StatsView = {
         return t.date >= yearStart && t.date <= yearEnd;
       });
       
+      if (yearTransactions.length === 0) {
+        alert('该年度没有交易记录');
+        return;
+      }
+      
       const totalIncome = yearTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
       const totalExpense = yearTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
       const netIncome = totalIncome - totalExpense;
+      const savingsRate = totalIncome > 0 ? ((netIncome / totalIncome) * 100).toFixed(1) : 0;
       
       // 计算月度支出
       const monthlyExpenses = {};
+      const monthlyIncomes = {};
       for (let i = 0; i < 12; i++) {
         const monthKey = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
         monthlyExpenses[monthKey] = 0;
+        monthlyIncomes[monthKey] = 0;
       }
       
       yearTransactions.filter(t => t.type === 'expense').forEach(t => {
@@ -1847,9 +1949,23 @@ const StatsView = {
         }
       });
       
+      yearTransactions.filter(t => t.type === 'income').forEach(t => {
+        const monthKey = t.date.slice(0, 7);
+        if (monthlyIncomes[monthKey] !== undefined) {
+          monthlyIncomes[monthKey] += t.amount;
+        }
+      });
+      
       const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
       const maxExpenseMonth = Object.entries(monthlyExpenses).reduce((max, [month, amount]) => 
         amount > max.amount ? { month, amount } : max, { month: '0000-00', amount: 0 });
+      
+      const maxIncomeMonth = Object.entries(monthlyIncomes).reduce((max, [month, amount]) => 
+        amount > max.amount ? { month, amount } : max, { month: '0000-00', amount: 0 });
+      
+      // 计算平均月度支出
+      const avgMonthlyExpense = totalExpense / 12;
+      const avgMonthlyIncome = totalIncome / 12;
       
       // 计算分类支出
       const categoryExpenses = {};
@@ -1858,26 +1974,148 @@ const StatsView = {
         categoryExpenses[categoryName] = (categoryExpenses[categoryName] || 0) + t.amount;
       });
       
-      const topCategory = Object.entries(categoryExpenses).reduce((max, [category, amount]) => 
-        amount > max.amount ? { category, amount } : max, { category: '', amount: 0 });
+      const sortedCategories = Object.entries(categoryExpenses)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+      
+      const topCategory = sortedCategories[0] || { category: '', amount: 0 };
+      
+      // 检测异常支出（超过平均值2倍的单笔支出）
+      const largeTransactions = yearTransactions
+        .filter(t => t.type === 'expense' && t.amount > avgMonthlyExpense * 2)
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 5);
+      
+      // 消费习惯分析
+      const weekendTransactions = yearTransactions.filter(t => {
+        const date = new Date(t.date);
+        const day = date.getDay();
+        return day === 0 || day === 6;
+      });
+      const weekendExpense = weekendTransactions.filter(t => t.type === 'expense')
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      // 消费趋势分析
+      const firstHalfExpense = Object.entries(monthlyExpenses)
+        .slice(0, 6)
+        .reduce((sum, [, amount]) => sum + amount, 0);
+      const secondHalfExpense = Object.entries(monthlyExpenses)
+        .slice(6)
+        .reduce((sum, [, amount]) => sum + amount, 0);
+      
+      const trend = secondHalfExpense > firstHalfExpense ? '上升' : 
+                    secondHalfExpense < firstHalfExpense ? '下降' : '稳定';
+      
+      // 智能建议生成
+      const suggestions = [];
+      
+      // 储蓄率建议
+      if (parseFloat(savingsRate) < 10) {
+        suggestions.push({
+          type: 'warning',
+          icon: 'fa-exclamation-triangle',
+          title: '储蓄率偏低',
+          content: `您的储蓄率为${savingsRate}%，建议控制在10%以上。可以尝试减少非必要开支。`
+        });
+      } else if (parseFloat(savingsRate) >= 30) {
+        suggestions.push({
+          type: 'success',
+          icon: 'fa-check-circle',
+          title: '储蓄率优秀',
+          content: `您的储蓄率为${savingsRate}%，财务状况非常健康！可以考虑增加投资。`
+        });
+      } else {
+        suggestions.push({
+          type: 'info',
+          icon: 'fa-info-circle',
+          title: '储蓄率正常',
+          content: `您的储蓄率为${savingsRate}%，保持在合理范围内。`
+        });
+      }
+      
+      // 异常支出提醒
+      if (largeTransactions.length > 0) {
+        suggestions.push({
+          type: 'warning',
+          icon: 'fa-chart-line',
+          title: '大额支出提醒',
+          content: `您有${largeTransactions.length}笔大额支出，建议检查是否合理。最大一笔为¥${largeTransactions[0].amount.toFixed(2)}`
+        });
+      }
+      
+      // 消费趋势建议
+      if (trend === '上升') {
+        suggestions.push({
+          type: 'info',
+          icon: 'fa-arrow-trend-up',
+          title: '消费趋势上升',
+          content: '下半年支出比上半年增加了，建议分析原因并适当控制。'
+        });
+      } else if (trend === '下降') {
+        suggestions.push({
+          type: 'success',
+          icon: 'fa-arrow-trend-down',
+          title: '消费趋势下降',
+          content: '下半年支出比上半年减少了，理财意识增强！'
+        });
+      }
+      
+      // 周末消费建议
+      if (weekendExpense > totalExpense * 0.4) {
+        suggestions.push({
+          type: 'info',
+          icon: 'fa-calendar-weekend',
+          title: '周末消费较高',
+          content: '周末支出占总支出的40%以上，建议制定周末消费计划。'
+        });
+      }
       
       annualReview.value = {
         year: currentYear,
-        summary: `在${currentYear}年，您的总收入为¥${totalIncome.toFixed(2)}，总支出为¥${totalExpense.toFixed(2)}，净收入为¥${netIncome.toFixed(2)}。`,
+        summary: `在${currentYear}年，您的总收入为¥${totalIncome.toFixed(2)}，总支出为¥${totalExpense.toFixed(2)}，净收入为¥${netIncome.toFixed(2)}，储蓄率为${savingsRate}%。`,
         highlights: [
           {
+            title: '收入最高的月份',
+            content: `${months[parseInt(maxIncomeMonth.month.split('-')[1]) - 1]}，收入¥${maxIncomeMonth.amount.toFixed(2)}`,
+            icon: 'fa-coins',
+            color: 'green'
+          },
+          {
             title: '支出最高的月份',
-            content: `${months[parseInt(maxExpenseMonth.month.split('-')[1]) - 1]}，支出¥${maxExpenseMonth.amount.toFixed(2)}`
+            content: `${months[parseInt(maxExpenseMonth.month.split('-')[1]) - 1]}，支出¥${maxExpenseMonth.amount.toFixed(2)}`,
+            icon: 'fa-chart-bar',
+            color: 'red'
           },
           {
             title: '支出最多的分类',
-            content: `${topCategory.category}，支出¥${topCategory.amount.toFixed(2)}`
+            content: `${topCategory[0]}，支出¥${topCategory[1].toFixed(2)}（占比${((topCategory[1] / totalExpense) * 100).toFixed(1)}%）`,
+            icon: 'fa-tags',
+            color: 'orange'
           },
           {
-            title: '财务建议',
-            content: netIncome > 0 ? '您的财务状况良好，建议适当增加储蓄和投资。' : '您的支出大于收入，建议控制开支，增加收入来源。'
+            title: '平均月度支出',
+            content: `¥${avgMonthlyExpense.toFixed(2)}`,
+            icon: 'fa-calculator',
+            color: 'blue'
           }
-        ]
+        ],
+        categoryBreakdown: sortedCategories.map(([category, amount]) => ({
+          category,
+          amount,
+          percentage: ((amount / totalExpense) * 100).toFixed(1)
+        })),
+        largeTransactions: largeTransactions.map(t => ({
+          date: t.date,
+          amount: t.amount,
+          description: t.description || getCategoryName(t.categoryId)
+        })),
+        suggestions: suggestions,
+        stats: {
+          totalTransactions: yearTransactions.length,
+          avgDailyExpense: (totalExpense / 365).toFixed(2),
+          weekendExpenseRate: ((weekendExpense / totalExpense) * 100).toFixed(1),
+          trend: trend
+        }
       };
     };
 
@@ -2413,11 +2651,54 @@ const AdminView = {
                 <button @click="exportAllData" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
                   <i class="fas fa-file-export mr-2"></i> 导出所有数据
                 </button>
-                <button @click="importData" class="px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 rounded-lg hover:from-gray-300 hover:to-gray-400 transition-all shadow-md">
+                <button @click="showImportModal = true" class="px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 rounded-lg hover:from-gray-300 hover:to-gray-400 transition-all shadow-md">
                   <i class="fas fa-file-import mr-2"></i> 导入数据
                 </button>
-                <input type="file" ref="fileInput" accept=".json" @change="handleFileImport" class="hidden">
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 导入数据模态框 -->
+      <div v-if="showImportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <h3 class="text-lg font-bold text-gray-900 mb-4">导入数据</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">选择导入类型</label>
+              <select v-model="importType" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+                <option value="json">JSON格式（完整数据备份）</option>
+                <option value="alipay">支付宝账单（CSV）</option>
+                <option value="wechat">微信账单（CSV）</option>
+                <option value="csv">CSV格式（通用）</option>
+              </select>
+            </div>
+            <div v-if="importType === 'alipay' || importType === 'wechat'" class="bg-blue-50 p-4 rounded-lg text-sm text-gray-600">
+              <p class="font-medium mb-2">导入说明：</p>
+              <ul class="list-disc list-inside space-y-1">
+                <li>请从支付宝/微信导出CSV格式账单</li>
+                <li>确保账单包含完整的交易信息</li>
+                <li>导入后需要手动核对分类和账户</li>
+              </ul>
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">选择文件</label>
+              <input type="file" ref="importFileInput" :accept="importType === 'json' ? '.json' : '.csv'" @change="handleFileSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            </div>
+            <div v-if="importPreview.length > 0" class="bg-gray-50 p-4 rounded-lg max-h-60 overflow-y-auto">
+              <p class="text-sm font-medium text-gray-700 mb-2">预览（前5条）：</p>
+              <div v-for="(item, index) in importPreview.slice(0, 5)" :key="index" class="text-xs text-gray-600 mb-1 pb-1 border-b border-gray-200">
+                {{ item.date }} - {{ item.description }} - ¥{{ item.amount }}
+              </div>
+            </div>
+            <div class="flex justify-end gap-3">
+              <button @click="showImportModal = false; importPreview = []" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-all">
+                取消
+              </button>
+              <button @click="confirmImport" :disabled="importPreview.length === 0" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                确认导入
+              </button>
             </div>
           </div>
         </div>
@@ -2428,6 +2709,11 @@ const AdminView = {
     const users = ref(JSON.parse(localStorage.getItem('users') || '[]'));
     const updateInfo = ref({ hasUpdate: false, version: '', releaseNotes: '' });
     const fileInput = ref(null);
+    const showImportModal = ref(false);
+    const importType = ref('json');
+    const importFileInput = ref(null);
+    const importPreview = ref([]);
+    const parsedImportData = ref([]);
 
     const resetPassword = (user) => {
       if (confirm(`确定要将 ${user.username} 的密码重置为默认密码 '123456' 吗？`)) {
@@ -2486,44 +2772,209 @@ const AdminView = {
       URL.revokeObjectURL(url);
     };
 
-    const importData = () => {
-      fileInput.value.click();
+    // 解析支付宝CSV账单
+    const parseAlipayCSV = (content) => {
+      const lines = content.split('\n');
+      const transactions = [];
+      
+      // 跳过标题行，从第3行开始（支付宝CSV格式）
+      for (let i = 2; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const columns = line.split(',');
+        if (columns.length < 10) continue;
+        
+        // 支付宝CSV格式：日期,时间,交易对方,商品说明,收支,金额,交易状态...
+        const date = columns[0] || '';
+        const time = columns[1] || '';
+        const merchant = columns[2] || '';
+        const description = columns[3] || '';
+        const type = columns[4] || '';
+        const amount = parseFloat(columns[5]) || 0;
+        
+        if (!date || isNaN(amount)) continue;
+        
+        transactions.push({
+          date: date,
+          description: description || merchant,
+          merchant: merchant,
+          amount: Math.abs(amount),
+          type: type.includes('支出') ? 'expense' : 'income'
+        });
+      }
+      
+      return transactions;
     };
 
-    const handleFileImport = (event) => {
-      const file = event.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const data = JSON.parse(e.target.result);
-            if (confirm('确定要导入数据吗？这将覆盖现有数据。')) {
-              if (data.users) {
-                localStorage.setItem('users', JSON.stringify(data.users));
-              }
-              if (data.books && data.books.default) {
-                localStorage.setItem('accounts_default', JSON.stringify(data.books.default.accounts || []));
-                localStorage.setItem('transactions_default', JSON.stringify(data.books.default.transactions || []));
-                localStorage.setItem('categories_default', JSON.stringify(data.books.default.categories || []));
-                localStorage.setItem('merchants_default', JSON.stringify(data.books.default.merchants || []));
-                localStorage.setItem('projects_default', JSON.stringify(data.books.default.projects || []));
-                localStorage.setItem('members_default', JSON.stringify(data.books.default.members || []));
-              }
-              alert('数据导入成功');
-              window.location.reload();
-            }
-          } catch (error) {
-            alert('导入失败：文件格式错误');
-          }
-        };
-        reader.readAsText(file);
+    // 解析微信CSV账单
+    const parseWechatCSV = (content) => {
+      const lines = content.split('\n');
+      const transactions = [];
+      
+      // 跳过标题行，从第17行开始（微信CSV格式）
+      for (let i = 16; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const columns = line.split(',');
+        if (columns.length < 5) continue;
+        
+        // 微信CSV格式：交易时间,交易类型,交易对方,商品,金额...
+        const datetime = columns[0] || '';
+        const type = columns[1] || '';
+        const merchant = columns[2] || '';
+        const description = columns[3] || '';
+        const amount = parseFloat(columns[4]) || 0;
+        
+        if (!datetime || isNaN(amount)) continue;
+        
+        // 提取日期（格式：2026-03-06 14:30:00）
+        const date = datetime.split(' ')[0];
+        
+        transactions.push({
+          date: date,
+          description: description || merchant,
+          merchant: merchant,
+          amount: Math.abs(amount),
+          type: type.includes('支出') ? 'expense' : 'income'
+        });
       }
+      
+      return transactions;
+    };
+
+    // 解析通用CSV
+    const parseGenericCSV = (content) => {
+      const lines = content.split('\n');
+      const transactions = [];
+      
+      // 假设CSV格式：日期,描述,金额,类型,商户
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const columns = line.split(',');
+        if (columns.length < 3) continue;
+        
+        const date = columns[0] || '';
+        const description = columns[1] || '';
+        const amount = parseFloat(columns[2]) || 0;
+        const type = columns[3] || (amount < 0 ? 'expense' : 'income');
+        const merchant = columns[4] || '';
+        
+        if (!date || isNaN(amount)) continue;
+        
+        transactions.push({
+          date: date,
+          description: description,
+          merchant: merchant,
+          amount: Math.abs(amount),
+          type: type
+        });
+      }
+      
+      return transactions;
+    };
+
+    const handleFileSelect = (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target.result;
+          let transactions = [];
+          
+          if (importType.value === 'alipay') {
+            transactions = parseAlipayCSV(content);
+          } else if (importType.value === 'wechat') {
+            transactions = parseWechatCSV(content);
+          } else if (importType.value === 'csv') {
+            transactions = parseGenericCSV(content);
+          } else if (importType.value === 'json') {
+            const data = JSON.parse(content);
+            parsedImportData.value = data;
+            importPreview.value = data.transactions?.slice(0, 5) || [];
+            return;
+          }
+          
+          if (transactions.length === 0) {
+            alert('未找到有效的交易记录，请检查文件格式');
+            return;
+          }
+          
+          parsedImportData.value = transactions;
+          importPreview.value = transactions.slice(0, 5);
+          
+        } catch (error) {
+          alert('文件解析失败：' + error.message);
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    const confirmImport = () => {
+      if (parsedImportData.value.length === 0) return;
+      
+      if (!confirm(`确定要导入 ${parsedImportData.value.length} 条记录吗？`)) return;
+      
+      const currentBookId = localStorage.getItem('currentBookId') || 'default';
+      
+      if (importType.value === 'json') {
+        const data = parsedImportData.value;
+        if (data.users) {
+          localStorage.setItem('users', JSON.stringify(data.users));
+        }
+        if (data.books && data.books.default) {
+          localStorage.setItem('accounts_default', JSON.stringify(data.books.default.accounts || []));
+          localStorage.setItem('transactions_default', JSON.stringify(data.books.default.transactions || []));
+          localStorage.setItem('categories_default', JSON.stringify(data.books.default.categories || []));
+          localStorage.setItem('merchants_default', JSON.stringify(data.books.default.merchants || []));
+          localStorage.setItem('projects_default', JSON.stringify(data.books.default.projects || []));
+          localStorage.setItem('members_default', JSON.stringify(data.books.default.members || []));
+        }
+      } else {
+        // 导入CSV账单
+        const existingTransactions = JSON.parse(localStorage.getItem(`transactions_${currentBookId}`) || '[]');
+        const newTransactions = parsedImportData.value.map((item, index) => ({
+          id: Date.now() + index,
+          type: item.type,
+          amount: item.amount,
+          categoryId: null, // 需要用户手动选择
+          accountId: null, // 需要用户手动选择
+          merchantId: null,
+          projectId: null,
+          memberId: null,
+          date: item.date,
+          description: item.description,
+          merchant: item.merchant
+        }));
+        
+        const allTransactions = [...existingTransactions, ...newTransactions];
+        localStorage.setItem(`transactions_${currentBookId}`, JSON.stringify(allTransactions));
+      }
+      
+      alert('数据导入成功');
+      showImportModal.value = false;
+      importPreview.value = [];
+      parsedImportData.value = [];
+      window.location.reload();
+    };
+
+    const importData = () => {
+      showImportModal.value = true;
     };
 
     return { 
       users, 
       updateInfo, 
       fileInput, 
+      showImportModal,
+      importType,
+      importFileInput,
+      importPreview,
       APP_VERSION,
       resetPassword, 
       deleteUser, 
@@ -2531,7 +2982,8 @@ const AdminView = {
       downloadUpdate, 
       exportAllData, 
       importData, 
-      handleFileImport 
+      handleFileSelect,
+      confirmImport
     };
   }
 };
