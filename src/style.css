@@ -1,0 +1,17 @@
+/* Tailwind CSS */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Custom Styles */
+@layer base {
+  /* 自定义样式 */
+}
+
+@layer components {
+  /* 组件样式 */
+}
+
+@layer utilities {
+  /* 工具类样式 */
+}

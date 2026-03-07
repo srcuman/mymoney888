@@ -1,0 +1,47 @@
+# 依赖目录
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 版本控制
+.git
+.gitignore
+.gitattributes
+
+# IDE和编辑器
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 测试文件
+tests
+test
+__tests__
+*.test.js
+*.spec.js
+
+# 文档
+*.md
+!README.md
+DEPLOYMENT.md
+
+# 构建工具
+.eslintrc
+.prettierrc
+.babelrc
+rollup.config.js
+vite.config.js
+
+# 其他
+.github
+*.log
+.env
+.env.local
+.env.*.local
