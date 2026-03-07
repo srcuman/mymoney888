@@ -1,31 +1,80 @@
 version: '3.8'
 
 services:
-  mymoney888:
-    # 从GitHub仓库构建
-    build:
-      context: https://github.com/srcuman/mymoney888.git
-      dockerfile: Dockerfile
-      # 国内用户如遇到镜像拉取问题，可取消注释以下配置使用镜像源
-      # args:
-      #   - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:25.8.0-alpine
-    image: mymoney888:latest
-    container_name: mymoney888
+  mysql:
+    image: mysql:8.0
+    container_name: mymoney888-mysql
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=mymoney888-root
+      - MYSQL_DATABASE=mymoney888
+      - MYSQL_USER=mymoney888
+      - MYSQL_PASSWORD=mymoney888
+      - TZ=Asia/Shanghai
     ports:
-      - "0.0.0.0:8888:8888"
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./server/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - mymoney888-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pmymoney888-root"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: mymoney888-backend
     restart: always
     environment:
       - NODE_ENV=production
-      # npm镜像源配置（国内用户已默认使用淘宝镜像）
+      - PORT=3000
+      - DB_HOST=mysql
+      - DB_USER=mymoney888
+      - DB_PASSWORD=mymoney888
+      - DB_NAME=mymoney888
+      - JWT_SECRET=mymoney888-secret-key-change-in-production
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    networks:
+      - mymoney888-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mymoney888-frontend
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=http://backend:3000/api
       - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
-    # 健康检查
+    depends_on:
+      - backend
+    ports:
+      - "8888:8888"
+    networks:
+      - mymoney888-network
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    # 资源限制
     deploy:
       resources:
         limits:
@@ -35,9 +84,12 @@ services:
           cpus: '0.5'
           memory: 256M
 
-# 网络配置 - 显式定义桥接网络
+volumes:
+  mysql_data:
+    driver: local
+
 networks:
-  default:
+  mymoney888-network:
     driver: bridge
     ipam:
       config:

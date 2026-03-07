@@ -1,26 +1,21 @@
-# 使用Node.js 25.8.0-alpine版本
-# 国内用户可使用以下镜像源（取消注释即可）：
-# FROM docker.mirrors.sjtug.sjtu.edu.cn/library/node:25.8.0-alpine
-# FROM registry.cn-hangzhou.aliyuncs.com/library/node:25.8.0-alpine
-# FROM docker.mirrors.ustc.edu.cn/library/node:25.8.0-alpine
 FROM node:25.8.0-alpine
 
-# 设置工作目录
 WORKDIR /app
 
-# 设置npm镜像源（国内用户取消注释以下行）
-# RUN npm config set registry https://registry.npmmirror.com
-# 或使用淘宝镜像
+# 设置npm镜像源
 RUN npm config set registry https://registry.npmmirror.com
 
 # 复制package.json和package-lock.json
 COPY package*.json ./
 
-# 安装依赖
-RUN npm install --production
+# 安装所有依赖（包括开发依赖，用于构建）
+RUN npm install
 
 # 复制所有文件
 COPY . .
+
+# 构建前端
+RUN npm run build
 
 # 暴露8888端口
 EXPOSE 8888
