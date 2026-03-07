@@ -2,7 +2,7 @@ const { createApp, ref, computed, onMounted, nextTick } = Vue;
 const { createRouter, createWebHashHistory } = VueRouter;
 
 // 版本控制
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 const GITHUB_REPO = 'https://api.github.com/repos/srcuman/mymoney888/releases/latest';
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/srcuman/mymoney888/main';
 
@@ -429,6 +429,7 @@ const defaultCategories = [...defaultExpenseCategories, ...defaultIncomeCategori
 const accountTypes = [
   { id: 'cash', name: '现金', icon: 'fa-money-bill' },
   { id: 'bank', name: '银行卡', icon: 'fa-credit-card' },
+  { id: 'credit_card', name: '信用卡', icon: 'fa-credit-card' },
   { id: 'alipay', name: '支付宝', icon: 'fa-alipay' },
   { id: 'wechat', name: '微信', icon: 'fa-weixin' },
   { id: 'investment', name: '投资账户', icon: 'fa-chart-line' },
@@ -605,6 +606,38 @@ const HomeView = {
             </div>
           </div>
 
+          <!-- 信用卡分期选项 -->
+          <div v-if="transactionType !== 'transfer' && getAccountType(transaction.accountId) === 'credit_card'" class="space-y-4">
+            <div>
+              <label class="flex items-center">
+                <input type="checkbox" v-model="isInstallment" 
+                  class="w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded">
+                <span class="ml-2 text-sm font-medium text-gray-700">使用分期</span>
+              </label>
+            </div>
+            <div v-if="isInstallment" class="space-y-3">
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700">分期期数</label>
+                <select v-model="installmentMonths" 
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+                  <option value="3">3期</option>
+                  <option value="6">6期</option>
+                  <option value="12">12期</option>
+                  <option value="24">24期</option>
+                </select>
+              </div>
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700">分期费率（%）</label>
+                <input type="number" v-model.number="installmentRate" step="0.01" 
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+              </div>
+              <div class="bg-blue-50 p-3 rounded-lg">
+                <p class="text-sm text-gray-700">每期还款：¥{{ monthlyPayment.toFixed(2) }}</p>
+                <p class="text-sm text-gray-700">总手续费：¥{{ totalFee.toFixed(2) }}</p>
+              </div>
+            </div>
+          </div>
+
           <!-- 备注 -->
           <div>
             <label class="block mb-2 text-sm font-medium text-gray-700">备注</label>
@@ -704,10 +737,37 @@ const HomeView = {
     const transactionDate = ref(new Date().toISOString().split('T')[0]);
     const transactionTime = ref(new Date().toISOString().split('T')[1].substring(0, 5));
 
+    // 信用卡分期相关
+    const isInstallment = ref(false);
+    const installmentMonths = ref(3);
+    const installmentRate = ref(0);
+
     // 金额计算器
     const amountInput = ref('');
     const calculatedAmount = ref(null);
     const calcError = ref('');
+
+    // 计算分期还款金额
+    const monthlyPayment = computed(() => {
+      if (!isInstallment.value || !transaction.value.amount) return 0;
+      const amount = transaction.value.amount;
+      const rate = installmentRate.value / 100;
+      const months = parseInt(installmentMonths.value);
+      const totalFee = amount * rate;
+      return (amount + totalFee) / months;
+    });
+
+    // 计算总手续费
+    const totalFee = computed(() => {
+      if (!isInstallment.value || !transaction.value.amount) return 0;
+      return transaction.value.amount * (installmentRate.value / 100);
+    });
+
+    // 获取账户类型
+    const getAccountType = (accountId) => {
+      const account = accounts.value.find(a => a.id === parseInt(accountId));
+      return account ? account.type : '';
+    };
 
     const calculateAmount = () => {
       if (!amountInput.value) {
@@ -1189,6 +1249,12 @@ const HomeView = {
       transaction, 
       transactionDate, 
       transactionTime, 
+      isInstallment, 
+      installmentMonths, 
+      installmentRate, 
+      monthlyPayment, 
+      totalFee, 
+      getAccountType, 
       amountInput,
       calculatedAmount,
       calcError,
@@ -1392,6 +1458,27 @@ const AccountsView = {
               <input type="number" v-model.number="accountForm.balance" step="0.01" required 
                 class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
             </div>
+            
+            <!-- 信用卡特有字段 -->
+            <div v-if="accountForm.type === 'credit_card'" class="space-y-4">
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700">账单日</label>
+                <input type="number" v-model.number="accountForm.billDay" min="1" max="31" 
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+                <p class="text-xs text-gray-500 mt-1">每月的账单日期（1-31）</p>
+              </div>
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700">还款日</label>
+                <input type="number" v-model.number="accountForm.repayDay" min="1" max="31" 
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+                <p class="text-xs text-gray-500 mt-1">每月的还款日期（1-31）</p>
+              </div>
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700">信用额度</label>
+                <input type="number" v-model.number="accountForm.creditLimit" step="0.01" 
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+              </div>
+            </div>
             <div class="flex justify-end space-x-3">
               <button type="button" @click="showAddModal = false" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all">
                 取消
@@ -1409,8 +1496,9 @@ const AccountsView = {
     const accounts = ref(JSON.parse(localStorage.getItem(getBookKey('accounts')) || JSON.stringify([
       { id: 1, name: '现金', type: 'cash', balance: 1000 },
       { id: 2, name: '工商银行', type: 'bank', balance: 5000 },
-      { id: 3, name: '支付宝', type: 'alipay', balance: 2000 },
-      { id: 4, name: '微信钱包', type: 'wechat', balance: 1500 }
+      { id: 3, name: '招商银行信用卡', type: 'credit_card', balance: 0, billDay: 10, repayDay: 25, creditLimit: 20000 },
+      { id: 4, name: '支付宝', type: 'alipay', balance: 2000 },
+      { id: 5, name: '微信钱包', type: 'wechat', balance: 1500 }
     ])));
     const showAddModal = ref(false);
     const editingAccount = ref(null);
@@ -3553,6 +3641,171 @@ const AdminView = {
   }
 };
 
+// 信用卡管理页面
+const CreditCardsView = {
+  template: `
+    <div class="space-y-8">
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
+          <i class="fas fa-credit-card text-primary mr-2"></i>
+          信用卡管理
+        </h2>
+        
+        <!-- 信用卡列表 -->
+        <div class="space-y-4">
+          <div v-for="card in creditCards" :key="card.id" class="bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:shadow-md transition-all p-4">
+            <div class="flex justify-between items-start">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900">{{ card.name }}</h3>
+                <p class="text-sm text-gray-500 mt-1">
+                  账单日: {{ card.billDay }}号 | 还款日: {{ card.repayDay }}号
+                </p>
+              </div>
+              <div class="text-right">
+                <p class="text-sm text-gray-500">信用额度</p>
+                <p class="text-lg font-semibold text-primary">¥{{ card.creditLimit.toFixed(2) }}</p>
+              </div>
+            </div>
+            
+            <div class="mt-4 space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">当前余额</span>
+                <span class="text-sm font-medium" :class="card.balance < 0 ? 'text-red-600' : 'text-green-600'">
+                  ¥{{ card.balance.toFixed(2) }}
+                </span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">可用额度</span>
+                <span class="text-sm font-medium text-green-600">
+                  ¥{{ (card.creditLimit + card.balance).toFixed(2) }}
+                </span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">本月账单</span>
+                <span class="text-sm font-medium text-blue-600">
+                  ¥{{ getMonthlyBill(card.id).toFixed(2) }}
+                </span>
+              </div>
+            </div>
+            
+            <div class="mt-4 flex space-x-2">
+              <button @click="editCard(card)" class="px-3 py-1 bg-primary text-white text-sm rounded-lg hover:bg-blue-600 transition-all">
+                编辑
+              </button>
+              <button @click="viewBill(card)" class="px-3 py-1 bg-secondary text-white text-sm rounded-lg hover:bg-green-600 transition-all">
+                查看账单
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 近期还款提醒 -->
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+          <i class="fas fa-bell text-primary mr-2"></i>
+          近期还款提醒
+        </h2>
+        <div v-if="upcomingPayments.length > 0" class="space-y-3">
+          <div v-for="payment in upcomingPayments" :key="payment.cardId" class="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+            <div class="flex justify-between items-center">
+              <div>
+                <p class="font-medium text-gray-900">{{ payment.cardName }}</p>
+                <p class="text-sm text-gray-600">还款日期: {{ payment.repayDate }}</p>
+              </div>
+              <div class="text-right">
+                <p class="text-sm text-gray-600">应还款额</p>
+                <p class="text-lg font-semibold text-red-600">¥{{ payment.amount.toFixed(2) }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else class="text-center py-6 text-gray-500">
+          <i class="fas fa-check-circle text-green-500 text-2xl mb-2"></i>
+          <p>暂无近期还款</p>
+        </div>
+      </div>
+    </div>
+  `,
+  setup() {
+    // 获取当前账套ID
+    const currentBookId = localStorage.getItem('currentBookId') || 'default';
+    
+    // 获取账套特定的localStorage key
+    const getBookKey = (key) => `${key}_${currentBookId}`;
+    
+    // 从localStorage加载数据
+    const accounts = ref(JSON.parse(localStorage.getItem(getBookKey('accounts')) || '[]'));
+    const transactions = ref(JSON.parse(localStorage.getItem(getBookKey('transactions')) || '[]'));
+    
+    // 过滤信用卡账户
+    const creditCards = computed(() => {
+      return accounts.value.filter(account => account.type === 'credit_card');
+    });
+    
+    // 计算本月账单
+    const getMonthlyBill = (cardId) => {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      return transactions.value.filter(t => {
+        return t.type === 'expense' && t.accountId === cardId && t.date.startsWith(currentMonth);
+      }).reduce((total, t) => total + t.amount, 0);
+    };
+    
+    // 计算近期还款
+    const upcomingPayments = computed(() => {
+      const today = new Date();
+      const payments = [];
+      
+      creditCards.value.forEach(card => {
+        // 计算本月还款日
+        const repayDate = new Date();
+        repayDate.setDate(card.repayDay);
+        
+        // 如果还款日已过，计算下个月的
+        if (repayDate < today) {
+          repayDate.setMonth(repayDate.getMonth() + 1);
+        }
+        
+        // 计算距离还款的天数
+        const daysUntilRepay = Math.ceil((repayDate - today) / (1000 * 60 * 60 * 24));
+        
+        // 只显示30天内的还款
+        if (daysUntilRepay <= 30) {
+          payments.push({
+            cardId: card.id,
+            cardName: card.name,
+            repayDate: repayDate.toISOString().split('T')[0],
+            amount: getMonthlyBill(card.id),
+            daysUntilRepay
+          });
+        }
+      });
+      
+      return payments.sort((a, b) => a.daysUntilRepay - b.daysUntilRepay);
+    });
+    
+    // 编辑信用卡
+    const editCard = (card) => {
+      // 这里可以跳转到账户编辑页面或打开编辑模态框
+      alert('编辑功能开发中');
+    };
+    
+    // 查看账单
+    const viewBill = (card) => {
+      // 这里可以跳转到账单详情页面
+      alert('账单详情功能开发中');
+    };
+    
+    return {
+      creditCards,
+      getMonthlyBill,
+      upcomingPayments,
+      editCard,
+      viewBill
+    };
+  }
+};
+
 // 路由配置
 const routes = [
   { path: '/', component: HomeView },
@@ -3562,6 +3815,7 @@ const routes = [
   { path: '/accounts', component: AccountsView },
   { path: '/stats', component: StatsView },
   { path: '/dimensions', component: DimensionsView },
+  { path: '/credit-cards', component: CreditCardsView },
   { path: '/admin', component: AdminView }
 ];
 
@@ -3622,6 +3876,9 @@ const App = {
               </router-link>
               <router-link to="/dimensions" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
                 维度
+              </router-link>
+              <router-link to="/credit-cards" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
+                信用卡
               </router-link>
               <router-link v-if="currentUser.isAdmin" to="/admin" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
                 管理员
