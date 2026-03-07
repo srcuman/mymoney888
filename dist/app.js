@@ -6,14 +6,137 @@ const APP_VERSION = '1.6.0';
 const GITHUB_REPO = 'https://api.github.com/repos/srcuman/mymoney888/releases/latest';
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/srcuman/mymoney888/main';
 
+// 日志系统
+class Logger {
+  constructor() {
+    this.logLevel = 'INFO'; // DEBUG, INFO, WARN, ERROR
+    this.maxLogs = 1000;
+    this.logs = JSON.parse(localStorage.getItem('app_logs') || '[]');
+  }
+
+  // 日志级别
+  levels = {
+    DEBUG: 0,
+    INFO: 1,
+    WARN: 2,
+    ERROR: 3
+  };
+
+  // 检查日志级别
+  shouldLog(level) {
+    return this.levels[level] >= this.levels[this.logLevel];
+  }
+
+  // 基础日志方法
+  log(level, message, context = {}) {
+    if (!this.shouldLog(level)) return;
+
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      context,
+      version: APP_VERSION,
+      userAgent: navigator.userAgent,
+      screen: `${window.screen.width}x${window.screen.height}`,
+      url: window.location.href
+    };
+
+    this.logs.push(logEntry);
+    
+    // 限制日志数量
+    if (this.logs.length > this.maxLogs) {
+      this.logs = this.logs.slice(-this.maxLogs);
+    }
+
+    // 保存到localStorage
+    localStorage.setItem('app_logs', JSON.stringify(this.logs));
+
+    // 同时输出到控制台
+    if (level === 'ERROR') {
+      console.error(`[${level}] ${message}`, context);
+    } else if (level === 'WARN') {
+      console.warn(`[${level}] ${message}`, context);
+    } else if (level === 'DEBUG') {
+      console.debug(`[${level}] ${message}`, context);
+    } else {
+      console.log(`[${level}] ${message}`, context);
+    }
+  }
+
+  // 快捷方法
+  debug(message, context) {
+    this.log('DEBUG', message, context);
+  }
+
+  info(message, context) {
+    this.log('INFO', message, context);
+  }
+
+  warn(message, context) {
+    this.log('WARN', message, context);
+  }
+
+  error(message, context) {
+    this.log('ERROR', message, context);
+  }
+
+  // 获取日志
+  getLogs() {
+    return this.logs;
+  }
+
+  // 清空日志
+  clearLogs() {
+    this.logs = [];
+    localStorage.removeItem('app_logs');
+    this.info('日志已清空');
+  }
+
+  // 导出日志
+  exportLogs() {
+    const logs = JSON.stringify(this.logs, null, 2);
+    const blob = new Blob([logs], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `mymoney888_logs_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    this.info('日志导出成功');
+  }
+
+  // 搜索日志
+  searchLogs(keyword) {
+    if (!keyword) return this.logs;
+    const lowerKeyword = keyword.toLowerCase();
+    return this.logs.filter(log => 
+      log.message.toLowerCase().includes(lowerKeyword) ||
+      JSON.stringify(log.context).toLowerCase().includes(lowerKeyword)
+    );
+  }
+
+  // 按级别过滤日志
+  filterLogs(level) {
+    if (!level) return this.logs;
+    return this.logs.filter(log => log.level === level);
+  }
+}
+
+// 全局日志实例
+const logger = new Logger();
+
 // 检查版本更新
 const checkForUpdates = async () => {
   try {
+    logger.info('开始检查版本更新');
     const response = await fetch(GITHUB_REPO);
     if (response.ok) {
       const data = await response.json();
       const latestVersion = data.tag_name.replace('v', '');
+      logger.info('版本检查成功', { currentVersion: APP_VERSION, latestVersion });
       if (compareVersions(latestVersion, APP_VERSION) > 0) {
+        logger.info('发现新版本', { version: latestVersion });
         return {
           hasUpdate: true,
           version: latestVersion,
@@ -24,7 +147,7 @@ const checkForUpdates = async () => {
       }
     }
   } catch (error) {
-    console.log('版本检查失败:', error);
+    logger.error('版本检查失败', { error: error.message });
   }
   return { hasUpdate: false };
 };
@@ -928,6 +1051,12 @@ const HomeView = {
       // 确保金额已计算
       calculateAmount();
       
+      logger.info('开始添加交易', {
+        type: transactionType.value,
+        amount: transaction.value.amount,
+        date: transactionDate.value + ' ' + transactionTime.value
+      });
+      
       // 检测疑似重复录入
       if (!editingTransactionId.value) {
         const today = new Date().toISOString().split('T')[0];
@@ -1060,6 +1189,13 @@ const HomeView = {
           localStorage.setItem(getBookKey('transactions'), JSON.stringify(transactions.value));
           localStorage.setItem(getBookKey('accounts'), JSON.stringify(accounts.value));
           
+          logger.info('交易编辑成功', {
+            id: editingTransactionId.value,
+            type: transactionType.value,
+            amount: transaction.value.amount,
+            date: transactionDate.value + ' ' + transactionTime.value
+          });
+          
           // 重置表单
           resetForm();
         }
@@ -1137,6 +1273,12 @@ const HomeView = {
         localStorage.setItem(getBookKey('transactions'), JSON.stringify(transactions.value));
         localStorage.setItem(getBookKey('accounts'), JSON.stringify(accounts.value));
         
+        logger.info('交易添加成功', {
+          type: transactionType.value,
+          amount: transaction.value.amount,
+          date: transactionDate.value + ' ' + transactionTime.value
+        });
+        
         // 重置表单
         resetForm();
       }
@@ -1161,7 +1303,13 @@ const HomeView = {
     };
 
     const deleteTransaction = (t) => {
-      if (confirm('确定要删除此交易吗？')) {
+      if (confirm('确定要删除这条交易记录吗？')) {
+        logger.info('开始删除交易', {
+          id: t.id,
+          type: t.type,
+          amount: t.amount,
+          date: t.date
+        });
         // 恢复余额
         if (t.type === 'transfer') {
           const fromAccountIndex = accounts.value.findIndex(a => a.id === t.fromAccountId);
@@ -1192,12 +1340,24 @@ const HomeView = {
         // 更新localStorage（使用账套前缀）
         localStorage.setItem(getBookKey('transactions'), JSON.stringify(transactions.value));
         localStorage.setItem(getBookKey('accounts'), JSON.stringify(accounts.value));
+        
+        logger.info('交易删除成功', {
+          id: t.id,
+          type: t.type,
+          amount: t.amount
+        });
       }
     };
 
     const editingTransactionId = ref(null);
 
     const editTransaction = (t) => {
+      logger.info('开始编辑交易', {
+        id: t.id,
+        type: t.type,
+        amount: t.amount,
+        date: t.date
+      });
       editingTransactionId.value = t.id;
       transactionType.value = t.type;
       transaction.value = {
@@ -3641,6 +3801,215 @@ const AdminView = {
   }
 };
 
+// 日志管理页面
+const LogsView = {
+  template: `
+    <div class="space-y-8">
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
+          <i class="fas fa-file-alt text-primary mr-2"></i>
+          系统日志
+        </h2>
+        
+        <!-- 日志过滤器 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div>
+            <label class="block mb-2 text-sm font-medium text-gray-700">搜索</label>
+            <input type="text" v-model="searchKeyword" placeholder="搜索日志内容" 
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+          </div>
+          <div>
+            <label class="block mb-2 text-sm font-medium text-gray-700">日志级别</label>
+            <select v-model="filterLevel" 
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+              <option value="">全部</option>
+              <option value="DEBUG">DEBUG</option>
+              <option value="INFO">INFO</option>
+              <option value="WARN">WARN</option>
+              <option value="ERROR">ERROR</option>
+            </select>
+          </div>
+          <div class="flex items-end">
+            <div class="flex space-x-2 w-full">
+              <button @click="exportLogs" class="flex-1 px-4 py-3 bg-secondary text-white rounded-lg hover:bg-green-600 transition-all flex items-center justify-center">
+                <i class="fas fa-download mr-2"></i> 导出日志
+              </button>
+              <button @click="clearLogs" class="flex-1 px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all flex items-center justify-center">
+                <i class="fas fa-trash mr-2"></i> 清空日志
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 日志列表 -->
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  时间
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  级别
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  消息
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  详情
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr v-for="(log, index) in filteredLogs" :key="index" 
+                :class="{
+                  'bg-red-50': log.level === 'ERROR',
+                  'bg-yellow-50': log.level === 'WARN',
+                  'bg-blue-50': log.level === 'DEBUG'
+                }">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {{ formatTime(log.timestamp) }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span :class="{
+                    'px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800': log.level === 'ERROR',
+                    'px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800': log.level === 'WARN',
+                    'px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800': log.level === 'DEBUG',
+                    'px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800': log.level === 'INFO'
+                  }">
+                    {{ log.level }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-900">
+                  {{ log.message }}
+                </td>
+                <td class="px-6 py-4 text-sm text-gray-500">
+                  <button @click="showLogDetail(log)" class="text-primary hover:text-blue-800 transition-colors">
+                    查看
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- 日志详情模态框 -->
+        <div v-if="selectedLog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl">
+            <h3 class="text-lg font-bold text-gray-900 mb-4">日志详情</h3>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700">时间</label>
+                <p class="mt-1 text-sm text-gray-900">{{ selectedLog.timestamp }}</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700">级别</label>
+                <span :class="{
+                  'px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800': selectedLog.level === 'ERROR',
+                  'px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800': selectedLog.level === 'WARN',
+                  'px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800': selectedLog.level === 'DEBUG',
+                  'px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800': selectedLog.level === 'INFO'
+                }">
+                  {{ selectedLog.level }}
+                </span>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700">消息</label>
+                <p class="mt-1 text-sm text-gray-900">{{ selectedLog.message }}</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700">上下文</label>
+                <pre class="mt-1 p-3 bg-gray-50 rounded-lg text-sm text-gray-900 overflow-auto max-h-40">{{ JSON.stringify(selectedLog.context, null, 2) }}</pre>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700">版本</label>
+                <p class="mt-1 text-sm text-gray-900">{{ selectedLog.version }}</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700">用户代理</label>
+                <p class="mt-1 text-sm text-gray-900">{{ selectedLog.userAgent }}</p>
+              </div>
+            </div>
+            <div class="mt-6 flex justify-end">
+              <button @click="selectedLog = null" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all">
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  setup() {
+    const searchKeyword = ref('');
+    const filterLevel = ref('');
+    const selectedLog = ref(null);
+    
+    // 获取日志
+    const logs = ref(logger.getLogs());
+    
+    // 过滤日志
+    const filteredLogs = computed(() => {
+      let result = [...logs.value];
+      
+      // 按关键字搜索
+      if (searchKeyword.value) {
+        result = logger.searchLogs(searchKeyword.value);
+      }
+      
+      // 按级别过滤
+      if (filterLevel.value) {
+        result = logger.filterLogs(filterLevel.value);
+      }
+      
+      // 按时间倒序排序
+      return result.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    });
+    
+    // 格式化时间
+    const formatTime = (timestamp) => {
+      const date = new Date(timestamp);
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    };
+    
+    // 显示日志详情
+    const showLogDetail = (log) => {
+      selectedLog.value = log;
+    };
+    
+    // 导出日志
+    const exportLogs = () => {
+      logger.exportLogs();
+    };
+    
+    // 清空日志
+    const clearLogs = () => {
+      if (confirm('确定要清空所有日志吗？')) {
+        logger.clearLogs();
+        logs.value = [];
+      }
+    };
+    
+    return {
+      searchKeyword,
+      filterLevel,
+      selectedLog,
+      filteredLogs,
+      formatTime,
+      showLogDetail,
+      exportLogs,
+      clearLogs
+    };
+  }
+};
+
 // 信用卡管理页面
 const CreditCardsView = {
   template: `
@@ -3816,6 +4185,7 @@ const routes = [
   { path: '/stats', component: StatsView },
   { path: '/dimensions', component: DimensionsView },
   { path: '/credit-cards', component: CreditCardsView },
+  { path: '/logs', component: LogsView },
   { path: '/admin', component: AdminView }
 ];
 
@@ -3879,6 +4249,9 @@ const App = {
               </router-link>
               <router-link to="/credit-cards" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
                 信用卡
+              </router-link>
+              <router-link to="/logs" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
+                日志
               </router-link>
               <router-link v-if="currentUser.isAdmin" to="/admin" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
                 管理员
