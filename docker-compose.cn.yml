@@ -19,13 +19,13 @@ services:
       NODE_ENV: production
       PORT: 3000
       JWT_SECRET: ${JWT_SECRET:-mymoney888-secret-key}
-      DB_HOST: ${DB_HOST:-localhost}
+      DB_HOST: ${DB_HOST:-host.docker.internal}
       DB_PORT: ${DB_PORT:-3306}
       DB_USER: ${DB_USER:-mymoney888}
       DB_PASSWORD: ${DB_PASSWORD:-mymoney888}
       DB_NAME: ${DB_NAME:-mymoney888}
     ports:
-      - "3000:3000"
+      - "30001:3000"
     restart: always
     # networks:
     #   - mymoney888-network
@@ -62,7 +62,7 @@ services:
       - "8888:8888"
     environment:
       NODE_ENV: production
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:30001/api}
     depends_on:
       - backend
     restart: always
