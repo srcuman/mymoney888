@@ -1,33 +1,42 @@
 # 国内网络环境专用Docker Compose配置
 # 使用国内镜像源加速构建和部署
+# 使用外部MySQL数据库
 
 version: '3.8'
 
 services:
-  mymoney888:
+  # Express后端API服务
+  backend:
     build:
-      context: https://github.com/srcuman/mymoney888.git
+      context: ./server
       dockerfile: Dockerfile
       args:
-        # 使用国内Node.js镜像源（25.8.0-alpine版本）
-        - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:25.8.0-alpine
-    image: mymoney888:latest
-    container_name: mymoney888
-    ports:
-      - "0.0.0.0:8888:8888"
-    restart: always
+        # 使用国内Node.js镜像源
+        - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:20-alpine
+    image: mymoney888-backend:latest
+    container_name: mymoney888-backend
     environment:
-      - NODE_ENV=production
-      # 使用淘宝npm镜像源
-      - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
-    # 健康检查
+      NODE_ENV: production
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-mymoney888-secret-key}
+      DB_HOST: ${DB_HOST:-localhost}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER:-mymoney888}
+      DB_PASSWORD: ${DB_PASSWORD:-mymoney888}
+      DB_NAME: ${DB_NAME:-mymoney888}
+    ports:
+      - "3000:3000"
+    restart: always
+    networks:
+      - mymoney888-network
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
-    # 资源限制
+      start_period: 40s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     deploy:
       resources:
         limits:
@@ -37,10 +46,47 @@ services:
           cpus: '0.5'
           memory: 256M
 
-# 网络配置 - 显式定义桥接网络
+  # Vue前端服务
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # 使用国内Node.js镜像源
+        - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:20-alpine
+        # 使用淘宝npm镜像源
+        - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+    image: mymoney888-frontend:latest
+    container_name: mymoney888-frontend
+    ports:
+      - "8888:8888"
+    environment:
+      NODE_ENV: production
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - mymoney888-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+# 自定义网络
 networks:
-  default:
+  mymoney888-network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: 172.24.0.0/16
