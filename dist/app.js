@@ -2,7 +2,7 @@ const { createApp, ref, computed, onMounted, nextTick } = Vue;
 const { createRouter, createWebHashHistory } = VueRouter;
 
 // 版本控制
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.7.1';
 const GITHUB_REPO = 'https://api.github.com/repos/srcuman/mymoney888/releases/latest';
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/srcuman/mymoney888/main';
 
@@ -1319,6 +1319,45 @@ const HomeView = {
               accounts.value[accountIndex].balance += transaction.value.amount;
             } else if (transactionType.value === 'expense') {
               accounts.value[accountIndex].balance -= transaction.value.amount;
+            }
+          }
+          
+          // 处理信用卡分期
+          if (isInstallment.value && transactionType.value === 'expense') {
+            const accountType = accounts.value.find(a => a.id === transaction.value.accountId)?.type;
+            if (accountType === 'credit_card') {
+              const installments = [];
+              const monthlyPaymentAmount = monthlyPayment.value;
+              const startDate = new Date(transactionDateTime.value);
+              
+              for (let i = 0; i < installmentMonths.value; i++) {
+                const dueDate = new Date(startDate);
+                dueDate.setMonth(dueDate.getMonth() + i + 1);
+                
+                installments.push({
+                  id: Date.now() + i + 1,
+                  transactionId: newTransaction.id,
+                  period: i + 1,
+                  totalPeriods: parseInt(installmentMonths.value),
+                  amount: monthlyPaymentAmount,
+                  dueDate: dueDate.toISOString().split('T')[0],
+                  paid: false,
+                  paidDate: null,
+                  installmentName: installmentName.value || '分期还款',
+                  rate: installmentRate.value
+                });
+              }
+              
+              // 保存分期记录
+              const existingInstallments = JSON.parse(localStorage.getItem(getBookKey('installments')) || '[]');
+              existingInstallments.push(...installments);
+              localStorage.setItem(getBookKey('installments'), JSON.stringify(existingInstallments));
+              
+              logger.info('分期记录创建成功', {
+                transactionId: newTransaction.id,
+                periods: installmentMonths.value,
+                monthlyPayment: monthlyPaymentAmount
+              });
             }
           }
         }
@@ -3532,6 +3571,17 @@ const AdminView = {
                 <li>导入后需要手动核对分类和账户</li>
               </ul>
             </div>
+            <div v-if="importType === 'csv'" class="bg-blue-50 p-4 rounded-lg text-sm text-gray-600">
+              <p class="font-medium mb-2">导入说明：</p>
+              <ul class="list-disc list-inside space-y-1">
+                <li>CSV格式：日期,描述,金额,类型,商户</li>
+                <li>类型：收入/支出/转账</li>
+                <li>日期格式：YYYY-MM-DD</li>
+              </ul>
+              <button @click="downloadCSVTemplate" class="mt-3 px-4 py-2 bg-white border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 transition-all text-sm">
+                <i class="fas fa-download mr-2"></i>下载CSV样板
+              </button>
+            </div>
             <div>
               <label class="block mb-2 text-sm font-medium text-gray-700">选择文件</label>
               <input type="file" ref="importFileInput" :accept="importType === 'json' ? '.json' : '.csv'" @change="handleFileSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
@@ -3643,6 +3693,18 @@ const AdminView = {
       const link = document.createElement('a');
       link.href = url;
       link.download = `mymoney888_export_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+
+    // 下载CSV样板
+    const downloadCSVTemplate = () => {
+      const csvContent = '日期,描述,金额,类型,商户\n2025-01-01,餐饮消费,50.00,支出,美团外卖\n2025-01-02,工资收入,8000.00,收入,公司\n2025-01-03,转账,1000.00,转账,银行转账';
+      const dataBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'mymoney888_import_template.csv';
       link.click();
       URL.revokeObjectURL(url);
     };
@@ -3858,7 +3920,8 @@ const AdminView = {
       exportAllData, 
       importData, 
       handleFileSelect,
-      confirmImport
+      confirmImport,
+      downloadCSVTemplate
     };
   }
 };
@@ -4151,10 +4214,16 @@ const CreditCardsView = {
               <div>
                 <p class="font-medium text-gray-900">{{ payment.cardName }}</p>
                 <p class="text-sm text-gray-600">还款日期: {{ payment.repayDate }}</p>
+                <p class="text-xs text-gray-500 mt-1" :class="payment.daysUntilRepay <= 3 ? 'text-red-600' : payment.daysUntilRepay <= 7 ? 'text-yellow-600' : 'text-blue-600'">
+                  {{ payment.daysUntilRepay === 0 ? '今天到期' : payment.daysUntilRepay === 1 ? '明天到期' : '还有' + payment.daysUntilRepay + '天到期' }}
+                </p>
               </div>
               <div class="text-right">
                 <p class="text-sm text-gray-600">应还款额</p>
                 <p class="text-lg font-semibold text-red-600">¥{{ payment.amount.toFixed(2) }}</p>
+                <button @click="recordCreditCardPayment(payment)" class="mt-2 px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition-all">
+                  <i class="fas fa-check mr-1"></i>记录还款
+                </button>
               </div>
             </div>
           </div>
@@ -4626,6 +4695,45 @@ const CreditCardsView = {
       showAnalysisModal.value = true;
     };
     
+    // 记录信用卡还款
+    const recordCreditCardPayment = (payment) => {
+      if (!confirm(`确定要为"${payment.cardName}"记录还款 ¥${payment.amount.toFixed(2)} 吗？`)) return;
+      
+      // 创建还款交易记录
+      const repaymentTransaction = {
+        id: Date.now(),
+        type: 'income',
+        amount: payment.amount,
+        categoryId: null,
+        accountId: payment.cardId,
+        merchantId: null,
+        projectId: null,
+        memberId: null,
+        description: `${payment.cardName} 还款`,
+        date: new Date().toISOString().split('T')[0]
+      };
+      
+      // 获取交易记录并添加新交易
+      const existingTransactions = JSON.parse(localStorage.getItem(getBookKey('transactions')) || '[]');
+      existingTransactions.push(repaymentTransaction);
+      localStorage.setItem(getBookKey('transactions'), JSON.stringify(existingTransactions));
+      
+      // 更新账户余额
+      const accountIndex = accounts.value.findIndex(a => a.id === payment.cardId);
+      if (accountIndex !== -1) {
+        accounts.value[accountIndex].balance += payment.amount;
+        localStorage.setItem(getBookKey('accounts'), JSON.stringify(accounts.value));
+      }
+      
+      logger.info('信用卡还款记录成功', {
+        cardId: payment.cardId,
+        cardName: payment.cardName,
+        amount: payment.amount
+      });
+      
+      alert('还款记录成功！');
+    };
+    
     return {
       creditCards,
       getMonthlyBill,
@@ -4634,6 +4742,7 @@ const CreditCardsView = {
       viewBill,
       viewAnalysis,
       saveCard,
+      recordCreditCardPayment,
       showAddModal,
       showBillModal,
       showAnalysisModal,
@@ -5145,6 +5254,32 @@ const LoansView = {
         note: paymentNote.value
       });
       localStorage.setItem(getBookKey('loan_payment_records'), JSON.stringify(records));
+      
+      // 创建还款交易记录
+      const paymentTransaction = {
+        id: Date.now() + 1,
+        type: 'expense',
+        amount: paymentAmount.value,
+        categoryId: null,
+        accountId: null,
+        merchantId: null,
+        projectId: null,
+        memberId: null,
+        description: paymentNote.value || `${selectedLoan.value.name} 第${loans.value[loanIndex].paidMonths}期还款`,
+        date: paymentDate.value
+      };
+      
+      // 获取交易记录并添加新交易
+      const existingTransactions = JSON.parse(localStorage.getItem(getBookKey('transactions')) || '[]');
+      existingTransactions.push(paymentTransaction);
+      localStorage.setItem(getBookKey('transactions'), JSON.stringify(existingTransactions));
+      
+      logger.info('贷款还款记录成功', {
+        loanId: selectedLoan.value.id,
+        loanName: selectedLoan.value.name,
+        amount: paymentAmount.value,
+        date: paymentDate.value
+      });
       
       showPaymentModal.value = false;
       alert('还款记录成功！');
