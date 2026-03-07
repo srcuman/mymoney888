@@ -2,7 +2,7 @@ const { createApp, ref, computed, onMounted, nextTick } = Vue;
 const { createRouter, createWebHashHistory } = VueRouter;
 
 // 版本控制
-const APP_VERSION = '1.7.1';
+const APP_VERSION = '1.8.0';
 const GITHUB_REPO = 'https://api.github.com/repos/srcuman/mymoney888/releases/latest';
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/srcuman/mymoney888/main';
 
@@ -723,7 +723,7 @@ const HomeView = {
           </div>
 
           <!-- 信用卡分期选项 -->
-          <div v-if="transactionType !== 'transfer' && getAccountType(transaction.accountId) === 'credit_card'" class="space-y-4">
+          <div v-if="transactionType === 'expense' && transaction.accountId && getAccountType(transaction.accountId) === 'credit_card'" class="space-y-4">
             <div>
               <label class="flex items-center">
                 <input type="checkbox" v-model="isInstallment" 
@@ -3511,109 +3511,11 @@ const AdminView = {
           </div>
         </div>
         
-        <!-- 系统设置 -->
-        <div>
-          <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <i class="fas fa-sliders-h text-primary mr-2"></i>
-            系统设置
-          </h3>
-          <div class="space-y-6">
-            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-100">
-              <label class="block mb-3 text-sm font-medium text-gray-700">系统版本</label>
-              <div class="flex items-center">
-                <span class="text-lg font-bold text-gray-900 mr-4">{{ APP_VERSION }}</span>
-                <button @click="checkForUpdates" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
-                  <i class="fas fa-sync-alt mr-2"></i> 检查更新
-                </button>
-              </div>
-              <div v-if="updateInfo.hasUpdate" class="mt-4 p-4 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg">
-                <p class="text-sm font-medium text-yellow-800"><i class="fas fa-exclamation-circle mr-2"></i>发现新版本：{{ updateInfo.version }}</p>
-                <p class="text-xs text-yellow-600 mt-2">{{ updateInfo.releaseNotes }}</p>
-                <button @click="downloadUpdate" class="mt-3 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all shadow-md">
-                  <i class="fas fa-download mr-2"></i> 下载更新
-                </button>
-              </div>
-            </div>
-            <div class="bg-gradient-to-r from-green-50 to-teal-50 p-6 rounded-lg border border-green-100">
-              <label class="block mb-3 text-sm font-medium text-gray-700">数据管理</label>
-              <div class="flex flex-wrap gap-3">
-                <button @click="exportAllData" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
-                  <i class="fas fa-file-export mr-2"></i> 导出所有数据
-                </button>
-                <button @click="showImportModal = true" class="px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 rounded-lg hover:from-gray-300 hover:to-gray-400 transition-all shadow-md">
-                  <i class="fas fa-file-import mr-2"></i> 导入数据
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 导入数据模态框 -->
-      <div v-if="showImportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-          <h3 class="text-lg font-bold text-gray-900 mb-4">导入数据</h3>
-          <div class="space-y-4">
-            <div>
-              <label class="block mb-2 text-sm font-medium text-gray-700">选择导入类型</label>
-              <select v-model="importType" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-                <option value="json">JSON格式（完整数据备份）</option>
-                <option value="alipay">支付宝账单（CSV）</option>
-                <option value="wechat">微信账单（CSV）</option>
-                <option value="csv">CSV格式（通用）</option>
-              </select>
-            </div>
-            <div v-if="importType === 'alipay' || importType === 'wechat'" class="bg-blue-50 p-4 rounded-lg text-sm text-gray-600">
-              <p class="font-medium mb-2">导入说明：</p>
-              <ul class="list-disc list-inside space-y-1">
-                <li>请从支付宝/微信导出CSV格式账单</li>
-                <li>确保账单包含完整的交易信息</li>
-                <li>导入后需要手动核对分类和账户</li>
-              </ul>
-            </div>
-            <div v-if="importType === 'csv'" class="bg-blue-50 p-4 rounded-lg text-sm text-gray-600">
-              <p class="font-medium mb-2">导入说明：</p>
-              <ul class="list-disc list-inside space-y-1">
-                <li>CSV格式：日期,描述,金额,类型,商户</li>
-                <li>类型：收入/支出/转账</li>
-                <li>日期格式：YYYY-MM-DD</li>
-              </ul>
-              <button @click="downloadCSVTemplate" class="mt-3 px-4 py-2 bg-white border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 transition-all text-sm">
-                <i class="fas fa-download mr-2"></i>下载CSV样板
-              </button>
-            </div>
-            <div>
-              <label class="block mb-2 text-sm font-medium text-gray-700">选择文件</label>
-              <input type="file" ref="importFileInput" :accept="importType === 'json' ? '.json' : '.csv'" @change="handleFileSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-            </div>
-            <div v-if="importPreview.length > 0" class="bg-gray-50 p-4 rounded-lg max-h-60 overflow-y-auto">
-              <p class="text-sm font-medium text-gray-700 mb-2">预览（前5条）：</p>
-              <div v-for="(item, index) in importPreview.slice(0, 5)" :key="index" class="text-xs text-gray-600 mb-1 pb-1 border-b border-gray-200">
-                {{ item.date }} - {{ item.description }} - ¥{{ item.amount }}
-              </div>
-            </div>
-            <div class="flex justify-end gap-3">
-              <button @click="showImportModal = false; importPreview = []" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-all">
-                取消
-              </button>
-              <button @click="confirmImport" :disabled="importPreview.length === 0" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
-                确认导入
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   `,
   setup() {
     const users = ref(JSON.parse(localStorage.getItem('users') || '[]'));
-    const updateInfo = ref({ hasUpdate: false, version: '', releaseNotes: '' });
-    const fileInput = ref(null);
-    const showImportModal = ref(false);
-    const importType = ref('json');
-    const importFileInput = ref(null);
-    const importPreview = ref([]);
-    const parsedImportData = ref([]);
 
     const resetPassword = (user) => {
       if (confirm(`确定要将 ${user.username} 的密码重置为默认密码 '123456' 吗？`)) {
@@ -3631,26 +3533,111 @@ const AdminView = {
       }
     };
 
-    const checkForUpdates = async () => {
-      const update = await checkForUpdates();
-      updateInfo.value = update;
+    return { 
+      users, 
+      resetPassword, 
+      deleteUser
     };
+  }
+};
 
-    const downloadUpdate = async () => {
-      const result = await downloadUpdate(updateInfo.value.version);
-      if (result.success) {
-        if (confirm('更新已下载完成，是否立即应用？')) {
-          applyUpdate();
-        }
-      } else {
-        alert('下载更新失败：' + result.error);
-      }
-    };
+// 数据管理页面（导入导出）
+const DataManageView = {
+  template: `
+    <div class="space-y-8">
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-6 flex items-center">
+          <i class="fas fa-database text-primary mr-2"></i>
+          数据管理
+        </h2>
+        
+        <!-- 导出数据 -->
+        <div class="mb-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <i class="fas fa-file-export text-secondary mr-2"></i>
+            导出数据
+          </h3>
+          <div class="bg-gradient-to-r from-green-50 to-teal-50 p-6 rounded-lg border border-green-100">
+            <p class="text-sm text-gray-600 mb-4">将当前账套的所有数据导出为CSV格式，可用于备份或迁移。</p>
+            <div class="flex flex-wrap gap-3">
+              <button @click="exportAllData" class="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md flex items-center">
+                <i class="fas fa-file-csv mr-2"></i> 导出所有数据 (CSV)
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 导入数据 -->
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+            <i class="fas fa-file-import text-purple-600 mr-2"></i>
+            导入数据
+          </h3>
+          <div class="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-lg border border-purple-100">
+            <p class="text-sm text-gray-600 mb-4">从外部文件导入数据到当前账套。支持多种格式。</p>
+            <div class="space-y-4">
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700">选择导入类型</label>
+                <select v-model="importType" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+                  <option value="json">JSON格式（完整数据备份）</option>
+                  <option value="alipay">支付宝账单（CSV）</option>
+                  <option value="wechat">微信账单（CSV）</option>
+                  <option value="csv">CSV格式（通用）</option>
+                </select>
+              </div>
+              
+              <div v-if="importType === 'alipay' || importType === 'wechat'" class="bg-blue-50 p-4 rounded-lg text-sm text-gray-600">
+                <p class="font-medium mb-2">导入说明：</p>
+                <ul class="list-disc list-inside space-y-1">
+                  <li>请从支付宝/微信导出CSV格式账单</li>
+                  <li>确保账单包含完整的交易信息</li>
+                  <li>导入后需要手动核对分类和账户</li>
+                </ul>
+              </div>
+              
+              <div v-if="importType === 'csv'" class="bg-blue-50 p-4 rounded-lg text-sm text-gray-600">
+                <p class="font-medium mb-2">导入说明：</p>
+                <ul class="list-disc list-inside space-y-1">
+                  <li>CSV格式：日期,描述,金额,类型,商户</li>
+                  <li>类型：收入/支出/转账</li>
+                  <li>日期格式：YYYY-MM-DD</li>
+                </ul>
+                <button @click="downloadCSVTemplate" class="mt-3 px-4 py-2 bg-white border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 transition-all text-sm">
+                  <i class="fas fa-download mr-2"></i>下载CSV样板
+                </button>
+              </div>
+              
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700">选择文件</label>
+                <input type="file" ref="importFileInput" :accept="importType === 'json' ? '.json' : '.csv'" @change="handleFileSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+              </div>
+              
+              <div v-if="importPreview.length > 0" class="bg-gray-50 p-4 rounded-lg max-h-60 overflow-y-auto">
+                <p class="text-sm font-medium text-gray-700 mb-2">预览（前5条）：</p>
+                <div v-for="(item, index) in importPreview.slice(0, 5)" :key="index" class="text-xs text-gray-600 mb-1 pb-1 border-b border-gray-200">
+                  {{ item.date }} - {{ item.description }} - ¥{{ item.amount }}
+                </div>
+              </div>
+              
+              <button v-if="importPreview.length > 0" @click="confirmImport" class="w-full px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all shadow-md">
+                <i class="fas fa-check mr-2"></i> 确认导入 {{ importPreview.length }} 条记录
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  setup() {
+    const importType = ref('json');
+    const importFileInput = ref(null);
+    const importPreview = ref([]);
+    const parsedImportData = ref([]);
 
+    // 导出所有数据
     const exportAllData = () => {
       const transactions = JSON.parse(localStorage.getItem(getBookKey('transactions')) || '[]');
       
-      // 生成CSV内容
       let csvContent = '日期,时间,类型,分类,金额,账户,商家,项目,成员,备注\n';
       
       transactions.forEach(transaction => {
@@ -3666,7 +3653,6 @@ const AdminView = {
         const member = transaction.member || '';
         const note = transaction.note || '';
         
-        // 处理CSV特殊字符
         const escapeCsv = (value) => {
           if (value.includes(',') || value.includes('"') || value.includes('\n')) {
             return '"' + value.replace(/"/g, '""') + '"';
@@ -3695,6 +3681,8 @@ const AdminView = {
       link.download = `mymoney888_export_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
       URL.revokeObjectURL(url);
+      
+      logger.info('数据导出成功', { count: transactions.length });
     };
 
     // 下载CSV样板
@@ -3709,29 +3697,22 @@ const AdminView = {
       URL.revokeObjectURL(url);
     };
 
-    // 解析支付宝CSV账单
+    // 解析CSV文件
     const parseAlipayCSV = (content) => {
       const lines = content.split('\n');
       const transactions = [];
-      
-      // 跳过标题行，从第3行开始（支付宝CSV格式）
       for (let i = 2; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line) continue;
-        
         const columns = line.split(',');
         if (columns.length < 10) continue;
-        
-        // 支付宝CSV格式：日期,时间,交易对方,商品说明,收支,金额,交易状态...
         const date = columns[0] || '';
         const time = columns[1] || '';
         const merchant = columns[2] || '';
         const description = columns[3] || '';
         const type = columns[4] || '';
         const amount = parseFloat(columns[5]) || 0;
-        
         if (!date || isNaN(amount)) continue;
-        
         transactions.push({
           date: date,
           description: description || merchant,
@@ -3740,35 +3721,24 @@ const AdminView = {
           type: type.includes('支出') ? 'expense' : 'income'
         });
       }
-      
       return transactions;
     };
 
-    // 解析微信CSV账单
     const parseWechatCSV = (content) => {
       const lines = content.split('\n');
       const transactions = [];
-      
-      // 跳过标题行，从第17行开始（微信CSV格式）
       for (let i = 16; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line) continue;
-        
         const columns = line.split(',');
         if (columns.length < 5) continue;
-        
-        // 微信CSV格式：交易时间,交易类型,交易对方,商品,金额...
         const datetime = columns[0] || '';
         const type = columns[1] || '';
         const merchant = columns[2] || '';
         const description = columns[3] || '';
         const amount = parseFloat(columns[4]) || 0;
-        
         if (!datetime || isNaN(amount)) continue;
-        
-        // 提取日期（格式：2026-03-06 14:30:00）
         const date = datetime.split(' ')[0];
-        
         transactions.push({
           date: date,
           description: description || merchant,
@@ -3777,31 +3747,23 @@ const AdminView = {
           type: type.includes('支出') ? 'expense' : 'income'
         });
       }
-      
       return transactions;
     };
 
-    // 解析通用CSV
     const parseGenericCSV = (content) => {
       const lines = content.split('\n');
       const transactions = [];
-      
-      // 假设CSV格式：日期,描述,金额,类型,商户
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line) continue;
-        
         const columns = line.split(',');
         if (columns.length < 3) continue;
-        
         const date = columns[0] || '';
         const description = columns[1] || '';
         const amount = parseFloat(columns[2]) || 0;
         const type = columns[3] || (amount < 0 ? 'expense' : 'income');
         const merchant = columns[4] || '';
-        
         if (!date || isNaN(amount)) continue;
-        
         transactions.push({
           date: date,
           description: description,
@@ -3810,7 +3772,6 @@ const AdminView = {
           type: type
         });
       }
-      
       return transactions;
     };
 
@@ -3867,26 +3828,20 @@ const AdminView = {
         if (data.books && data.books.default) {
           localStorage.setItem('accounts_default', JSON.stringify(data.books.default.accounts || []));
           localStorage.setItem('transactions_default', JSON.stringify(data.books.default.transactions || []));
-          localStorage.setItem('categories_default', JSON.stringify(data.books.default.categories || []));
-          localStorage.setItem('merchants_default', JSON.stringify(data.books.default.merchants || []));
-          localStorage.setItem('projects_default', JSON.stringify(data.books.default.projects || []));
-          localStorage.setItem('members_default', JSON.stringify(data.books.default.members || []));
         }
       } else {
-        // 导入CSV账单
         const existingTransactions = JSON.parse(localStorage.getItem(`transactions_${currentBookId}`) || '[]');
-        const newTransactions = parsedImportData.value.map((item, index) => ({
-          id: Date.now() + index,
+        const newTransactions = parsedImportData.value.map(item => ({
+          id: Date.now() + Math.random(),
           type: item.type,
           amount: item.amount,
-          categoryId: null, // 需要用户手动选择
-          accountId: null, // 需要用户手动选择
+          categoryId: null,
+          accountId: null,
           merchantId: null,
           projectId: null,
           memberId: null,
-          date: item.date,
-          description: item.description,
-          merchant: item.merchant
+          description: item.description || item.merchant || '导入记录',
+          date: item.date
         }));
         
         const allTransactions = [...existingTransactions, ...newTransactions];
@@ -3894,34 +3849,21 @@ const AdminView = {
       }
       
       alert('数据导入成功');
-      showImportModal.value = false;
       importPreview.value = [];
       parsedImportData.value = [];
-      window.location.reload();
+      if (importFileInput.value) importFileInput.value.value = '';
+      
+      logger.info('数据导入成功', { count: parsedImportData.value.length, type: importType.value });
     };
 
-    const importData = () => {
-      showImportModal.value = true;
-    };
-
-    return { 
-      users, 
-      updateInfo, 
-      fileInput, 
-      showImportModal,
+    return {
       importType,
       importFileInput,
       importPreview,
-      APP_VERSION,
-      resetPassword, 
-      deleteUser, 
-      checkForUpdates, 
-      downloadUpdate, 
-      exportAllData, 
-      importData, 
+      exportAllData,
+      downloadCSVTemplate,
       handleFileSelect,
-      confirmImport,
-      downloadCSVTemplate
+      confirmImport
     };
   }
 };
@@ -5334,6 +5276,7 @@ const routes = [
   { path: '/credit-cards', component: CreditCardsView },
   { path: '/loans', component: LoansView },
   { path: '/logs', component: LogsView },
+  { path: '/data-manage', component: DataManageView },
   { path: '/admin', component: AdminView }
 ];
 
@@ -5404,9 +5347,37 @@ const App = {
               <router-link to="/logs" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
                 日志
               </router-link>
+              <router-link to="/data-manage" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
+                数据管理
+              </router-link>
               <router-link v-if="currentUser.isAdmin" to="/admin" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
                 管理员
               </router-link>
+              <!-- 账套切换 -->
+              <div class="relative">
+                <button @click="showBookMenu = !showBookMenu" class="flex items-center text-sm font-medium text-gray-700 hover:text-gray-900 focus:outline-none px-3 py-2 rounded-md hover:bg-gray-100">
+                  <i class="fas fa-book mr-2 text-primary"></i>
+                  <span>{{ currentBook.name }}</span>
+                  <svg class="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                  </svg>
+                </button>
+                <div v-if="showBookMenu" class="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 z-10">
+                  <div class="px-4 py-2 text-xs font-semibold text-gray-500 border-b">
+                    切换账套
+                  </div>
+                  <button v-for="book in books" :key="book.id" @click="switchBook(book)" 
+                    :class="['block px-4 py-2 text-sm w-full text-left hover:bg-gray-100', currentBook.id === book.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700']">
+                    <i v-if="currentBook.id === book.id" class="fas fa-check mr-2"></i>
+                    {{ book.name }}
+                  </button>
+                  <div class="border-t mt-1 pt-1">
+                    <button @click="showAddBookModal = true" class="block px-4 py-2 text-sm text-primary hover:bg-gray-100 w-full text-left">
+                      <i class="fas fa-plus mr-2"></i>新建账套
+                    </button>
+                  </div>
+                </div>
+              </div>
               <div class="relative">
                 <button @click="showUserMenu = !showUserMenu" class="flex items-center text-sm font-medium text-gray-700 hover:text-gray-900 focus:outline-none">
                   <span>{{ currentUser.username }}</span>
@@ -5438,13 +5409,37 @@ const App = {
   setup() {
     const currentUser = ref(JSON.parse(localStorage.getItem('currentUser') || 'null'));
     const showUserMenu = ref(false);
+    const showBookMenu = ref(false);
+    const showAddBookModal = ref(false);
+    
+    // 账套管理
+    const books = ref(JSON.parse(localStorage.getItem('books') || '[{"id":"default","name":"默认账套"}]'));
+    const currentBook = ref(JSON.parse(localStorage.getItem('currentBook') || '{"id":"default","name":"默认账套"}'));
 
     const logout = () => {
       localStorage.removeItem('currentUser');
       window.location.hash = '/login';
     };
 
-    return { currentUser, showUserMenu, logout };
+    const switchBook = (book) => {
+      currentBook.value = book;
+      localStorage.setItem('currentBook', JSON.stringify(book));
+      localStorage.setItem('currentBookId', book.id);
+      showBookMenu.value = false;
+      // 刷新页面以加载新账套的数据
+      window.location.reload();
+    };
+
+    return { 
+      currentUser, 
+      showUserMenu, 
+      showBookMenu,
+      showAddBookModal,
+      books,
+      currentBook,
+      logout,
+      switchBook
+    };
   }
 };
 
