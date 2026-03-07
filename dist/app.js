@@ -2,7 +2,7 @@ const { createApp, ref, computed, onMounted, nextTick } = Vue;
 const { createRouter, createWebHashHistory } = VueRouter;
 
 // 版本控制
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 const GITHUB_REPO = 'https://api.github.com/repos/srcuman/mymoney888/releases/latest';
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/srcuman/mymoney888/main';
 
@@ -716,17 +716,10 @@ const HomeView = {
           </div>
 
           <!-- 第五行：交易日期时间 -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block mb-2 text-sm font-medium text-gray-700">交易日期</label>
-              <input type="date" v-model="transactionDate" 
-                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
-            </div>
-            <div>
-              <label class="block mb-2 text-sm font-medium text-gray-700">交易时间</label>
-              <input type="time" v-model="transactionTime" 
-                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
-            </div>
+          <div>
+            <label class="block mb-2 text-sm font-medium text-gray-700">交易时间</label>
+            <input type="datetime-local" v-model="transactionDateTime" 
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
           </div>
 
           <!-- 信用卡分期选项 -->
@@ -740,6 +733,16 @@ const HomeView = {
             </div>
             <div v-if="isInstallment" class="space-y-3">
               <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700">分期模板</label>
+                <select v-model="selectedInstallmentTemplate" @change="applyInstallmentTemplate"
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+                  <option value="">选择模板（可选）</option>
+                  <option v-for="template in installmentTemplates" :key="template.id" :value="template.id">
+                    {{ template.name }} - {{ template.months }}期 {{ template.rate }}%
+                  </option>
+                </select>
+              </div>
+              <div>
                 <label class="block mb-2 text-sm font-medium text-gray-700">分期期数</label>
                 <select v-model="installmentMonths" 
                   class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
@@ -747,6 +750,7 @@ const HomeView = {
                   <option value="6">6期</option>
                   <option value="12">12期</option>
                   <option value="24">24期</option>
+                  <option value="36">36期</option>
                 </select>
               </div>
               <div>
@@ -754,10 +758,19 @@ const HomeView = {
                 <input type="number" v-model.number="installmentRate" step="0.01" 
                   class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
               </div>
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700">分期名称</label>
+                <input type="text" v-model="installmentName" placeholder="如：iPhone15分期"
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+              </div>
               <div class="bg-blue-50 p-3 rounded-lg">
                 <p class="text-sm text-gray-700">每期还款：¥{{ monthlyPayment.toFixed(2) }}</p>
                 <p class="text-sm text-gray-700">总手续费：¥{{ totalFee.toFixed(2) }}</p>
+                <p class="text-sm text-gray-700">总还款额：¥{{ (parseFloat(transaction.value.amount) + totalFee).toFixed(2) }}</p>
               </div>
+              <button type="button" @click="saveInstallmentTemplate" class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all">
+                <i class="fas fa-save mr-2"></i>保存为模板
+              </button>
             </div>
           </div>
 
@@ -856,14 +869,23 @@ const HomeView = {
       description: '' 
     });
 
-    // 交易日期时间
-    const transactionDate = ref(new Date().toISOString().split('T')[0]);
-    const transactionTime = ref(new Date().toISOString().split('T')[1].substring(0, 5));
+    // 交易日期时间（合并为datetime-local）
+    const transactionDateTime = ref(new Date().toLocaleString('zh-CN', { 
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit', 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    }).replace(/\//g, '-').replace(', ', 'T') + ':00');
 
     // 信用卡分期相关
     const isInstallment = ref(false);
     const installmentMonths = ref(3);
     const installmentRate = ref(0);
+    const installmentName = ref('');
+    const selectedInstallmentTemplate = ref('');
+    const installmentTemplates = ref(JSON.parse(localStorage.getItem('installment_templates') || '[]'));
 
     // 金额计算器
     const amountInput = ref('');
@@ -950,6 +972,38 @@ const HomeView = {
         calculatedAmount.value = null;
         calcError.value = '';
       }
+    };
+
+    // 应用分期模板
+    const applyInstallmentTemplate = () => {
+      if (!selectedInstallmentTemplate.value) return;
+      
+      const template = installmentTemplates.value.find(t => t.id === selectedInstallmentTemplate.value);
+      if (template) {
+        installmentMonths.value = template.months;
+        installmentRate.value = template.rate;
+        installmentName.value = template.name;
+      }
+    };
+
+    // 保存分期模板
+    const saveInstallmentTemplate = () => {
+      if (!installmentName.value) {
+        alert('请输入分期名称');
+        return;
+      }
+      
+      const newTemplate = {
+        id: Date.now(),
+        name: installmentName.value,
+        months: parseInt(installmentMonths.value),
+        rate: parseFloat(installmentRate.value)
+      };
+      
+      installmentTemplates.value.push(newTemplate);
+      localStorage.setItem('installment_templates', JSON.stringify(installmentTemplates.value));
+      
+      alert('分期模板保存成功！');
     };
 
     // 获取当前账套ID
@@ -1054,7 +1108,7 @@ const HomeView = {
       logger.info('开始添加交易', {
         type: transactionType.value,
         amount: transaction.value.amount,
-        date: transactionDate.value + ' ' + transactionTime.value
+        date: transactionDateTime.value
       });
       
       // 检测疑似重复录入
@@ -1156,7 +1210,7 @@ const HomeView = {
               projectId: null,
               memberId: null,
               description: transaction.value.description || '账户转账',
-              date: transactionDate.value + ' ' + transactionTime.value
+              date: transactionDateTime.value
             };
             
             accounts.value[fromAccountIndex].balance -= transaction.value.amount;
@@ -1172,7 +1226,7 @@ const HomeView = {
               projectId: transaction.value.projectId ? parseInt(transaction.value.projectId) : null,
               memberId: transaction.value.memberId ? parseInt(transaction.value.memberId) : null,
               description: transaction.value.description,
-              date: transactionDate.value + ' ' + transactionTime.value
+              date: transactionDateTime.value
             };
             
             const accountIndex = accounts.value.findIndex(a => a.id === transaction.value.accountId);
@@ -1193,7 +1247,7 @@ const HomeView = {
             id: editingTransactionId.value,
             type: transactionType.value,
             amount: transaction.value.amount,
-            date: transactionDate.value + ' ' + transactionTime.value
+            date: transactionDateTime.value
           });
           
           // 重置表单
@@ -1236,7 +1290,7 @@ const HomeView = {
             projectId: null,
             memberId: null,
             description: transaction.value.description || '账户转账',
-            date: transactionDate.value + ' ' + transactionTime.value
+            date: transactionDateTime.value
           };
           
           transactions.value.push(newTransaction);
@@ -1254,7 +1308,7 @@ const HomeView = {
             projectId: transaction.value.projectId ? parseInt(transaction.value.projectId) : null,
             memberId: transaction.value.memberId ? parseInt(transaction.value.memberId) : null,
             description: transaction.value.description,
-            date: transactionDate.value + ' ' + transactionTime.value
+            date: transactionDateTime.value
           };
           
           transactions.value.push(newTransaction);
@@ -1276,7 +1330,7 @@ const HomeView = {
         logger.info('交易添加成功', {
           type: transactionType.value,
           amount: transaction.value.amount,
-          date: transactionDate.value + ' ' + transactionTime.value
+          date: transactionDateTime.value
         });
         
         // 重置表单
@@ -1373,9 +1427,7 @@ const HomeView = {
       };
       // 解析日期时间
       if (t.date) {
-        const dateParts = t.date.split(' ');
-        transactionDate.value = dateParts[0] || new Date().toISOString().split('T')[0];
-        transactionTime.value = dateParts[1] || new Date().toISOString().split('T')[1].substring(0, 5);
+        transactionDateTime.value = t.date.replace(' ', 'T') + ':00';
       }
       amountInput.value = t.amount.toString();
       calculatedAmount.value = null;
@@ -1396,8 +1448,14 @@ const HomeView = {
         description: ''
       };
       // 重置日期时间为当前时间
-      transactionDate.value = new Date().toISOString().split('T')[0];
-      transactionTime.value = new Date().toISOString().split('T')[1].substring(0, 5);
+      transactionDateTime.value = new Date().toLocaleString('zh-CN', { 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit', 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+      }).replace(/\//g, '-').replace(', ', 'T') + ':00';
       amountInput.value = '';
       calculatedAmount.value = null;
       calcError.value = '';
@@ -1407,8 +1465,7 @@ const HomeView = {
     return { 
       transactionType, 
       transaction, 
-      transactionDate, 
-      transactionTime, 
+      transactionDateTime, 
       isInstallment, 
       installmentMonths, 
       installmentRate, 
@@ -1443,7 +1500,12 @@ const HomeView = {
       deleteTransaction,
       editingTransactionId,
       calculateAmount,
-      applyCalculatedAmount
+      applyCalculatedAmount,
+      installmentName,
+      selectedInstallmentTemplate,
+      installmentTemplates,
+      applyInstallmentTemplate,
+      saveInstallmentTemplate
     };
   }
 };
@@ -4015,9 +4077,14 @@ const CreditCardsView = {
   template: `
     <div class="space-y-8">
       <div class="bg-white rounded-lg shadow-md p-6">
-        <h2 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
-          <i class="fas fa-credit-card text-primary mr-2"></i>
-          信用卡管理
+        <h2 class="text-xl font-bold text-gray-900 mb-4 flex items-center justify-between">
+          <div class="flex items-center">
+            <i class="fas fa-credit-card text-primary mr-2"></i>
+            信用卡管理
+          </div>
+          <button @click="showAddModal = true" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-all">
+            <i class="fas fa-plus mr-2"></i>添加信用卡
+          </button>
         </h2>
         
         <!-- 信用卡列表 -->
@@ -4064,6 +4131,9 @@ const CreditCardsView = {
               <button @click="viewBill(card)" class="px-3 py-1 bg-secondary text-white text-sm rounded-lg hover:bg-green-600 transition-all">
                 查看账单
               </button>
+              <button @click="viewAnalysis(card)" class="px-3 py-1 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-all">
+                分析
+              </button>
             </div>
           </div>
         </div>
@@ -4094,6 +4164,208 @@ const CreditCardsView = {
           <p>暂无近期还款</p>
         </div>
       </div>
+      
+      <!-- 添加/编辑信用卡模态框 -->
+      <div v-if="showAddModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+            <i class="fas fa-credit-card text-primary mr-2"></i>
+            {{ editingCard ? '编辑信用卡' : '添加信用卡' }}
+          </h3>
+          <form @submit.prevent="saveCard" class="space-y-4">
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">信用卡名称</label>
+              <input type="text" v-model="cardForm.name" required 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">信用额度</label>
+              <input type="number" v-model.number="cardForm.creditLimit" step="0.01" required 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700">账单日</label>
+                <input type="number" v-model.number="cardForm.billDay" min="1" max="31" required 
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+                <p class="text-xs text-gray-500 mt-1">每月的账单日期（1-31）</p>
+              </div>
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700">还款日</label>
+                <input type="number" v-model.number="cardForm.repayDay" min="1" max="31" required 
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+                <p class="text-xs text-gray-500 mt-1">每月的还款日期（1-31）</p>
+              </div>
+            </div>
+            <div class="flex justify-end space-x-3">
+              <button type="button" @click="showAddModal = false" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all">
+                取消
+              </button>
+              <button type="submit" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
+                保存
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <!-- 账单详情模态框 -->
+      <div v-if="showBillModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl max-h-[80vh] overflow-auto">
+          <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center justify-between">
+            <div class="flex items-center">
+              <i class="fas fa-file-invoice-dollar text-primary mr-2"></i>
+              {{ selectedCard.name }} - 账单详情
+            </div>
+            <button @click="showBillModal = false" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </h3>
+          
+          <!-- 账期选择 -->
+          <div class="mb-4">
+            <label class="block mb-2 text-sm font-medium text-gray-700">选择账期</label>
+            <select v-model="selectedBillPeriod" @change="loadBillDetails"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+              <option v-for="period in billPeriods" :key="period" :value="period">{{ period }}</option>
+            </select>
+          </div>
+          
+          <!-- 账单统计 -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-blue-50 p-4 rounded-lg">
+              <p class="text-sm text-gray-600">账单金额</p>
+              <p class="text-2xl font-bold text-blue-600">¥{{ billSummary.totalAmount.toFixed(2) }}</p>
+            </div>
+            <div class="bg-green-50 p-4 rounded-lg">
+              <p class="text-sm text-gray-600">已还款</p>
+              <p class="text-2xl font-bold text-green-600">¥{{ billSummary.paidAmount.toFixed(2) }}</p>
+            </div>
+            <div class="bg-red-50 p-4 rounded-lg">
+              <p class="text-sm text-gray-600">待还款</p>
+              <p class="text-2xl font-bold text-red-600">¥{{ billSummary.unpaidAmount.toFixed(2) }}</p>
+            </div>
+          </div>
+          
+          <!-- 交易明细 -->
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分类</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">商家</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">金额</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">备注</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <tr v-for="transaction in billTransactions" :key="transaction.id" class="hover:bg-gray-50">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ transaction.date }}</td>
+                  <td class="px-6 py-4 text-sm text-gray-900">{{ getCategoryName(transaction.categoryId) }}</td>
+                  <td class="px-6 py-4 text-sm text-gray-900">{{ getMerchantName(transaction.merchantId) }}</td>
+                  <td class="px-6 py-4 text-sm text-gray-900">¥{{ transaction.amount.toFixed(2) }}</td>
+                  <td class="px-6 py-4 text-sm text-gray-900">{{ transaction.description || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 分析模态框 -->
+      <div v-if="showAnalysisModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-6xl max-h-[80vh] overflow-auto">
+          <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center justify-between">
+            <div class="flex items-center">
+              <i class="fas fa-chart-line text-primary mr-2"></i>
+              {{ selectedCard.name }} - 消费分析
+            </div>
+            <button @click="showAnalysisModal = false" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </h3>
+          
+          <!-- 分析类型选择 -->
+          <div class="flex space-x-4 mb-6">
+            <button @click="analysisType = 'month'" :class="analysisType === 'month' ? 'bg-primary text-white' : 'bg-gray-200 text-gray-700'" class="px-4 py-2 rounded-lg transition-all">
+              月份分析
+            </button>
+            <button @click="analysisType = 'period'" :class="analysisType === 'period' ? 'bg-primary text-white' : 'bg-gray-200 text-gray-700'" class="px-4 py-2 rounded-lg transition-all">
+              账期分析
+            </button>
+            <button @click="analysisType = 'category'" :class="analysisType === 'category' ? 'bg-primary text-white' : 'bg-gray-200 text-gray-700'" class="px-4 py-2 rounded-lg transition-all">
+              分类分析
+            </button>
+          </div>
+          
+          <!-- 月份分析 -->
+          <div v-if="analysisType === 'month'" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div v-for="month in monthlyAnalysis" :key="month.month" class="bg-gradient-to-br from-blue-50 to-white p-4 rounded-lg border border-blue-100">
+                <h4 class="font-bold text-gray-900 mb-2">{{ month.month }}</h4>
+                <div class="space-y-2">
+                  <div class="flex justify-between">
+                    <span class="text-sm text-gray-600">消费金额</span>
+                    <span class="text-sm font-medium text-blue-600">¥{{ month.amount.toFixed(2) }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-sm text-gray-600">交易笔数</span>
+                    <span class="text-sm font-medium text-gray-900">{{ month.count }}笔</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 账期分析 -->
+          <div v-if="analysisType === 'period'" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div v-for="period in periodAnalysis" :key="period.period" class="bg-gradient-to-br from-green-50 to-white p-4 rounded-lg border border-green-100">
+                <h4 class="font-bold text-gray-900 mb-2">{{ period.period }}</h4>
+                <div class="space-y-2">
+                  <div class="flex justify-between">
+                    <span class="text-sm text-gray-600">账单金额</span>
+                    <span class="text-sm font-medium text-blue-600">¥{{ period.amount.toFixed(2) }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-sm text-gray-600">还款日期</span>
+                    <span class="text-sm font-medium text-red-600">{{ period.repayDate }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-sm text-gray-600">状态</span>
+                    <span :class="period.isPaid ? 'text-green-600' : 'text-red-600'" class="text-sm font-medium">
+                      {{ period.isPaid ? '已还款' : '未还款' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 分类分析 -->
+          <div v-if="analysisType === 'category'" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div v-for="cat in categoryAnalysis" :key="cat.category" class="bg-gradient-to-br from-purple-50 to-white p-4 rounded-lg border border-purple-100">
+                <h4 class="font-bold text-gray-900 mb-2">{{ cat.category }}</h4>
+                <div class="space-y-2">
+                  <div class="flex justify-between">
+                    <span class="text-sm text-gray-600">消费金额</span>
+                    <span class="text-sm font-medium text-blue-600">¥{{ cat.amount.toFixed(2) }}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-sm text-gray-600">占比</span>
+                    <span class="text-sm font-medium text-purple-600">{{ cat.percentage }}%</span>
+                  </div>
+                  <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                    <div class="bg-purple-600 h-2 rounded-full" :style="{ width: cat.percentage + '%' }"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   `,
   setup() {
@@ -4106,6 +4378,145 @@ const CreditCardsView = {
     // 从localStorage加载数据
     const accounts = ref(JSON.parse(localStorage.getItem(getBookKey('accounts')) || '[]'));
     const transactions = ref(JSON.parse(localStorage.getItem(getBookKey('transactions')) || '[]'));
+    const categories = ref(JSON.parse(localStorage.getItem(getBookKey('categories')) || JSON.stringify(defaultCategories)));
+    const merchants = ref(JSON.parse(localStorage.getItem(getBookKey('merchants')) || '[]'));
+    
+    // 模态框状态
+    const showAddModal = ref(false);
+    const showBillModal = ref(false);
+    const showAnalysisModal = ref(false);
+    const editingCard = ref(null);
+    const selectedCard = ref(null);
+    const selectedBillPeriod = ref('');
+    const analysisType = ref('month');
+    
+    // 表单数据
+    const cardForm = ref({
+      name: '',
+      type: 'credit_card',
+      balance: 0,
+      billDay: 10,
+      repayDay: 25,
+      creditLimit: 0
+    });
+    
+    // 账单交易
+    const billTransactions = ref([]);
+    
+    // 账单汇总
+    const billSummary = computed(() => {
+      const totalAmount = billTransactions.value.reduce((sum, t) => sum + t.amount, 0);
+      const paidAmount = billTransactions.value.filter(t => t.isPaid).reduce((sum, t) => sum + t.amount, 0);
+      return {
+        totalAmount,
+        paidAmount,
+        unpaidAmount: totalAmount - paidAmount
+      };
+    });
+    
+    // 账期列表
+    const billPeriods = computed(() => {
+      const periods = new Set();
+      transactions.value.filter(t => t.accountId === selectedCard.value?.id).forEach(t => {
+        const date = new Date(t.date);
+        const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        periods.add(period);
+      });
+      return Array.from(periods).sort().reverse();
+    });
+    
+    // 月份分析
+    const monthlyAnalysis = computed(() => {
+      const monthlyData = {};
+      transactions.value.filter(t => t.accountId === selectedCard.value?.id).forEach(t => {
+        const date = new Date(t.date);
+        const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        if (!monthlyData[month]) {
+          monthlyData[month] = { amount: 0, count: 0 };
+        }
+        monthlyData[month].amount += t.amount;
+        monthlyData[month].count += 1;
+      });
+      
+      return Object.keys(monthlyData).map(month => ({
+        month,
+        amount: monthlyData[month].amount,
+        count: monthlyData[month].count
+      })).sort((a, b) => b.month.localeCompare(a.month)).slice(0, 12);
+    });
+    
+    // 账期分析
+    const periodAnalysis = computed(() => {
+      const periodData = {};
+      transactions.value.filter(t => t.accountId === selectedCard.value?.id).forEach(t => {
+        const date = new Date(t.date);
+        const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        if (!periodData[period]) {
+          periodData[period] = { amount: 0, repayDate: '', isPaid: false };
+        }
+        periodData[period].amount += t.amount;
+        
+        // 计算还款日期
+        if (selectedCard.value) {
+          const billDate = new Date(date.getFullYear(), date.getMonth(), selectedCard.value.billDay);
+          const repayDate = new Date(billDate);
+          repayDate.setDate(selectedCard.value.repayDay);
+          if (repayDate < billDate) {
+            repayDate.setMonth(repayDate.getMonth() + 1);
+          }
+          periodData[period].repayDate = repayDate.toISOString().split('T')[0];
+        }
+        
+        // 检查是否已还款
+        periodData[period].isPaid = t.isPaid || false;
+      });
+      
+      return Object.keys(periodData).map(period => ({
+        period,
+        amount: periodData[period].amount,
+        repayDate: periodData[period].repayDate,
+        isPaid: periodData[period].isPaid
+      })).sort((a, b) => b.period.localeCompare(a.period));
+    });
+    
+    // 分类分析
+    const categoryAnalysis = computed(() => {
+      const categoryData = {};
+      const totalAmount = transactions.value
+        .filter(t => t.accountId === selectedCard.value?.id)
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      transactions.value.filter(t => t.accountId === selectedCard.value?.id).forEach(t => {
+        const categoryName = getCategoryName(t.categoryId);
+        if (!categoryData[categoryName]) {
+          categoryData[categoryName] = { amount: 0 };
+        }
+        categoryData[categoryName].amount += t.amount;
+      });
+      
+      return Object.keys(categoryData).map(category => ({
+        category,
+        amount: categoryData[category].amount,
+        percentage: totalAmount > 0 ? ((categoryData[category].amount / totalAmount) * 100).toFixed(1) : 0
+      })).sort((a, b) => b.amount - a.amount);
+    });
+    
+    // 获取分类名称
+    const getCategoryName = (categoryId) => {
+      for (const parent of categories.value) {
+        if (parent.id === categoryId) return parent.name;
+        const child = parent.children?.find(c => c.id === categoryId);
+        if (child) return `${parent.name} > ${child.name}`;
+      }
+      return '';
+    };
+    
+    // 获取商家名称
+    const getMerchantName = (merchantId) => {
+      if (!merchantId) return '';
+      const merchant = merchants.value.find(m => m.id === merchantId);
+      return merchant ? merchant.name : '';
+    };
     
     // 过滤信用卡账户
     const creditCards = computed(() => {
@@ -4155,14 +4566,64 @@ const CreditCardsView = {
     
     // 编辑信用卡
     const editCard = (card) => {
-      // 这里可以跳转到账户编辑页面或打开编辑模态框
-      alert('编辑功能开发中');
+      editingCard.value = card;
+      cardForm.value = { ...card };
+      showAddModal.value = true;
+    };
+    
+    // 保存信用卡
+    const saveCard = () => {
+      if (editingCard.value) {
+        // 编辑现有信用卡
+        const index = accounts.value.findIndex(a => a.id === editingCard.value.id);
+        if (index !== -1) {
+          accounts.value[index] = { ...cardForm.value, id: editingCard.value.id };
+        }
+      } else {
+        // 添加新信用卡
+        const newCard = {
+          id: Date.now(),
+          ...cardForm.value
+        };
+        accounts.value.push(newCard);
+      }
+      localStorage.setItem(getBookKey('accounts'), JSON.stringify(accounts.value));
+      showAddModal.value = false;
+      editingCard.value = null;
+      cardForm.value = {
+        name: '',
+        type: 'credit_card',
+        balance: 0,
+        billDay: 10,
+        repayDay: 25,
+        creditLimit: 0
+      };
     };
     
     // 查看账单
     const viewBill = (card) => {
-      // 这里可以跳转到账单详情页面
-      alert('账单详情功能开发中');
+      selectedCard.value = card;
+      selectedBillPeriod.value = billPeriods.value[0] || '';
+      loadBillDetails();
+      showBillModal.value = true;
+    };
+    
+    // 加载账单详情
+    const loadBillDetails = () => {
+      if (!selectedBillPeriod.value || !selectedCard.value) return;
+      
+      billTransactions.value = transactions.value.filter(t => {
+        return t.type === 'expense' && 
+               t.accountId === selectedCard.value.id && 
+               t.date.startsWith(selectedBillPeriod.value);
+      });
+    };
+    
+    // 查看分析
+    const viewAnalysis = (card) => {
+      selectedCard.value = card;
+      analysisType.value = 'month';
+      showAnalysisModal.value = true;
     };
     
     return {
@@ -4170,7 +4631,558 @@ const CreditCardsView = {
       getMonthlyBill,
       upcomingPayments,
       editCard,
-      viewBill
+      viewBill,
+      viewAnalysis,
+      saveCard,
+      showAddModal,
+      showBillModal,
+      showAnalysisModal,
+      editingCard,
+      selectedCard,
+      selectedBillPeriod,
+      analysisType,
+      cardForm,
+      billTransactions,
+      billSummary,
+      billPeriods,
+      monthlyAnalysis,
+      periodAnalysis,
+      categoryAnalysis,
+      getCategoryName,
+      getMerchantName,
+      loadBillDetails
+    };
+  }
+};
+
+// 贷款管理页面
+const LoansView = {
+  template: `
+    <div class="space-y-8">
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4 flex items-center justify-between">
+          <div class="flex items-center">
+            <i class="fas fa-hand-holding-usd text-primary mr-2"></i>
+            贷款管理
+          </div>
+          <button @click="showAddModal = true" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-all">
+            <i class="fas fa-plus mr-2"></i>添加贷款
+          </button>
+        </h2>
+        
+        <!-- 贷款列表 -->
+        <div class="space-y-4">
+          <div v-for="loan in loans" :key="loan.id" class="bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:shadow-md transition-all p-4">
+            <div class="flex justify-between items-start">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900">{{ loan.name }}</h3>
+                <p class="text-sm text-gray-500 mt-1">
+                  贷款类型: {{ getLoanTypeName(loan.type) }} | 利率: {{ loan.interestRate }}%
+                </p>
+                <p class="text-sm text-gray-500">
+                  贷款期限: {{ loan.term }}个月 | 已还: {{ loan.paidMonths }}期
+                </p>
+              </div>
+              <div class="text-right">
+                <p class="text-sm text-gray-500">贷款金额</p>
+                <p class="text-lg font-semibold text-primary">¥{{ loan.amount.toFixed(2) }}</p>
+              </div>
+            </div>
+            
+            <div class="mt-4 space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">剩余本金</span>
+                <span class="text-sm font-medium text-blue-600">
+                  ¥{{ getRemainingPrincipal(loan).toFixed(2) }}
+                </span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">每月还款</span>
+                <span class="text-sm font-medium text-green-600">
+                  ¥{{ getMonthlyPayment(loan).toFixed(2) }}
+                </span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">下次还款日</span>
+                <span class="text-sm font-medium text-red-600">
+                  {{ getNextPaymentDate(loan) }}
+                </span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                <div class="bg-primary h-2 rounded-full transition-all" :style="{ width: getProgress(loan) + '%' }"></div>
+              </div>
+              <p class="text-xs text-gray-500 text-right">还款进度: {{ getProgress(loan).toFixed(1) }}%</p>
+            </div>
+            
+            <div class="mt-4 flex space-x-2">
+              <button @click="recordPayment(loan)" class="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-all">
+                记录还款
+              </button>
+              <button @click="viewDetails(loan)" class="px-3 py-1 bg-primary text-white text-sm rounded-lg hover:bg-blue-600 transition-all">
+                查看详情
+              </button>
+              <button @click="editLoan(loan)" class="px-3 py-1 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-all">
+                编辑
+              </button>
+              <button @click="deleteLoan(loan)" class="px-3 py-1 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-all">
+                删除
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div v-if="loans.length === 0" class="text-center py-12 text-gray-500">
+          <i class="fas fa-hand-holding-usd text-6xl mb-4 text-gray-300"></i>
+          <p class="text-lg">暂无贷款记录</p>
+          <p class="text-sm mt-2">点击"添加贷款"按钮开始记录您的贷款信息</p>
+        </div>
+      </div>
+      
+      <!-- 还款提醒 -->
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+          <i class="fas fa-bell text-primary mr-2"></i>
+          近期还款提醒
+        </h2>
+        <div v-if="upcomingPayments.length > 0" class="space-y-3">
+          <div v-for="payment in upcomingPayments" :key="payment.loanId" 
+            :class="{
+              'p-3 bg-red-50 rounded-lg border border-red-200': payment.daysUntil <= 3,
+              'p-3 bg-yellow-50 rounded-lg border border-yellow-200': payment.daysUntil > 3 && payment.daysUntil <= 7,
+              'p-3 bg-blue-50 rounded-lg border border-blue-200': payment.daysUntil > 7
+            }">
+            <div class="flex justify-between items-center">
+              <div>
+                <p class="font-medium text-gray-900">{{ payment.loanName }}</p>
+                <p class="text-sm text-gray-600">还款日期: {{ payment.paymentDate }}</p>
+                <p class="text-sm" :class="payment.daysUntil <= 3 ? 'text-red-600' : 'text-gray-600'">
+                  {{ payment.daysUntil === 0 ? '今天到期' : payment.daysUntil === 1 ? '明天到期' : '还有' + payment.daysUntil + '天到期' }}
+                </p>
+              </div>
+              <div class="text-right">
+                <p class="text-sm text-gray-600">应还款额</p>
+                <p class="text-lg font-semibold text-red-600">¥{{ payment.amount.toFixed(2) }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else class="text-center py-6 text-gray-500">
+          <i class="fas fa-check-circle text-green-500 text-2xl mb-2"></i>
+          <p>暂无近期还款</p>
+        </div>
+      </div>
+      
+      <!-- 添加/编辑贷款模态框 -->
+      <div v-if="showAddModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-auto">
+          <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+            <i class="fas fa-hand-holding-usd text-primary mr-2"></i>
+            {{ editingLoan ? '编辑贷款' : '添加贷款' }}
+          </h3>
+          <form @submit.prevent="saveLoan" class="space-y-4">
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">贷款名称</label>
+              <input type="text" v-model="loanForm.name" required placeholder="如：房贷、车贷"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">贷款类型</label>
+              <select v-model="loanForm.type" required
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+                <option value="mortgage">房贷</option>
+                <option value="car">车贷</option>
+                <option value="personal">个人贷款</option>
+                <option value="business">商业贷款</option>
+                <option value="student">助学贷款</option>
+                <option value="other">其他贷款</option>
+              </select>
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">贷款金额</label>
+              <input type="number" v-model.number="loanForm.amount" step="0.01" required 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">年利率（%）</label>
+              <input type="number" v-model.number="loanForm.interestRate" step="0.01" required 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">贷款期限（月）</label>
+              <input type="number" v-model.number="loanForm.term" min="1" required 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">开始日期</label>
+              <input type="date" v-model="loanForm.startDate" required 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">还款日</label>
+              <input type="number" v-model.number="loanForm.repaymentDay" min="1" max="31" required 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+              <p class="text-xs text-gray-500 mt-1">每月的还款日期（1-31）</p>
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">已还期数</label>
+              <input type="number" v-model.number="loanForm.paidMonths" min="0" :max="loanForm.term" required 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div class="flex justify-end space-x-3">
+              <button type="button" @click="showAddModal = false" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all">
+                取消
+              </button>
+              <button type="submit" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md">
+                保存
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <!-- 记录还款模态框 -->
+      <div v-if="showPaymentModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center">
+            <i class="fas fa-money-bill-wave text-green-600 mr-2"></i>
+            记录还款
+          </h3>
+          <div class="space-y-4">
+            <div>
+              <p class="text-sm text-gray-600">贷款名称</p>
+              <p class="text-lg font-semibold text-gray-900">{{ selectedLoan?.name }}</p>
+            </div>
+            <div>
+              <p class="text-sm text-gray-600">应还金额</p>
+              <p class="text-lg font-semibold text-blue-600">¥{{ getMonthlyPayment(selectedLoan).toFixed(2) }}</p>
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">还款金额</label>
+              <input type="number" v-model.number="paymentAmount" step="0.01" required 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">还款日期</label>
+              <input type="date" v-model="paymentDate" required 
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div>
+              <label class="block mb-2 text-sm font-medium text-gray-700">备注</label>
+              <input type="text" v-model="paymentNote" placeholder="可选"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+            </div>
+            <div class="flex justify-end space-x-3">
+              <button type="button" @click="showPaymentModal = false" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-all">
+                取消
+              </button>
+              <button @click="confirmPayment" class="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all shadow-md">
+                确认还款
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 贷款详情模态框 -->
+      <div v-if="showDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl max-h-[80vh] overflow-auto">
+          <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center justify-between">
+            <div class="flex items-center">
+              <i class="fas fa-file-invoice-dollar text-primary mr-2"></i>
+              {{ selectedLoan?.name }} - 贷款详情
+            </div>
+            <button @click="showDetailsModal = false" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </h3>
+          
+          <!-- 贷款统计 -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-blue-50 p-4 rounded-lg">
+              <p class="text-sm text-gray-600">贷款总额</p>
+              <p class="text-2xl font-bold text-blue-600">¥{{ selectedLoan?.amount.toFixed(2) }}</p>
+            </div>
+            <div class="bg-green-50 p-4 rounded-lg">
+              <p class="text-sm text-gray-600">已还金额</p>
+              <p class="text-2xl font-bold text-green-600">¥{{ getPaidAmount(selectedLoan).toFixed(2) }}</p>
+            </div>
+            <div class="bg-red-50 p-4 rounded-lg">
+              <p class="text-sm text-gray-600">剩余本金</p>
+              <p class="text-2xl font-bold text-red-600">¥{{ getRemainingPrincipal(selectedLoan).toFixed(2) }}</p>
+            </div>
+            <div class="bg-purple-50 p-4 rounded-lg">
+              <p class="text-sm text-gray-600">剩余期数</p>
+              <p class="text-2xl font-bold text-purple-600">{{ selectedLoan?.term - selectedLoan?.paidMonths }}期</p>
+            </div>
+          </div>
+          
+          <!-- 还款记录 -->
+          <h4 class="font-bold text-gray-900 mb-4">还款记录</h4>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">期数</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">还款日期</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">还款金额</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">备注</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <tr v-for="record in paymentRecords" :key="record.id" class="hover:bg-gray-50">
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">第{{ record.period }}期</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ record.date }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">¥{{ record.amount.toFixed(2) }}</td>
+                  <td class="px-6 py-4 text-sm text-gray-900">{{ record.note || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  setup() {
+    // 获取当前账套ID
+    const currentBookId = localStorage.getItem('currentBookId') || 'default';
+    
+    // 获取账套特定的localStorage key
+    const getBookKey = (key) => `${key}_${currentBookId}`;
+    
+    // 模态框状态
+    const showAddModal = ref(false);
+    const showPaymentModal = ref(false);
+    const showDetailsModal = ref(false);
+    const editingLoan = ref(null);
+    const selectedLoan = ref(null);
+    
+    // 表单数据
+    const loanForm = ref({
+      name: '',
+      type: 'personal',
+      amount: 0,
+      interestRate: 0,
+      term: 12,
+      startDate: new Date().toISOString().split('T')[0],
+      repaymentDay: 1,
+      paidMonths: 0
+    });
+    
+    // 还款表单
+    const paymentAmount = ref(0);
+    const paymentDate = ref(new Date().toISOString().split('T')[0]);
+    const paymentNote = ref('');
+    
+    // 贷款数据
+    const loans = ref(JSON.parse(localStorage.getItem(getBookKey('loans')) || '[]'));
+    
+    // 还款记录
+    const paymentRecords = ref([]);
+    
+    // 贷款类型名称映射
+    const loanTypeNames = {
+      mortgage: '房贷',
+      car: '车贷',
+      personal: '个人贷款',
+      business: '商业贷款',
+      student: '助学贷款',
+      other: '其他贷款'
+    };
+    
+    // 获取贷款类型名称
+    const getLoanTypeName = (type) => {
+      return loanTypeNames[type] || type;
+    };
+    
+    // 计算每月还款（等额本息）
+    const getMonthlyPayment = (loan) => {
+      if (!loan) return 0;
+      const principal = loan.amount;
+      const monthlyRate = loan.interestRate / 100 / 12;
+      const months = loan.term;
+      
+      if (monthlyRate === 0) {
+        return principal / months;
+      }
+      
+      const monthlyPayment = principal * monthlyRate * Math.pow(1 + monthlyRate, months) / (Math.pow(1 + monthlyRate, months) - 1);
+      return monthlyPayment;
+    };
+    
+    // 计算剩余本金
+    const getRemainingPrincipal = (loan) => {
+      if (!loan) return 0;
+      const monthlyPayment = getMonthlyPayment(loan);
+      const monthlyRate = loan.interestRate / 100 / 12;
+      const paidMonths = loan.paidMonths;
+      
+      if (monthlyRate === 0) {
+        return loan.amount - monthlyPayment * paidMonths;
+      }
+      
+      const remainingPrincipal = loan.amount * Math.pow(1 + monthlyRate, paidMonths) - 
+                              monthlyPayment * (Math.pow(1 + monthlyRate, paidMonths) - 1) / monthlyRate;
+      return Math.max(0, remainingPrincipal);
+    };
+    
+    // 计算已还金额
+    const getPaidAmount = (loan) => {
+      if (!loan) return 0;
+      const monthlyPayment = getMonthlyPayment(loan);
+      return monthlyPayment * loan.paidMonths;
+    };
+    
+    // 计算还款进度
+    const getProgress = (loan) => {
+      if (!loan || loan.term === 0) return 0;
+      return (loan.paidMonths / loan.term) * 100;
+    };
+    
+    // 获取下次还款日期
+    const getNextPaymentDate = (loan) => {
+      if (!loan) return '';
+      const nextMonth = new Date(loan.startDate);
+      nextMonth.setMonth(nextMonth.getMonth() + loan.paidMonths + 1);
+      nextMonth.setDate(loan.repaymentDay);
+      return nextMonth.toISOString().split('T')[0];
+    };
+    
+    // 计算近期还款
+    const upcomingPayments = computed(() => {
+      const today = new Date();
+      const payments = [];
+      
+      loans.value.forEach(loan => {
+        const nextPaymentDate = new Date(getNextPaymentDate(loan));
+        const daysUntil = Math.ceil((nextPaymentDate - today) / (1000 * 60 * 60 * 24));
+        
+        if (daysUntil >= 0 && daysUntil <= 30) {
+          payments.push({
+            loanId: loan.id,
+            loanName: loan.name,
+            paymentDate: nextPaymentDate.toISOString().split('T')[0],
+            amount: getMonthlyPayment(loan),
+            daysUntil
+          });
+        }
+      });
+      
+      return payments.sort((a, b) => a.daysUntil - b.daysUntil);
+    });
+    
+    // 编辑贷款
+    const editLoan = (loan) => {
+      editingLoan.value = loan;
+      loanForm.value = { ...loan };
+      showAddModal.value = true;
+    };
+    
+    // 保存贷款
+    const saveLoan = () => {
+      if (editingLoan.value) {
+        const index = loans.value.findIndex(l => l.id === editingLoan.value.id);
+        if (index !== -1) {
+          loans.value[index] = { ...loanForm.value, id: editingLoan.value.id };
+        }
+      } else {
+        const newLoan = {
+          id: Date.now(),
+          ...loanForm.value
+        };
+        loans.value.push(newLoan);
+      }
+      localStorage.setItem(getBookKey('loans'), JSON.stringify(loans.value));
+      showAddModal.value = false;
+      editingLoan.value = null;
+      loanForm.value = {
+        name: '',
+        type: 'personal',
+        amount: 0,
+        interestRate: 0,
+        term: 12,
+        startDate: new Date().toISOString().split('T')[0],
+        repaymentDay: 1,
+        paidMonths: 0
+      };
+    };
+    
+    // 删除贷款
+    const deleteLoan = (loan) => {
+      if (confirm(`确定要删除"${loan.name}"吗？此操作不可恢复。`)) {
+        loans.value = loans.value.filter(l => l.id !== loan.id);
+        localStorage.setItem(getBookKey('loans'), JSON.stringify(loans.value));
+      }
+    };
+    
+    // 记录还款
+    const recordPayment = (loan) => {
+      selectedLoan.value = loan;
+      paymentAmount.value = getMonthlyPayment(loan);
+      paymentDate.value = new Date().toISOString().split('T')[0];
+      paymentNote.value = '';
+      showPaymentModal.value = true;
+    };
+    
+    // 确认还款
+    const confirmPayment = () => {
+      if (!selectedLoan.value) return;
+      
+      // 更新贷款已还期数
+      const loanIndex = loans.value.findIndex(l => l.id === selectedLoan.value.id);
+      if (loanIndex !== -1) {
+        loans.value[loanIndex].paidMonths += 1;
+        localStorage.setItem(getBookKey('loans'), JSON.stringify(loans.value));
+      }
+      
+      // 记录还款记录
+      const records = JSON.parse(localStorage.getItem(getBookKey('loan_payment_records')) || '[]');
+      records.push({
+        id: Date.now(),
+        loanId: selectedLoan.value.id,
+        period: selectedLoan.value.paidMonths,
+        amount: paymentAmount.value,
+        date: paymentDate.value,
+        note: paymentNote.value
+      });
+      localStorage.setItem(getBookKey('loan_payment_records'), JSON.stringify(records));
+      
+      showPaymentModal.value = false;
+      alert('还款记录成功！');
+    };
+    
+    // 查看详情
+    const viewDetails = (loan) => {
+      selectedLoan.value = loan;
+      const records = JSON.parse(localStorage.getItem(getBookKey('loan_payment_records')) || '[]');
+      paymentRecords.value = records.filter(r => r.loanId === loan.id).sort((a, b) => a.period - b.period);
+      showDetailsModal.value = true;
+    };
+    
+    return {
+      loans,
+      upcomingPayments,
+      getLoanTypeName,
+      getMonthlyPayment,
+      getRemainingPrincipal,
+      getPaidAmount,
+      getProgress,
+      getNextPaymentDate,
+      editLoan,
+      saveLoan,
+      deleteLoan,
+      recordPayment,
+      confirmPayment,
+      viewDetails,
+      showAddModal,
+      showPaymentModal,
+      showDetailsModal,
+      editingLoan,
+      selectedLoan,
+      loanForm,
+      paymentAmount,
+      paymentDate,
+      paymentNote,
+      paymentRecords
     };
   }
 };
@@ -4185,6 +5197,7 @@ const routes = [
   { path: '/stats', component: StatsView },
   { path: '/dimensions', component: DimensionsView },
   { path: '/credit-cards', component: CreditCardsView },
+  { path: '/loans', component: LoansView },
   { path: '/logs', component: LogsView },
   { path: '/admin', component: AdminView }
 ];
@@ -4249,6 +5262,9 @@ const App = {
               </router-link>
               <router-link to="/credit-cards" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
                 信用卡
+              </router-link>
+              <router-link to="/loans" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
+                贷款
               </router-link>
               <router-link to="/logs" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
                 日志
