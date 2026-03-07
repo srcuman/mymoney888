@@ -1,8 +1,8 @@
-const { createApp, ref, computed, onMounted, nextTick } = Vue;
+const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 const { createRouter, createWebHashHistory } = VueRouter;
 
 // 版本控制
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 const GITHUB_REPO = 'https://api.github.com/repos/srcuman/mymoney888/releases/latest';
 const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/srcuman/mymoney888/main';
 
@@ -723,15 +723,15 @@ const HomeView = {
           </div>
 
           <!-- 信用卡分期选项 -->
-          <div v-if="transactionType === 'expense' && transaction.accountId && (getAccountType(transaction.accountId) === 'credit_card' || getAccountType(transaction.accountId) === 'debt')" class="space-y-4">
+          <div v-if="transactionType === 'expense' && transaction.accountId && currentAccountType && (currentAccountType === 'credit_card' || currentAccountType === 'debt')" class="space-y-4">
             <div>
               <label class="flex items-center">
-                <input type="checkbox" v-model="isInstallment" 
+                <input type="checkbox" v-model="isInstallment"
                   class="w-4 h-4 text-primary focus:ring-primary border-gray-300 rounded">
                 <span class="ml-2 text-sm font-medium text-gray-700">使用分期</span>
               </label>
             </div>
-            <div v-if="isInstallment" class="space-y-3">
+            <div v-if="getIsInstallmentDisplay()" class="space-y-3">
               <div>
                 <label class="block mb-2 text-sm font-medium text-gray-700">分期模板</label>
                 <select v-model="selectedInstallmentTemplate" @change="applyInstallmentTemplate"
@@ -766,7 +766,7 @@ const HomeView = {
               <div class="bg-blue-50 p-3 rounded-lg">
                 <p class="text-sm text-gray-700">每期还款：¥{{ monthlyPayment.toFixed(2) }}</p>
                 <p class="text-sm text-gray-700">总手续费：¥{{ totalFee.toFixed(2) }}</p>
-                <p class="text-sm text-gray-700">总还款额：¥{{ (parseFloat(transaction.value.amount) + totalFee).toFixed(2) }}</p>
+                <p class="text-sm text-gray-700">总还款额：¥{{ (parseFloat(transaction.amount || 0) + totalFee).toFixed(2) }}</p>
               </div>
               <button type="button" @click="saveInstallmentTemplate" class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all">
                 <i class="fas fa-save mr-2"></i>保存为模板
@@ -894,25 +894,54 @@ const HomeView = {
 
     // 计算分期还款金额
     const monthlyPayment = computed(() => {
-      if (!isInstallment.value || !transaction.value.amount) return 0;
-      const amount = transaction.value.amount;
+      if (!isInstallment.value) return 0;
+      const amount = parseFloat(transaction.value.amount) || 0;
+      if (!amount) return 0;
       const rate = installmentRate.value / 100;
-      const months = parseInt(installmentMonths.value);
+      const months = parseInt(installmentMonths.value) || 3;
       const totalFee = amount * rate;
       return (amount + totalFee) / months;
     });
 
     // 计算总手续费
     const totalFee = computed(() => {
-      if (!isInstallment.value || !transaction.value.amount) return 0;
-      return transaction.value.amount * (installmentRate.value / 100);
+      if (!isInstallment.value) return 0;
+      const amount = parseFloat(transaction.value.amount) || 0;
+      if (!amount) return 0;
+      return amount * (installmentRate.value / 100);
     });
 
     // 获取账户类型
     const getAccountType = (accountId) => {
       if (!accountId) return '';
       const account = accounts.value.find(a => a.id === parseInt(accountId));
-      return account ? account.type : '';
+      const accountType = account ? account.type : '';
+      console.log('getAccountType - accountId:', accountId, 'accountType:', accountType, 'account:', account);
+      return accountType;
+    };
+
+    // 当前账户类型（计算属性）
+    const currentAccountType = computed(() => {
+      const type = getAccountType(transaction.value.accountId);
+      console.log('currentAccountType computed - accountId:', transaction.value.accountId, 'type:', type);
+      return type;
+    });
+
+    // 监控isInstallment变化
+    watch(isInstallment, (newVal, oldVal) => {
+      console.log('isInstallment watch - oldVal:', oldVal, 'newVal:', newVal, 'isInstallment.value:', isInstallment.value);
+    });
+
+    // isInstallment显示值（计算属性，用于强制模板更新）
+    const isInstallmentDisplay = computed(() => {
+      console.log('isInstallmentDisplay computed - isInstallment.value:', isInstallment.value);
+      return isInstallment.value;
+    });
+
+    // 获取isInstallment显示值（方法）
+    const getIsInstallmentDisplay = () => {
+      console.log('getIsInstallmentDisplay method - isInstallment.value:', isInstallment.value);
+      return isInstallment.value;
     };
 
     const calculateAmount = () => {
@@ -1021,7 +1050,7 @@ const HomeView = {
       { id: 3, name: '支付宝', type: 'alipay', balance: 2000 },
       { id: 4, name: '微信钱包', type: 'wechat', balance: 1500 },
       { id: 5, name: '股票账户', type: 'investment', balance: 10000 },
-      { id: 6, name: '信用卡', type: 'debt', balance: -2000 }
+      { id: 6, name: '招商银行信用卡', type: 'credit_card', balance: -2000, billDay: 10, repayDay: 25, creditLimit: 20000 }
     ])));
     const merchants = ref(JSON.parse(localStorage.getItem(getBookKey('merchants')) || JSON.stringify([
       { id: 1, name: '沃尔玛' },
@@ -1053,7 +1082,16 @@ const HomeView = {
       return categories.value.filter(cat => cat.type === transactionType.value);
     });
 
-    const recentTransactions = computed(() => transactions.value.slice(0, 5));
+    const recentTransactions = computed(() => {
+      return transactions.value
+        .filter(t => {
+          // 只显示总额记录，排除每期分期记录（isInstallmentPayment为true的）
+          return !t.isInstallmentPayment;
+        })
+        .slice()
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 10);
+    });
 
     const totalAssets = computed(() => accounts.value.reduce((total, account) => total + account.balance, 0));
     const monthlyIncome = computed(() => {
@@ -1327,35 +1365,62 @@ const HomeView = {
           if (isInstallment.value && transactionType.value === 'expense') {
             const accountType = accounts.value.find(a => a.id === transaction.value.accountId)?.type;
             if (accountType === 'credit_card' || accountType === 'debt') {
-              const installments = [];
               const monthlyPaymentAmount = monthlyPayment.value;
               const startDate = new Date(transactionDateTime.value);
+              const installmentGroupId = 'INS-' + Date.now();
               
-              for (let i = 0; i < installmentMonths.value; i++) {
-                const dueDate = new Date(startDate);
-                dueDate.setMonth(dueDate.getMonth() + i + 1);
-                
-                installments.push({
-                  id: Date.now() + i + 1,
-                  transactionId: newTransaction.id,
-                  period: i + 1,
-                  totalPeriods: parseInt(installmentMonths.value),
-                  amount: monthlyPaymentAmount,
-                  dueDate: dueDate.toISOString().split('T')[0],
-                  paid: false,
-                  paidDate: null,
-                  installmentName: installmentName.value || '分期还款',
-                  rate: installmentRate.value
-                });
+              // 恢复账户余额（因为刚才扣除了总金额，改为每期扣除）
+              const accountIndex = accounts.value.findIndex(a => a.id === transaction.value.accountId);
+              if (accountIndex !== -1) {
+                accounts.value[accountIndex].balance += transaction.value.amount;
               }
               
-              // 保存分期记录
-              const existingInstallments = JSON.parse(localStorage.getItem(getBookKey('installments')) || '[]');
-              existingInstallments.push(...installments);
-              localStorage.setItem(getBookKey('installments'), JSON.stringify(existingInstallments));
+              // 修改原始交易为分期总额记录（不扣除余额）
+              newTransaction.isInstallment = true;
+              newTransaction.installmentGroupId = installmentGroupId;
+              newTransaction.installmentTotalPeriods = parseInt(installmentMonths.value);
+              newTransaction.installmentTotalAmount = transaction.value.amount * (1 + installmentRate.value / 100);
+              newTransaction.installmentOriginalAmount = transaction.value.amount;
+              newTransaction.installmentName = installmentName.value || '分期还款';
+              newTransaction.installmentRate = installmentRate.value;
+              newTransaction.description = (installmentName.value || '分期还款') + ` (${installmentMonths.value}期)`;
               
-              logger.info('分期记录创建成功', {
-                transactionId: newTransaction.id,
+              // 生成每期的交易记录
+              for (let i = 0; i < installmentMonths.value; i++) {
+                const dueDate = new Date(startDate);
+                dueDate.setMonth(dueDate.getMonth() + i);
+                
+                const installmentTransaction = {
+                  id: Date.now() + i + 1,
+                  type: 'expense',
+                  amount: monthlyPaymentAmount,
+                  categoryId: parseInt(transaction.value.categoryId),
+                  accountId: parseInt(transaction.value.accountId),
+                  merchantId: transaction.value.merchantId ? parseInt(transaction.value.merchantId) : null,
+                  projectId: transaction.value.projectId ? parseInt(transaction.value.projectId) : null,
+                  memberId: transaction.value.memberId ? parseInt(transaction.value.memberId) : null,
+                  description: (installmentName.value || '分期还款') + ` - 第${i + 1}期/${installmentMonths.value}期`,
+                  date: dueDate.toISOString().split('T')[0],
+                  isInstallment: true,
+                  installmentGroupId: installmentGroupId,
+                  installmentPeriod: i + 1,
+                  installmentTotalPeriods: parseInt(installmentMonths.value),
+                  installmentRate: installmentRate.value,
+                  installmentOriginalAmount: transaction.value.amount,
+                  installmentName: installmentName.value || '分期还款',
+                  isInstallmentPayment: true,
+                  paid: false,
+                  paidDate: null
+                };
+                
+                transactions.value.push(installmentTransaction);
+                
+                // 扣除每期金额
+                accounts.value[accountIndex].balance -= monthlyPaymentAmount;
+              }
+              
+              logger.info('分期交易创建成功', {
+                installmentGroupId: installmentGroupId,
                 periods: installmentMonths.value,
                 monthlyPayment: monthlyPaymentAmount
               });
@@ -1500,6 +1565,11 @@ const HomeView = {
       calculatedAmount.value = null;
       calcError.value = '';
       editingTransactionId.value = null;
+      isInstallment.value = false;
+      installmentMonths.value = 3;
+      installmentRate.value = 0;
+      installmentName.value = '';
+      selectedInstallmentTemplate.value = '';
     };
 
     return { 
@@ -1507,11 +1577,13 @@ const HomeView = {
       transaction, 
       transactionDateTime, 
       isInstallment, 
+      isInstallmentDisplay,
       installmentMonths, 
       installmentRate, 
       monthlyPayment, 
       totalFee, 
       getAccountType, 
+      currentAccountType,
       amountInput,
       calculatedAmount,
       calcError,
@@ -1545,7 +1617,8 @@ const HomeView = {
       selectedInstallmentTemplate,
       installmentTemplates,
       applyInstallmentTemplate,
-      saveInstallmentTemplate
+      saveInstallmentTemplate,
+      getIsInstallmentDisplay
     };
   }
 };
@@ -1893,6 +1966,31 @@ const StatsView = {
           </div>
         </div>
         
+        <!-- 子类别多选 -->
+        <div class="mb-6">
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm font-medium text-gray-700">子类别筛选（可多选）</label>
+            <button @click="clearCategoryFilter" class="text-xs text-primary hover:text-blue-700">
+              清除选择
+            </button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div v-for="parent in parentCategories" :key="parent.id" class="bg-gray-50 rounded-lg p-3">
+              <div class="flex items-center mb-2">
+                <input type="checkbox" :id="'parent-' + parent.id" :checked="isParentCategorySelected(parent)" 
+                  @change="toggleParentCategory(parent)" class="mr-2">
+                <label :for="'parent-' + parent.id" class="text-sm font-medium text-gray-900">{{ parent.name }}</label>
+              </div>
+              <div v-if="parent.children && parent.children.length > 0" class="pl-6 space-y-1">
+                <div v-for="child in parent.children" :key="child.id" class="flex items-center">
+                  <input type="checkbox" :id="'child-' + child.id" v-model="selectedCategories" :value="child.id" class="mr-2">
+                  <label :for="'child-' + child.id" class="text-xs text-gray-600">{{ child.name }}</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <!-- 统计概览 -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-6 text-white shadow-lg">
@@ -2115,6 +2213,11 @@ const StatsView = {
     
     const transactions = ref(JSON.parse(localStorage.getItem(getBookKey('transactions')) || '[]'));
     const categories = ref(JSON.parse(localStorage.getItem(getBookKey('categories')) || JSON.stringify(defaultCategories)));
+    const selectedCategories = ref([]);
+    
+    const parentCategories = computed(() => {
+      return categories.value.filter(cat => !cat.parentId);
+    });
     
     const filteredTransactions = computed(() => {
       return transactions.value.filter(t => {
@@ -2122,9 +2225,35 @@ const StatsView = {
         const start = new Date(filter.value.startDate);
         const end = new Date(filter.value.endDate);
         const typeMatch = filter.value.type === 'all' || t.type === filter.value.type;
-        return date >= start && date <= end && typeMatch;
+        const categoryMatch = selectedCategories.value.length === 0 || selectedCategories.value.includes(t.categoryId);
+        return date >= start && date <= end && typeMatch && categoryMatch;
       });
     });
+    
+    const isParentCategorySelected = (parent) => {
+      if (!parent.children || parent.children.length === 0) return false;
+      return parent.children.every(child => selectedCategories.value.includes(child.id));
+    };
+    
+    const toggleParentCategory = (parent) => {
+      if (!parent.children || parent.children.length === 0) return;
+      const isSelected = isParentCategorySelected(parent);
+      if (isSelected) {
+        selectedCategories.value = selectedCategories.value.filter(id => 
+          !parent.children.some(child => child.id === id)
+        );
+      } else {
+        parent.children.forEach(child => {
+          if (!selectedCategories.value.includes(child.id)) {
+            selectedCategories.value.push(child.id);
+          }
+        });
+      }
+    };
+    
+    const clearCategoryFilter = () => {
+      selectedCategories.value = [];
+    };
 
     const totalIncome = computed(() => {
       return filteredTransactions.value.filter(t => t.type === 'income').reduce((total, t) => total + t.amount, 0);
@@ -2581,6 +2710,11 @@ const StatsView = {
       totalIncome,
       totalExpense,
       balance,
+      parentCategories,
+      selectedCategories,
+      isParentCategorySelected,
+      toggleParentCategory,
+      clearCategoryFilter,
       applyQuickFilter, 
       applyFilter, 
       generateAnnualReview 
@@ -4268,6 +4402,8 @@ const CreditCardsView = {
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分类</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">商家</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">金额</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分期信息</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分期ID</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">备注</th>
                 </tr>
               </thead>
@@ -4277,6 +4413,16 @@ const CreditCardsView = {
                   <td class="px-6 py-4 text-sm text-gray-900">{{ getCategoryName(transaction.categoryId) }}</td>
                   <td class="px-6 py-4 text-sm text-gray-900">{{ getMerchantName(transaction.merchantId) }}</td>
                   <td class="px-6 py-4 text-sm text-gray-900">¥{{ transaction.amount.toFixed(2) }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    <span v-if="transaction.isInstallment" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      第{{ transaction.installmentPeriod }}/{{ transaction.installmentTotalPeriods }}期
+                    </span>
+                    <span v-else>-</span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <span v-if="transaction.isInstallment">{{ transaction.installmentGroupId }}</span>
+                    <span v-else>-</span>
+                  </td>
                   <td class="px-6 py-4 text-sm text-gray-900">{{ transaction.description || '-' }}</td>
                 </tr>
               </tbody>
@@ -4625,9 +4771,11 @@ const CreditCardsView = {
       if (!selectedBillPeriod.value || !selectedCard.value) return;
       
       billTransactions.value = transactions.value.filter(t => {
+        // 只显示每期分期记录（isInstallmentPayment为true的），排除总额记录
         return t.type === 'expense' && 
                t.accountId === selectedCard.value.id && 
-               t.date.startsWith(selectedBillPeriod.value);
+               t.date.startsWith(selectedBillPeriod.value) &&
+               t.isInstallmentPayment;
       });
     };
     
@@ -5265,6 +5413,312 @@ const LoansView = {
   }
 };
 
+// 交易明细页面
+const TransactionsView = {
+  template: `
+    <div class="space-y-8">
+      <!-- 页面标题 -->
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
+          <i class="fas fa-list text-primary mr-2"></i>
+          交易明细
+        </h2>
+        
+        <!-- 筛选条件 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div>
+            <label class="block mb-2 text-sm font-medium text-gray-700">开始日期</label>
+            <input type="date" v-model="filter.startDate" 
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+          </div>
+          <div>
+            <label class="block mb-2 text-sm font-medium text-gray-700">结束日期</label>
+            <input type="date" v-model="filter.endDate" 
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+          </div>
+          <div>
+            <label class="block mb-2 text-sm font-medium text-gray-700">交易类型</label>
+            <select v-model="filter.type" 
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+              <option value="all">全部</option>
+              <option value="expense">支出</option>
+              <option value="income">收入</option>
+              <option value="transfer">转账</option>
+            </select>
+          </div>
+          <div>
+            <label class="block mb-2 text-sm font-medium text-gray-700">搜索</label>
+            <input type="text" v-model="filter.search" placeholder="搜索备注、分类、账户..."
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+          </div>
+        </div>
+        
+        <!-- 每页显示数量 -->
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center space-x-2">
+            <span class="text-sm text-gray-700">每页显示：</span>
+            <select v-model="pageSize" 
+              class="px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all">
+              <option value="10">10条</option>
+              <option value="20">20条</option>
+              <option value="50">50条</option>
+              <option value="100">100条</option>
+            </select>
+          </div>
+          <div class="text-sm text-gray-700">
+            共 {{ filteredTransactions.length }} 条记录
+          </div>
+        </div>
+      </div>
+      
+      <!-- 交易列表 -->
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">类型</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分类</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">金额</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">账户</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">备注</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分期信息</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr v-for="t in paginatedTransactions" :key="t.id" class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ t.date }}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm">
+                  <span v-if="t.type === 'expense'" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                    <i class="fas fa-minus-circle mr-1"></i> 支出
+                  </span>
+                  <span v-else-if="t.type === 'income'" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <i class="fas fa-plus-circle mr-1"></i> 收入
+                  </span>
+                  <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    <i class="fas fa-exchange-alt mr-1"></i> 转账
+                  </span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  <span v-if="t.type === 'transfer'">{{ getAccountName(t.fromAccountId) }} → {{ getAccountName(t.toAccountId) }}</span>
+                  <span v-else>{{ getCategoryName(t.categoryId) }}</span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm font-bold" :class="t.type === 'expense' ? 'text-danger' : t.type === 'income' ? 'text-secondary' : 'text-purple-600'">
+                  {{ t.type === 'expense' ? '-' : t.type === 'income' ? '+' : '' }}{{ t.amount.toFixed(2) }}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  <span v-if="t.type === 'transfer'">{{ getAccountName(t.toAccountId) }}</span>
+                  <span v-else>{{ getAccountName(t.accountId) }}</span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ t.description || '-' }}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm">
+                  <button v-if="t.isInstallment" @click="viewInstallmentDetails(t)" 
+                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-all cursor-pointer">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    {{ t.installmentGroupId }}
+                  </button>
+                  <span v-else>-</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- 分页 -->
+        <div v-if="totalPages > 1" class="flex items-center justify-between mt-6">
+          <div class="text-sm text-gray-700">
+            第 {{ currentPage }} / {{ totalPages }} 页
+          </div>
+          <div class="flex items-center space-x-2">
+            <button @click="currentPage = 1" :disabled="currentPage === 1"
+              class="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+              首页
+            </button>
+            <button @click="currentPage--" :disabled="currentPage === 1"
+              class="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+              上一页
+            </button>
+            <button @click="currentPage++" :disabled="currentPage === totalPages"
+              class="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+              下一页
+            </button>
+            <button @click="currentPage = totalPages" :disabled="currentPage === totalPages"
+              class="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+              末页
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 分期详情模态框 -->
+      <div v-if="showInstallmentModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl max-h-[80vh] overflow-auto">
+          <h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center justify-between">
+            <div class="flex items-center">
+              <i class="fas fa-credit-card text-primary mr-2"></i>
+              分期详情 - {{ selectedInstallment.installmentGroupId }}
+            </div>
+            <button @click="showInstallmentModal = false" class="text-gray-500 hover:text-gray-700">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </h3>
+          
+          <!-- 总额信息 -->
+          <div class="bg-gradient-to-r from-blue-50 to-white p-4 rounded-lg border border-blue-200 mb-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p class="text-sm text-gray-600">分期名称</p>
+                <p class="text-lg font-bold text-gray-900">{{ selectedInstallment.installmentName }}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">原始金额</p>
+                <p class="text-lg font-bold text-gray-900">¥{{ selectedInstallment.installmentOriginalAmount?.toFixed(2) }}</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">分期期数</p>
+                <p class="text-lg font-bold text-gray-900">{{ selectedInstallment.installmentTotalPeriods }}期</p>
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">分期费率</p>
+                <p class="text-lg font-bold text-gray-900">{{ selectedInstallment.installmentRate }}%</p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 每期明细 -->
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">期数</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">应还日期</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">应还金额</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
+                  <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">备注</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <tr v-for="payment in installmentPayments" :key="payment.id" class="hover:bg-gray-50">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                    第{{ payment.installmentPeriod }}/{{ payment.installmentTotalPeriods }}期
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ payment.date }}</td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm font-bold text-gray-900">¥{{ payment.amount.toFixed(2) }}</td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm">
+                    <span v-if="payment.paid" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      已还款
+                    </span>
+                    <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      未还款
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ payment.description || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  setup() {
+    const transactions = ref(JSON.parse(localStorage.getItem(getBookKey('transactions')) || '[]'));
+    const categories = ref(JSON.parse(localStorage.getItem(getBookKey('categories')) || JSON.stringify(defaultCategories)));
+    const accounts = ref(JSON.parse(localStorage.getItem(getBookKey('accounts')) || '[]'));
+    
+    const filter = ref({
+      startDate: '',
+      endDate: '',
+      type: 'all',
+      search: ''
+    });
+    
+    const currentPage = ref(1);
+    const pageSize = ref(20);
+    const showInstallmentModal = ref(false);
+    const selectedInstallment = ref({});
+    const installmentPayments = ref([]);
+    
+    const filteredTransactions = computed(() => {
+      return transactions.value.filter(t => {
+        // 只显示总额记录，排除每期分期记录（isInstallmentPayment为true的）
+        if (t.isInstallmentPayment) return false;
+        
+        let dateMatch = true;
+        if (filter.value.startDate) {
+          dateMatch = new Date(t.date) >= new Date(filter.value.startDate);
+        }
+        if (filter.value.endDate) {
+          dateMatch = dateMatch && new Date(t.date) <= new Date(filter.value.endDate);
+        }
+        
+        const typeMatch = filter.value.type === 'all' || t.type === filter.value.type;
+        
+        const searchMatch = !filter.value.search || 
+          (t.description && t.description.toLowerCase().includes(filter.value.search.toLowerCase())) ||
+          (getCategoryName(t.categoryId) && getCategoryName(t.categoryId).toLowerCase().includes(filter.value.search.toLowerCase())) ||
+          (getAccountName(t.accountId) && getAccountName(t.accountId).toLowerCase().includes(filter.value.search.toLowerCase()));
+        
+        return dateMatch && typeMatch && searchMatch;
+      }).sort((a, b) => new Date(b.date) - new Date(a.date));
+    });
+    
+    const totalPages = computed(() => Math.ceil(filteredTransactions.value.length / pageSize.value));
+    
+    const paginatedTransactions = computed(() => {
+      const start = (currentPage.value - 1) * pageSize.value;
+      const end = start + pageSize.value;
+      return filteredTransactions.value.slice(start, end);
+    });
+    
+    const getCategoryName = (categoryId) => {
+      for (const parent of categories.value) {
+        if (parent.children) {
+          for (const child of parent.children) {
+            if (child.id === categoryId) {
+              return parent.name + ' > ' + child.name;
+            }
+          }
+        }
+      }
+      return '';
+    };
+    
+    const getAccountName = (accountId) => {
+      const account = accounts.value.find(a => a.id === accountId);
+      return account ? account.name : '';
+    };
+    
+    const viewInstallmentDetails = (transaction) => {
+      selectedInstallment.value = transaction;
+      installmentPayments.value = transactions.value.filter(t => 
+        t.installmentGroupId === transaction.installmentGroupId && t.isInstallmentPayment
+      ).sort((a, b) => a.installmentPeriod - b.installmentPeriod);
+      showInstallmentModal.value = true;
+    };
+    
+    watch(pageSize, () => {
+      currentPage.value = 1;
+    });
+    
+    return {
+      filter,
+      currentPage,
+      pageSize,
+      filteredTransactions,
+      totalPages,
+      paginatedTransactions,
+      getCategoryName,
+      getAccountName,
+      showInstallmentModal,
+      selectedInstallment,
+      installmentPayments,
+      viewInstallmentDetails
+    };
+  }
+};
+
 // 路由配置
 const routes = [
   { path: '/', component: HomeView },
@@ -5276,6 +5730,7 @@ const routes = [
   { path: '/dimensions', component: DimensionsView },
   { path: '/credit-cards', component: CreditCardsView },
   { path: '/loans', component: LoansView },
+  { path: '/transactions', component: TransactionsView },
   { path: '/logs', component: LogsView },
   { path: '/data-manage', component: DataManageView },
   { path: '/admin', component: AdminView }
@@ -5344,6 +5799,9 @@ const App = {
               </router-link>
               <router-link to="/loans" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
                 贷款
+              </router-link>
+              <router-link to="/transactions" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
+                交易明细
               </router-link>
               <router-link to="/logs" class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100">
                 日志
