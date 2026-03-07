@@ -7,13 +7,7 @@ version: '3.8'
 services:
   # Express后端API服务
   backend:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-      args:
-        # 使用国内Node.js镜像源
-        - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:20-alpine
-    image: mymoney888-backend:latest
+    image: ghcr.io/srcuman/mymoney888-backend:latest
     container_name: mymoney888-backend
     environment:
       NODE_ENV: production
@@ -48,15 +42,7 @@ services:
 
   # Vue前端服务
   frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        # 使用国内Node.js镜像源
-        - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:20-alpine
-        # 使用淘宝npm镜像源
-        - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
-    image: mymoney888-frontend:latest
+    image: ghcr.io/srcuman/mymoney888-frontend:latest
     container_name: mymoney888-frontend
     ports:
       - "8888:8888"
