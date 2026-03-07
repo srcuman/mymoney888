@@ -723,7 +723,7 @@ const HomeView = {
           </div>
 
           <!-- 信用卡分期选项 -->
-          <div v-if="transactionType === 'expense' && transaction.accountId && getAccountType(transaction.accountId) === 'credit_card'" class="space-y-4">
+          <div v-if="transactionType === 'expense' && transaction.accountId && (getAccountType(transaction.accountId) === 'credit_card' || getAccountType(transaction.accountId) === 'debt')" class="space-y-4">
             <div>
               <label class="flex items-center">
                 <input type="checkbox" v-model="isInstallment" 
@@ -910,6 +910,7 @@ const HomeView = {
 
     // 获取账户类型
     const getAccountType = (accountId) => {
+      if (!accountId) return '';
       const account = accounts.value.find(a => a.id === parseInt(accountId));
       return account ? account.type : '';
     };
@@ -1325,7 +1326,7 @@ const HomeView = {
           // 处理信用卡分期
           if (isInstallment.value && transactionType.value === 'expense') {
             const accountType = accounts.value.find(a => a.id === transaction.value.accountId)?.type;
-            if (accountType === 'credit_card') {
+            if (accountType === 'credit_card' || accountType === 'debt') {
               const installments = [];
               const monthlyPaymentAmount = monthlyPayment.value;
               const startDate = new Date(transactionDateTime.value);
