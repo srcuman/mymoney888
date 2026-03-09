@@ -28,17 +28,22 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { statistics as statisticsApi } from '../api'
+import { statistics as statisticsApi, books as booksApi } from '../api'
 
 const statistics = ref({
   incomeByCategory: [],
   expenseByCategory: [],
   totals: { total_income: 0, total_expense: 0, balance: 0 }
 })
+const currentBookId = ref(null)
 
 const loadStatistics = async () => {
   try {
-    statistics.value = await statisticsApi.getStatistics(1)
+    const books = await booksApi.getAll()
+    if (books.length > 0) {
+      currentBookId.value = books[0].id
+      statistics.value = await statisticsApi.getStatistics(currentBookId.value)
+    }
   } catch (error) {
     console.error('加载统计失败:', error)
   }

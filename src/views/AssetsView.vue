@@ -22,26 +22,31 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { accounts as accountsApi, statistics as statisticsApi } from '../api'
+import { accounts as accountsApi, statistics as statisticsApi, books as booksApi } from '../api'
 
 const accounts = ref([])
 const totalAssets = ref('0.00')
 const monthlyIncome = ref('0.00')
 const monthlyExpense = ref('0.00')
+const currentBookId = ref(null)
 const loading = ref(false)
 
 const loadData = async () => {
   loading.value = true
   try {
-    const accs = await accountsApi.getAll(1)
-    accounts.value = accs
-    totalAssets.value = accs.reduce((sum, acc) => sum + parseFloat(acc.balance), 0).toFixed(2)
-    const stats = await statisticsApi.getStatistics(1, {
-      startDate: new Date(new Date().getFullYear(), new Date().getMonth(),1).toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0]
-    })
-    monthlyIncome.value = stats.totals.total_income || 0
-    monthlyExpense.value = stats.totals.total_expense || 0
+    const books = await booksApi.getAll()
+    if (books.length > 0) {
+      currentBookId.value = books[0].id
+      const accs = await accountsApi.getAll(currentBookId.value)
+      accounts.value = accs
+      totalAssets.value = accs.reduce((sum, acc) => sum + parseFloat(acc.balance), 0).toFixed(2)
+      const stats = await statisticsApi.getStatistics(currentBookId.value, {
+        startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+        endDate: new Date().toISOString().split('T')[0]
+      })
+      monthlyIncome.value = parseFloat(stats.totals.total_income || 0).toFixed(2)
+      monthlyExpense.value = parseFloat(stats.totals.total_expense || 0).toFixed(2)
+    }
   } catch (error) {
     console.error('加载数据失败:', error)
   } finally {

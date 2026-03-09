@@ -214,6 +214,41 @@ app.post('/api/books/:bookId/accounts', verifyToken, async (req, res) => {
   }
 });
 
+app.put('/api/books/:bookId/accounts/:accountId', verifyToken, async (req, res) => {
+  try {
+    const { bookId, accountId } = req.params;
+    const { name, type, balance, description } = req.body;
+    const connection = await pool.getConnection();
+    await connection.query(
+      'UPDATE accounts SET name = ?, type = ?, balance = ?, description = ? WHERE id = ? AND book_id = ?',
+      [name, type, balance, description || null, accountId, bookId]
+    );
+    connection.release();
+    await logMessage('info', `更新账户: ${name}`, req.userId, { bookId, accountId });
+    res.json({ message: '更新成功' });
+  } catch (error) {
+    console.error('更新账户失败:', error);
+    res.status(500).json({ error: '更新账户失败: ' + error.message });
+  }
+});
+
+app.delete('/api/books/:bookId/accounts/:accountId', verifyToken, async (req, res) => {
+  try {
+    const { bookId, accountId } = req.params;
+    const connection = await pool.getConnection();
+    await connection.query(
+      'DELETE FROM accounts WHERE id = ? AND book_id = ?',
+      [accountId, bookId]
+    );
+    connection.release();
+    await logMessage('info', `删除账户 ID: ${accountId}`, req.userId, { bookId, accountId });
+    res.json({ message: '删除成功' });
+  } catch (error) {
+    console.error('删除账户失败:', error);
+    res.status(500).json({ error: '删除账户失败: ' + error.message });
+  }
+});
+
 app.get('/api/books/:bookId/categories', verifyToken, async (req, res) => {
   try {
     const { bookId } = req.params;

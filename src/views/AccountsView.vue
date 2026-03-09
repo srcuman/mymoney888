@@ -22,26 +22,48 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { accounts as accountsApi } from '../api'
+import { accounts as accountsApi, books as booksApi } from '../api'
 
 const accounts = ref([])
+const currentBookId = ref(null)
+const loading = ref(false)
 
 const loadData = async () => {
+  loading.value = true
   try {
-    accounts.value = await accountsApi.getAll(1)
+    const books = await booksApi.getAll()
+    if (books.length > 0) {
+      currentBookId.value = books[0].id
+      accounts.value = await accountsApi.getAll(currentBookId.value)
+    }
   } catch (error) {
     console.error('加载账户失败:', error)
+  } finally {
+    loading.value = false
   }
 }
 
 const editAccount = (account) => {
-  alert('编辑功能待实现')
+  const newName = prompt('请输入新的账户名称:', account.name)
+  if (newName && newName.trim() !== '') {
+    updateAccount(account.id, { ...account, name: newName.trim() })
+  }
+}
+
+const updateAccount = async (accountId, data) => {
+  try {
+    await accountsApi.update(currentBookId.value, accountId, data)
+    await loadData()
+  } catch (error) {
+    console.error('更新账户失败:', error)
+    alert('更新失败: ' + error.message)
+  }
 }
 
 const deleteAccount = async (id) => {
   if (confirm('确定要删除这个账户吗？')) {
     try {
-      await accountsApi.delete(1, id)
+      await accountsApi.delete(currentBookId.value, id)
       await loadData()
     } catch (error) {
       console.error('删除账户失败:', error)
