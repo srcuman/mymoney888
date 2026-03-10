@@ -5,6 +5,9 @@ WORKDIR /app
 # 设置npm镜像源
 RUN npm config set registry https://registry.npmmirror.com
 
+# 打印Node.js和npm版本
+RUN node --version && npm --version
+
 # 复制package.json
 COPY package.json ./
 
@@ -19,6 +22,9 @@ COPY . .
 
 # 查看目录结构
 RUN ls -la
+
+# 查看src目录结构
+RUN ls -la src
 
 # 构建前端
 RUN npm run build --verbose
