@@ -5,15 +5,23 @@ WORKDIR /app
 # 设置npm镜像源
 RUN npm config set registry https://registry.npmmirror.com
 
+# 复制package.json
+COPY package.json ./
+
+# 查看package.json内容
+RUN cat package.json
+
+# 安装所有依赖（包括开发依赖，用于构建）
+RUN npm install --legacy-peer-deps --no-optional --verbose
+
 # 复制所有文件
 COPY . .
 
-# 安装所有依赖
-RUN npm install --legacy-peer-deps --no-optional
+# 查看目录结构
+RUN ls -la
 
 # 构建前端
-RUN npm run build
-
+RUN npm run build --verbose
 # 暴露3000端口
 EXPOSE 3000
 
