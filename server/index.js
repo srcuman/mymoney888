@@ -17,6 +17,9 @@ const JWT_SECRET = process.env.JWT_SECRET || 'mymoney888-secret-key';
 app.use(cors());
 app.use(express.json());
 
+// 提供静态文件服务
+app.use(express.static(join(__dirname, '../dist')));
+
 const dbConfig = {
   host: process.env.DB_HOST || 'mysql',
   user: process.env.DB_USER || 'mymoney888',
@@ -460,6 +463,11 @@ app.get('/api/logs', verifyToken, async (req, res) => {
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', version: '2.0.0' });
+});
+
+// 处理所有未匹配的路由，重定向到前端的 index.html
+app.get('*', (req, res) => {
+  res.sendFile(join(__dirname, '../dist', 'index.html'));
 });
 
 app.listen(PORT, async () => {

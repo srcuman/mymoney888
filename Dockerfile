@@ -22,19 +22,25 @@ FROM node:25.8.0-alpine
 
 WORKDIR /app
 
-# 安装serve静态文件服务器
+# 复制package.json
+COPY package.json ./
+
+# 安装生产依赖
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm install -g serve
+    npm install --prod --legacy-peer-deps --no-optional
 
 # 从构建阶段复制构建产物
 COPY --from=builder /app/dist ./dist
 
-# 暴露8888端口
-EXPOSE 8888
+# 复制后端代码
+COPY server/ ./server/
+
+# 暴露3000端口
+EXPOSE 3000
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
+  CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
 
-# 启动静态文件服务器
-CMD ["serve", "-s", "dist", "-l", "8888"]
+# 启动应用
+CMD ["npm", "start"]
