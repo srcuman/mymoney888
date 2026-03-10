@@ -8,14 +8,20 @@ RUN npm config set registry https://registry.npmmirror.com
 # 复制package.json
 COPY package.json ./
 
+# 查看package.json内容
+RUN cat package.json
+
 # 安装所有依赖（包括开发依赖，用于构建）
-RUN npm install --legacy-peer-deps --no-optional
+RUN npm install --legacy-peer-deps --no-optional --verbose
 
 # 复制所有文件
 COPY . .
 
+# 查看目录结构
+RUN ls -la
+
 # 构建前端
-RUN npm run build
+RUN npm run build --verbose
 
 # 生产阶段
 FROM node:25.8.0-alpine
