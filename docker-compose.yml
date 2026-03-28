@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  mymoney888:
+    # 从GitHub仓库构建
+    build:
+      context: https://github.com/srcuman/mymoney888.git
+      dockerfile: Dockerfile
+      # 国内用户如遇到镜像拉取问题，可取消注释以下配置使用镜像源
+      # args:
+      #   - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:25.8.0-alpine
+    image: mymoney888:latest
+    container_name: mymoney888
+    ports:
+      - "${APP_PORT:-8888}:8888"
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3000/api}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-mymoney888}
+      - DB_NAME=${DB_NAME:-mymoney888}
+      - NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  mysql:
+    image: mysql:8.0
+    container_name: mymoney888-mysql
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-mymoney888}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-mymoney888}
+      - MYSQL_USER=${MYSQL_USER:-mymoney}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-mymoney888}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    profiles:
+      - internal
+
+volumes:
+  mysql_data:
+    driver: local
+
+# 网络配置 - 显式定义桥接网络
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
