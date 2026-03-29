@@ -17,10 +17,10 @@ services:
     environment:
       - NODE_ENV=production
       - VITE_API_URL=http://localhost:3000/api
-      - DB_HOST=mysql
+      - DB_HOST=your-mysql-host  # 请替换为您的MySQL主机地址
       - DB_PORT=3306
-      - DB_USER=root
-      - DB_PASSWORD=mymoney888
+      - DB_USER=your-mysql-user  # 请替换为您的MySQL用户名
+      - DB_PASSWORD=your-mysql-password  # 请替换为您的MySQL密码
       - DB_NAME=mymoney888
       - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
     # 健康检查
@@ -39,40 +39,6 @@ services:
         reservations:
           cpus: '0.5'
           memory: 256M
-
-  mysql:
-    image: mysql:8.0
-    container_name: mymoney888-mysql
-    restart: always
-    environment:
-      - MYSQL_ROOT_PASSWORD=mymoney888
-      - MYSQL_DATABASE=mymoney888
-      - MYSQL_USER=mymoney
-      - MYSQL_PASSWORD=mymoney888
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pmymoney888"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    # 资源限制
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-
-volumes:
-  mysql_data:
-    driver: local
 
 # 网络配置 - 显式定义桥接网络
 networks:
