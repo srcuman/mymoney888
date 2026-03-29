@@ -25,6 +25,9 @@ RUN npm install --production
 # 复制所有文件
 COPY . .
 
+# 设置脚本执行权限
+RUN chmod +x /app/scripts/start-app.sh
+
 # 暴露8888端口
 EXPOSE 8888
 
@@ -33,4 +36,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"
 
 # 启动服务器
-CMD ["/app/scripts/start-app.sh"]
+CMD ["/bin/sh", "/app/scripts/start-app.sh"]
