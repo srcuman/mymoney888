@@ -19,7 +19,7 @@ services:
       - VITE_API_URL=http://localhost:3000/api
       - DB_HOST=mysql
       - DB_PORT=3306
-      - DB_USER=root
+      - DB_USER=mymoney888
       - DB_PASSWORD=mymoney888
       - DB_NAME=mymoney888
       - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com

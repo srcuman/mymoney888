@@ -4,6 +4,37 @@
 
 当使用 `docker-compose-nosql.yml` 部署时，容器内部的 `localhost` 指的是容器本身，不是宿主机。因此，如果你在宿主机上运行MySQL服务，直接使用 `localhost` 会导致连接失败。
 
+## 数据库权限要求
+
+**重要**：项目不强制要求root权限，只需要以下权限的MySQL用户即可：
+
+- `CREATE DATABASE` - 创建数据库权限
+- `CREATE TABLE` - 创建表结构权限  
+- `INSERT, UPDATE, DELETE` - 数据操作权限
+- `SELECT` - 查询数据权限
+- `INDEX` - 创建索引权限
+- `ALTER` - 修改表结构权限
+
+### 创建专用用户（推荐）
+
+```sql
+-- 登录MySQL
+mysql -u root -p
+
+-- 创建专用数据库用户
+CREATE USER 'mymoney888'@'%' IDENTIFIED BY 'mymoney888';
+
+-- 授予必要权限
+GRANT ALL PRIVILEGES ON mymoney888.* TO 'mymoney888'@'%';
+
+-- 刷新权限
+FLUSH PRIVILEGES;
+```
+
+### 使用现有用户
+
+如果使用现有用户，确保其具有上述权限。
+
 ## 配置方法
 
 ### 方法1：使用宿主机IP地址
