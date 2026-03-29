@@ -22,15 +22,19 @@ if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_
         if mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" &> /dev/null; then
             echo "数据库已就绪！"
             break
+        else
+            echo "连接失败，尝试连接数据库 ($attempt/$max_attempts)..."
+            echo "连接信息: $DB_USER@$DB_HOST:${DB_PORT:-3306}"
         fi
         
         attempt=$((attempt + 1))
-        echo "尝试连接数据库 ($attempt/$max_attempts)..."
         sleep 2
     done
     
     if [ $attempt -eq $max_attempts ]; then
-        echo "警告: 无法连接到数据库，跳过初始化..."
+        echo "错误: 无法连接到数据库 $DB_USER@$DB_HOST:${DB_PORT:-3306}"
+        echo "请检查数据库配置和网络连接"
+        echo "跳过数据库初始化，应用将继续启动..."
     else
         # 检查数据库是否存在
         DB_EXISTS=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" -e "SHOW DATABASES LIKE '$DB_NAME'" | grep "$DB_NAME" || true)
