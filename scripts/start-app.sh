@@ -25,7 +25,7 @@ if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_
         echo "尝试连接数据库 ($((attempt + 1))/$max_attempts)..."
         
         # 捕获mysql命令的详细错误信息
-        ERROR_OUTPUT=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" 2>&1)
+        ERROR_OUTPUT=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" --ssl-mode=DISABLED -e "SELECT 1" 2>&1)
         MYSQL_EXIT_CODE=$?
         
         if [ $MYSQL_EXIT_CODE -eq 0 ]; then
@@ -88,13 +88,13 @@ if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_
         
         # 检查数据库是否存在
         echo "检查数据库是否存在..."
-        DB_EXISTS=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" -e "SHOW DATABASES LIKE '$DB_NAME'" 2>&1 | grep "$DB_NAME" || true)
+        DB_EXISTS=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" --ssl-mode=DISABLED -e "SHOW DATABASES LIKE '$DB_NAME'" 2>&1 | grep "$DB_NAME" || true)
         
         if [ -z "$DB_EXISTS" ]; then
             echo "数据库 $DB_NAME 不存在，正在创建..."
             
             # 捕获创建数据库的错误
-            CREATE_DB_ERROR=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" 2>&1)
+            CREATE_DB_ERROR=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" --ssl-mode=DISABLED -e "CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" 2>&1)
             
             if [ $? -eq 0 ]; then
                 echo "✓ 数据库创建成功！"
@@ -109,14 +109,14 @@ if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_
         
         # 检查是否需要初始化表结构
         echo "检查表结构..."
-        TABLE_COUNT=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "SHOW TABLES" 2>&1 | wc -l)
+        TABLE_COUNT=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" --ssl-mode=DISABLED "$DB_NAME" -e "SHOW TABLES" 2>&1 | wc -l)
         echo "当前表数量: $TABLE_COUNT"
         
         # 检查关键表是否存在
         REQUIRED_TABLES="users accounts categories transactions credit_cards credit_card_bills loans loan_payments installment_templates installments merchants projects members transaction_merchants transaction_projects transaction_members sync_logs user_settings"
         
         echo "检查必需表..."
-        TABLES_EXIST=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "SHOW TABLES" 2>&1 | grep -E "users|accounts|categories|transactions|credit_cards|credit_card_bills|loans|loan_payments|installment_templates|installments|merchants|projects|members|transaction_merchants|transaction_projects|transaction_members|sync_logs|user_settings" | wc -l)
+        TABLES_EXIST=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" --ssl-mode=DISABLED "$DB_NAME" -e "SHOW TABLES" 2>&1 | grep -E "users|accounts|categories|transactions|credit_cards|credit_card_bills|loans|loan_payments|installment_templates|installments|merchants|projects|members|transaction_merchants|transaction_projects|transaction_members|sync_logs|user_settings" | wc -l)
         echo "找到必需表数量: $TABLES_EXIST/18"
         
         if [ "$TABLE_COUNT" -le 1 ] || [ "$TABLES_EXIST" -lt 18 ]; then
@@ -131,7 +131,7 @@ if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_
                 echo "执行初始化SQL脚本..."
                 
                 # 捕获SQL执行的错误
-                SQL_ERROR=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < "/app/database/init-db.sql" 2>&1)
+                SQL_ERROR=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" --ssl-mode=DISABLED "$DB_NAME" < "/app/database/init-db.sql" 2>&1)
                 SQL_EXIT_CODE=$?
                 
                 if [ $SQL_EXIT_CODE -eq 0 ]; then
