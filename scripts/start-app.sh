@@ -55,8 +55,8 @@ if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_
             fi
         done
         
-        if [ "$TABLE_COUNT" -le 1 ] || [ ${#MISSING_TABLES[@]} -gt 0 ]; then
-            if [ ${#MISSING_TABLES[@]} -gt 0 ]; then
+        if [ "$TABLE_COUNT" -le 1 ] || [ "${#MISSING_TABLES[@]}" -gt 0 ]; then
+            if [ "${#MISSING_TABLES[@]}" -gt 0 ]; then
                 echo "检测到缺失的表: ${MISSING_TABLES[*]}"
                 echo "开始重建数据库结构..."
             else
