@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # 应用启动脚本
 # 在启动应用前初始化数据库
@@ -44,8 +44,24 @@ if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_
         # 检查是否需要初始化表结构
         TABLE_COUNT=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "SHOW TABLES" | wc -l)
         
-        if [ "$TABLE_COUNT" -le 1 ]; then
-            echo "数据库为空，开始初始化表结构..."
+        # 检查关键表是否存在
+        REQUIRED_TABLES=("users" "accounts" "categories" "transactions" "credit_cards" "credit_card_bills" "loans" "loan_payments" "installment_templates" "installments" "merchants" "projects" "members" "transaction_merchants" "transaction_projects" "transaction_members" "sync_logs" "user_settings")
+        MISSING_TABLES=()
+        
+        for table in "${REQUIRED_TABLES[@]}"; do
+            TABLE_EXISTS=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "SHOW TABLES LIKE '$table'" | grep "$table" || true)
+            if [ -z "$TABLE_EXISTS" ]; then
+                MISSING_TABLES+=("$table")
+            fi
+        done
+        
+        if [ "$TABLE_COUNT" -le 1 ] || [ ${#MISSING_TABLES[@]} -gt 0 ]; then
+            if [ ${#MISSING_TABLES[@]} -gt 0 ]; then
+                echo "检测到缺失的表: ${MISSING_TABLES[*]}"
+                echo "开始重建数据库结构..."
+            else
+                echo "数据库为空，开始初始化表结构..."
+            fi
             
             if [ -f "/app/database/init-db.sql" ]; then
                 echo "执行初始化SQL脚本..."
@@ -60,7 +76,7 @@ if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_
                 echo "警告: 初始化SQL文件不存在，跳过数据库初始化..."
             fi
         else
-            echo "数据库已包含表结构，跳过初始化"
+            echo "数据库已包含所有必需的表结构，跳过初始化"
         fi
     fi
 else

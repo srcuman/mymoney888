@@ -17,11 +17,11 @@ services:
     environment:
       - NODE_ENV=production
       - VITE_API_URL=http://localhost:3000/api
-      - DB_HOST=your-mysql-host  # 请替换为您的MySQL主机地址
-      - DB_PORT=3306
-      - DB_USER=your-mysql-user  # 请替换为您的MySQL用户名
-      - DB_PASSWORD=your-mysql-password  # 请替换为您的MySQL密码
-      - DB_NAME=mymoney888
+      - DB_HOST=${DB_HOST:-localhost}  # MySQL主机地址，默认localhost
+      - DB_PORT=${DB_PORT:-3306}  # MySQL端口，默认3306
+      - DB_USER=${DB_USER:-root}  # MySQL用户名，默认root
+      - DB_PASSWORD=${DB_PASSWORD:-mymoney888}  # MySQL密码，默认mymoney888
+      - DB_NAME=${DB_NAME:-mymoney888}  # 数据库名称，默认mymoney888
       - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
     # 健康检查
     healthcheck:
