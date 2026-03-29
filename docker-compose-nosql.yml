@@ -2,9 +2,9 @@ version: '3.8'
 
 services:
   mymoney888:
-    # 从本地构建
+    # 从GitHub仓库构建
     build:
-      context: .
+      context: https://github.com/srcuman/mymoney888.git
       dockerfile: Dockerfile
       # 国内用户如遇到镜像拉取问题，可取消注释以下配置使用镜像源
       # args:
