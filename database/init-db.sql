@@ -376,17 +376,22 @@ ALTER TABLE transactions ADD COLUMN project_id INT COMMENT '项目ID', ADD FOREI
 ALTER TABLE transactions ADD COLUMN member_id INT COMMENT '成员ID', ADD FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE SET NULL, ADD INDEX idx_member_id (member_id);
 
 -- 预设分类数据
+-- 首先插入一个默认用户，用于预设分类
+INSERT INTO users (name, email, password_hash, is_active) VALUES
+('默认用户', 'default@mymoney888.com', 'default_password_hash', 1);
+
+-- 获取默认用户的ID并插入预设分类
 INSERT INTO categories (user_id, name, type, icon, color, is_default, sort_order) VALUES
-(0, '餐饮', 'expense', 'food', '#FF6B6B', 1, 1),
-(0, '交通', 'expense', 'transport', '#4ECDC4', 1, 2),
-(0, '购物', 'expense', 'shopping', '#45B7D1', 1, 3),
-(0, '娱乐', 'expense', 'entertainment', '#96CEB4', 1, 4),
-(0, '医疗', 'expense', 'medical', '#FFEAA7', 1, 5),
-(0, '教育', 'expense', 'education', '#DDA0DD', 1, 6),
-(0, '工资', 'income', 'salary', '#98D8C8', 1, 1),
-(0, '投资', 'income', 'investment', '#F7DC6F', 1, 2),
-(0, '其他', 'expense', 'other', '#95A5A6', 1, 99),
-(0, '其他', 'income', 'other', '#95A5A6', 1, 99);
+((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '餐饮', 'expense', 'food', '#FF6B6B', 1, 1),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '交通', 'expense', 'transport', '#4ECDC4', 1, 2),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '购物', 'expense', 'shopping', '#45B7D1', 1, 3),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '娱乐', 'expense', 'entertainment', '#96CEB4', 1, 4),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '医疗', 'expense', 'medical', '#FFEAA7', 1, 5),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '教育', 'expense', 'education', '#DDA0DD', 1, 6),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '工资', 'income', 'salary', '#98D8C8', 1, 1),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '投资', 'income', 'investment', '#F7DC6F', 1, 2),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '其他', 'expense', 'other', '#95A5A6', 1, 99),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '其他', 'income', 'other', '#95A5A6', 1, 99);
 
 -- 创建视图：用户账户余额汇总
 CREATE OR REPLACE VIEW v_account_balance AS
