@@ -6,7 +6,7 @@
 FROM node:25.8.0-alpine
 
 # 安装MySQL客户端和bash（用于数据库初始化）
-RUN apk add --no-cache mysql-client bash
+RUN apk add --no-cache bash mariadb-client
 
 # 设置工作目录
 WORKDIR /app
