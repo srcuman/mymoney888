@@ -73,4 +73,7 @@ echo "启动应用服务"
 echo "========================================="
 
 # 启动应用
-exec node dist/server.mjs
+echo "构建项目..."
+npm run build
+echo "启动预览服务器..."
+exec npm run preview
