@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # 应用启动脚本
 # 在启动应用前初始化数据库
@@ -44,21 +44,15 @@ if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_
         # 检查是否需要初始化表结构
         TABLE_COUNT=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "SHOW TABLES" | wc -l)
         
-        # 检查关键表是否存在
-        REQUIRED_TABLES=("users" "accounts" "categories" "transactions" "credit_cards" "credit_card_bills" "loans" "loan_payments" "installment_templates" "installments" "merchants" "projects" "members" "transaction_merchants" "transaction_projects" "transaction_members" "sync_logs" "user_settings")
-        MISSING_TABLES=()
+        # 检查关键表是否存在（使用简单的字符串检查）
+        REQUIRED_TABLES="users accounts categories transactions credit_cards credit_card_bills loans loan_payments installment_templates installments merchants projects members transaction_merchants transaction_projects transaction_members sync_logs user_settings"
         
-        for table in "${REQUIRED_TABLES[@]}"; do
-            TABLE_EXISTS=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "SHOW TABLES LIKE '$table'" | grep "$table" || true)
-            if [ -z "$TABLE_EXISTS" ]; then
-                MISSING_TABLES+=("$table")
-            fi
-        done
+        # 检查是否有任何必需的表不存在
+        TABLES_EXIST=$(mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" -e "SHOW TABLES" | grep -E "users|accounts|categories|transactions|credit_cards|credit_card_bills|loans|loan_payments|installment_templates|installments|merchants|projects|members|transaction_merchants|transaction_projects|transaction_members|sync_logs|user_settings" | wc -l)
         
-        if [ "$TABLE_COUNT" -le 1 ] || [ "${#MISSING_TABLES[@]}" -gt 0 ]; then
-            if [ "${#MISSING_TABLES[@]}" -gt 0 ]; then
-                echo "检测到缺失的表: ${MISSING_TABLES[*]}"
-                echo "开始重建数据库结构..."
+        if [ "$TABLE_COUNT" -le 1 ] || [ "$TABLES_EXIST" -lt 18 ]; then
+            if [ "$TABLES_EXIST" -lt 18 ]; then
+                echo "检测到表结构不完整，开始重建数据库结构..."
             else
                 echo "数据库为空，开始初始化表结构..."
             fi
