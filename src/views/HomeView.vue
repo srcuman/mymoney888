@@ -84,6 +84,9 @@
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                 备注
               </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                操作
+              </th>
             </tr>
           </thead>
           <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -107,6 +110,17 @@
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {{ transaction.description || '-' }}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <button @click="editTransaction(transaction)" class="text-primary hover:text-blue-700 dark:hover:text-blue-400 mr-2">
+                  编辑
+                </button>
+                <button @click="copyTransaction(transaction)" class="text-secondary hover:text-green-700 dark:hover:text-green-400 mr-2">
+                  复制
+                </button>
+                <button @click="deleteTransaction(transaction.id)" class="text-danger hover:text-red-700 dark:hover:text-red-400">
+                  删除
+                </button>
               </td>
             </tr>
           </tbody>
@@ -210,6 +224,85 @@ const addTransaction = () => {
     description: ''
   }
   transactionType.value = 'expense'
+}
+
+// 编辑交易
+const editTransaction = (editTransaction) => {
+  transactionType.value = editTransaction.type
+  transaction.value = {
+    amount: editTransaction.amount,
+    category: editTransaction.category,
+    account: editTransaction.account.toString(),
+    toAccount: editTransaction.toAccount ? editTransaction.toAccount.toString() : '',
+    description: editTransaction.description
+  }
+  // 从列表中删除该交易
+  transactions.value = transactions.value.filter(t => t.id !== editTransaction.id)
+  // 更新账户余额
+  if (editTransaction.type === 'transfer') {
+    const fromAccountIndex = accounts.value.findIndex(a => a.id === editTransaction.account)
+    const toAccountIndex = accounts.value.findIndex(a => a.id === editTransaction.toAccount)
+    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
+      accounts.value[fromAccountIndex].balance += editTransaction.amount
+      accounts.value[toAccountIndex].balance -= editTransaction.amount
+    }
+  } else {
+    const accountIndex = accounts.value.findIndex(a => a.id === editTransaction.account)
+    if (accountIndex !== -1) {
+      if (editTransaction.type === 'income') {
+        accounts.value[accountIndex].balance -= editTransaction.amount
+      } else {
+        accounts.value[accountIndex].balance += editTransaction.amount
+      }
+    }
+  }
+  // 保存到本地存储
+  localStorage.setItem('accounts', JSON.stringify(accounts.value))
+  localStorage.setItem('transactions', JSON.stringify(transactions.value))
+}
+
+// 复制交易
+const copyTransaction = (copyTransaction) => {
+  transactionType.value = copyTransaction.type
+  transaction.value = {
+    amount: copyTransaction.amount,
+    category: copyTransaction.category,
+    account: copyTransaction.account.toString(),
+    toAccount: copyTransaction.toAccount ? copyTransaction.toAccount.toString() : '',
+    description: copyTransaction.description
+  }
+}
+
+// 删除交易
+const deleteTransaction = (transactionId) => {
+  if (confirm('确定要删除这条交易记录吗？')) {
+    const transactionToDelete = transactions.value.find(t => t.id === transactionId)
+    if (transactionToDelete) {
+      // 更新账户余额
+      if (transactionToDelete.type === 'transfer') {
+        const fromAccountIndex = accounts.value.findIndex(a => a.id === transactionToDelete.account)
+        const toAccountIndex = accounts.value.findIndex(a => a.id === transactionToDelete.toAccount)
+        if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
+          accounts.value[fromAccountIndex].balance += transactionToDelete.amount
+          accounts.value[toAccountIndex].balance -= transactionToDelete.amount
+        }
+      } else {
+        const accountIndex = accounts.value.findIndex(a => a.id === transactionToDelete.account)
+        if (accountIndex !== -1) {
+          if (transactionToDelete.type === 'income') {
+            accounts.value[accountIndex].balance -= transactionToDelete.amount
+          } else {
+            accounts.value[accountIndex].balance += transactionToDelete.amount
+          }
+        }
+      }
+      // 从列表中删除
+      transactions.value = transactions.value.filter(t => t.id !== transactionId)
+      // 保存到本地存储
+      localStorage.setItem('accounts', JSON.stringify(accounts.value))
+      localStorage.setItem('transactions', JSON.stringify(transactions.value))
+    }
+  }
 }
 
 onMounted(() => {

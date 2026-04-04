@@ -56,6 +56,12 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/user-management',
+      name: 'user-management',
+      component: () => import('../views/UserManagementView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/annual-review',
       name: 'annual-review',
       component: () => import('../views/AnnualReviewView.vue'),

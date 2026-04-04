@@ -91,6 +91,7 @@ const handleLogin = () => {
   
   // 保存用户信息
   localStorage.setItem('user', JSON.stringify(user))
-  router.push('/')
+  // 强制刷新页面以更新导航栏
+  window.location.href = '/'
 }
 </script>

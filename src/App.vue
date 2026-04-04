@@ -29,6 +29,9 @@
               <router-link to="/import-export" class="text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-blue-400">
                 数据管理
               </router-link>
+              <router-link to="/user-management" class="text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-blue-400">
+                用户管理
+              </router-link>
               <router-link to="/annual-review" class="text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-blue-400">
                 年度回顾
               </router-link>
