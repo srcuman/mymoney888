@@ -5,7 +5,7 @@
         <div class="flex justify-between items-center">
           <div class="flex items-center space-x-4">
             <router-link to="/" class="text-xl font-bold text-primary dark:text-blue-400">
-              个人记账
+              MyMoney888
             </router-link>
             <div class="hidden md:flex space-x-6">
               <router-link to="/" class="text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-blue-400">
@@ -19,6 +19,18 @@
               </router-link>
               <router-link to="/statistics" class="text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-blue-400">
                 统计分析
+              </router-link>
+              <router-link to="/credit-cards" class="text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-blue-400">
+                信用卡
+              </router-link>
+              <router-link to="/loans" class="text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-blue-400">
+                贷款
+              </router-link>
+              <router-link to="/import-export" class="text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-blue-400">
+                数据管理
+              </router-link>
+              <router-link to="/annual-review" class="text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-blue-400">
+                年度回顾
               </router-link>
             </div>
           </div>
