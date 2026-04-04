@@ -9,11 +9,11 @@
       </div>
       <form @submit.prevent="handleLogin" class="mt-8 space-y-6">
         <div>
-          <label for="email" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">邮箱</label>
+          <label for="username" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">用户名</label>
           <input 
-            type="email" 
-            id="email" 
-            v-model="email" 
+            type="text" 
+            id="username" 
+            v-model="username" 
             required 
             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
           >
@@ -72,16 +72,24 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const email = ref('')
+const username = ref('')
 const password = ref('')
 const rememberMe = ref(false)
 
 const handleLogin = () => {
-  // 简单的登录逻辑，实际项目中应该调用API
-  const user = {
-    email: email.value,
-    name: '用户'
+  // 检查用户是否存在
+  const existingUsers = JSON.parse(localStorage.getItem('users') || '[]')
+  const user = existingUsers.find(user => user.username === username.value)
+  
+  if (!user) {
+    alert('用户名不存在')
+    return
   }
+  
+  // 简单的密码验证（实际项目中应该使用加密密码）
+  // 这里暂时跳过密码验证，只验证用户名
+  
+  // 保存用户信息
   localStorage.setItem('user', JSON.stringify(user))
   router.push('/')
 }
