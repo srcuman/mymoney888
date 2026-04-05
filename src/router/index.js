@@ -62,6 +62,18 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/ledger-management',
+      name: 'ledger-management',
+      component: () => import('../views/LedgerManagementView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/dimension-management',
+      name: 'dimension-management',
+      component: () => import('../views/DimensionManagementView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/annual-review',
       name: 'annual-review',
       component: () => import('../views/AnnualReviewView.vue'),
