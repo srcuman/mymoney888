@@ -47,6 +47,29 @@
         </select>
       </div>
     </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label for="member" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">成员</label>
+        <select id="member" v-model="transaction.member" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+          <option value="">请选择成员</option>
+          <option v-for="member in members" :key="member.id" :value="member.name">{{ member.name }}</option>
+        </select>
+      </div>
+      <div>
+        <label for="merchant" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">商家</label>
+        <select id="merchant" v-model="transaction.merchant" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+          <option value="">请选择商家</option>
+          <option v-for="merchant in merchants" :key="merchant.id" :value="merchant.name">{{ merchant.name }}</option>
+        </select>
+      </div>
+      <div>
+        <label for="tag" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">标签</label>
+        <select id="tag" v-model="transaction.tag" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+          <option value="">请选择标签</option>
+          <option v-for="tag in tags" :key="tag.id" :value="tag.name">{{ tag.name }}</option>
+        </select>
+      </div>
+    </div>
     <div>
       <label for="description" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">备注</label>
       <input type="text" id="description" v-model="transaction.description" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
@@ -76,6 +99,9 @@ const transaction = ref({
   category: '',
   account: '',
   toAccount: '',
+  member: '',
+  merchant: '',
+  tag: '',
   description: ''
 })
 
@@ -90,6 +116,15 @@ const accounts = ref([
   { id: 4, name: '微信', balance: 1500 }
 ])
 
+// 成员列表
+const members = ref([])
+
+// 商家列表
+const merchants = ref([])
+
+// 标签列表
+const tags = ref([])
+
 // 交易记录
 const transactions = ref([])
 
@@ -102,6 +137,9 @@ const addTransaction = () => {
     category: transaction.value.category,
     account: parseInt(transaction.value.account),
     toAccount: transactionType.value === 'transfer' ? parseInt(transaction.value.toAccount) : null,
+    member: transaction.value.member,
+    merchant: transaction.value.merchant,
+    tag: transaction.value.tag,
     description: transaction.value.description,
     date: new Date().toISOString().split('T')[0]
   }
@@ -138,6 +176,9 @@ const addTransaction = () => {
     category: '',
     account: '',
     toAccount: '',
+    member: '',
+    merchant: '',
+    tag: '',
     description: ''
   }
   transactionType.value = 'expense'
@@ -150,11 +191,19 @@ onMounted(() => {
   // 从本地存储加载数据
   const savedAccounts = localStorage.getItem('accounts')
   const savedTransactions = localStorage.getItem('transactions')
+  const savedDimensions = localStorage.getItem('dimensions')
+  
   if (savedAccounts) {
     accounts.value = JSON.parse(savedAccounts)
   }
   if (savedTransactions) {
     transactions.value = JSON.parse(savedTransactions)
+  }
+  if (savedDimensions) {
+    const dimensions = JSON.parse(savedDimensions)
+    members.value = dimensions.members || []
+    merchants.value = dimensions.merchants || []
+    tags.value = dimensions.tags || []
   }
 })
 </script>

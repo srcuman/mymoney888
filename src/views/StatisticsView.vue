@@ -3,6 +3,37 @@
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
       <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">收支统计</h2>
       
+      <!-- 时间范围选择 -->
+      <div class="mb-6">
+        <div class="flex flex-wrap items-center gap-4">
+          <div class="flex space-x-2">
+            <button @click="setTimeRange('today')" :class="activeTimeRange === 'today' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-3 py-1 rounded-md text-sm font-medium">
+              今日
+            </button>
+            <button @click="setTimeRange('yesterday')" :class="activeTimeRange === 'yesterday' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-3 py-1 rounded-md text-sm font-medium">
+              昨日
+            </button>
+            <button @click="setTimeRange('thisWeek')" :class="activeTimeRange === 'thisWeek' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-3 py-1 rounded-md text-sm font-medium">
+              本周
+            </button>
+            <button @click="setTimeRange('thisMonth')" :class="activeTimeRange === 'thisMonth' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-3 py-1 rounded-md text-sm font-medium">
+              本月
+            </button>
+            <button @click="setTimeRange('lastMonth')" :class="activeTimeRange === 'lastMonth' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-3 py-1 rounded-md text-sm font-medium">
+              上月
+            </button>
+          </div>
+          <div class="flex space-x-2">
+            <input type="date" v-model="dateRange.start" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+            <span class="text-gray-500 dark:text-gray-400">至</span>
+            <input type="date" v-model="dateRange.end" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+            <button @click="applyDateRange" class="px-3 py-1 bg-primary text-white rounded-md hover:bg-blue-700 text-sm font-medium">
+              应用
+            </button>
+          </div>
+        </div>
+      </div>
+      
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">支出分类</h3>
@@ -79,9 +110,69 @@ const transactions = ref([
   { id: 6, type: 'income', amount: 500, category: '投资', account: 2, description: '股息', date: '2026-02-20' }
 ])
 
+// 时间范围
+const dateRange = ref({
+  start: '',
+  end: ''
+})
+
+// 活跃时间范围
+const activeTimeRange = ref('thisMonth')
+
+// 过滤后的交易记录
+const filteredTransactions = computed(() => {
+  if (!dateRange.value.start || !dateRange.value.end) {
+    return transactions.value
+  }
+  return transactions.value.filter(t => {
+    return t.date >= dateRange.value.start && t.date <= dateRange.value.end
+  })
+})
+
+// 设置时间范围
+const setTimeRange = (range) => {
+  activeTimeRange.value = range
+  const today = new Date()
+  let startDate, endDate
+  
+  switch (range) {
+    case 'today':
+      startDate = today.toISOString().split('T')[0]
+      endDate = startDate
+      break
+    case 'yesterday':
+      startDate = new Date(today.setDate(today.getDate() - 1)).toISOString().split('T')[0]
+      endDate = startDate
+      break
+    case 'thisWeek':
+      // 计算本周一
+      const monday = new Date(today)
+      monday.setDate(today.getDate() - today.getDay() + 1)
+      startDate = monday.toISOString().split('T')[0]
+      endDate = today.toISOString().split('T')[0]
+      break
+    case 'thisMonth':
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
+      endDate = today.toISOString().split('T')[0]
+      break
+    case 'lastMonth':
+      startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0]
+      endDate = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0]
+      break
+  }
+  
+  dateRange.value.start = startDate
+  dateRange.value.end = endDate
+}
+
+// 应用日期范围
+const applyDateRange = () => {
+  activeTimeRange.value = 'custom'
+}
+
 // 计算支出分类统计
 const expenseCategories = computed(() => {
-  const expenses = transactions.value.filter(t => t.type === 'expense')
+  const expenses = filteredTransactions.value.filter(t => t.type === 'expense')
   const totalExpense = expenses.reduce((total, t) => total + t.amount, 0)
   
   const categoryMap = {}
@@ -102,7 +193,7 @@ const expenseCategories = computed(() => {
 
 // 计算收入分类统计
 const incomeCategories = computed(() => {
-  const incomes = transactions.value.filter(t => t.type === 'income')
+  const incomes = filteredTransactions.value.filter(t => t.type === 'income')
   const totalIncome = incomes.reduce((total, t) => total + t.amount, 0)
   
   const categoryMap = {}
@@ -123,17 +214,15 @@ const incomeCategories = computed(() => {
 
 // 计算年度总收入
 const yearlyIncome = computed(() => {
-  const currentYear = new Date().getFullYear().toString()
-  return transactions.value
-    .filter(t => t.type === 'income' && t.date.startsWith(currentYear))
+  return filteredTransactions.value
+    .filter(t => t.type === 'income')
     .reduce((total, t) => total + t.amount, 0)
 })
 
 // 计算年度总支出
 const yearlyExpense = computed(() => {
-  const currentYear = new Date().getFullYear().toString()
-  return transactions.value
-    .filter(t => t.type === 'expense' && t.date.startsWith(currentYear))
+  return filteredTransactions.value
+    .filter(t => t.type === 'expense')
     .reduce((total, t) => total + t.amount, 0)
 })
 
@@ -144,7 +233,7 @@ const yearlyBalance = computed(() => {
 
 // 计算总交易次数
 const totalTransactions = computed(() => {
-  return transactions.value.length
+  return filteredTransactions.value.length
 })
 
 onMounted(() => {
@@ -153,5 +242,8 @@ onMounted(() => {
   if (savedTransactions) {
     transactions.value = JSON.parse(savedTransactions)
   }
+  
+  // 初始化时间范围为本月
+  setTimeRange('thisMonth')
 })
 </script>
