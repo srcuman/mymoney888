@@ -4,7 +4,7 @@
       <div class="text-center">
         <h2 class="text-3xl font-bold text-gray-900 dark:text-white">登录</h2>
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          欢迎使用个人记账软件
+          登录您的个人记账账户
         </p>
       </div>
       <form @submit.prevent="handleLogin" class="mt-8 space-y-6">
@@ -24,7 +24,6 @@
             type="password" 
             id="password" 
             v-model="password" 
-            required 
             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white"
           >
         </div>
@@ -37,13 +36,8 @@
               class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded dark:bg-gray-600 dark:border-gray-500"
             >
             <label for="remember-me" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
-              自动登录
+              记住我
             </label>
-          </div>
-          <div class="text-sm">
-            <a href="#" class="font-medium text-primary hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
-              忘记密码？
-            </a>
           </div>
         </div>
         <div>
@@ -68,10 +62,11 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, inject } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+const checkAuth = inject('checkAuth')
 const username = ref('')
 const password = ref('')
 const rememberMe = ref(false)
@@ -91,7 +86,13 @@ const handleLogin = () => {
   
   // 保存用户信息
   localStorage.setItem('user', JSON.stringify(user))
-  // 强制刷新页面以更新导航栏
-  window.location.href = '/'
+  
+  // 更新认证状态
+  if (checkAuth) {
+    checkAuth()
+  }
+  
+  // 跳转到首页
+  router.push('/')
 }
 </script>

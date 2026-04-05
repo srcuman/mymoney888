@@ -38,6 +38,7 @@
             </div>
           </div>
           <div class="flex items-center space-x-4">
+            <span class="text-sm text-gray-600 dark:text-gray-400">v3.1.1</span>
             <button @click="logout" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-md text-sm font-medium">
               退出登录
             </button>
@@ -57,16 +58,26 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, provide } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const isAuthenticated = ref(false)
 
-onMounted(() => {
-  // 检查本地存储中的登录状态
+const checkAuth = () => {
   const user = localStorage.getItem('user')
   isAuthenticated.value = !!user
+  return isAuthenticated.value
+}
+
+provide('checkAuth', checkAuth)
+
+onMounted(() => {
+  checkAuth()
+  // 监听路由变化，检查登录状态
+  router.afterEach(() => {
+    checkAuth()
+  })
 })
 
 const logout = () => {
