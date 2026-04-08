@@ -7,7 +7,7 @@
           <span class="mr-2">💰</span>
           MyMoney888
         </router-link>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">v3.2.0</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">v3.3.0</p>
       </div>
       <nav class="flex-1 p-4 space-y-1">
         <router-link to="/" :class="isActive('/')" class="flex items-center px-3 py-2 rounded-md text-sm font-medium">
@@ -46,7 +46,7 @@
           <span class="mr-3">🏷️</span>
           维度管理
         </router-link>
-        <router-link to="/user-management" :class="isActive('/user-management')" class="flex items-center px-3 py-2 rounded-md text-sm font-medium">
+        <router-link v-if="isAdmin" to="/user-management" :class="isActive('/user-management')" class="flex items-center px-3 py-2 rounded-md text-sm font-medium">
           <span class="mr-3">👥</span>
           用户管理
         </router-link>
@@ -92,7 +92,7 @@
               快速记账
             </button>
             <!-- 当前版本 -->
-            <span class="text-sm text-gray-600 dark:text-gray-400">v3.2.0</span>
+            <span class="text-sm text-gray-600 dark:text-gray-400">v3.3.0</span>
           </div>
         </div>
       </header>
@@ -169,6 +169,17 @@ const isActive = (path) => {
     ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-blue-400' 
     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
 }
+
+// 当前用户
+const currentUser = computed(() => {
+  const userStr = localStorage.getItem('user')
+  return userStr ? JSON.parse(userStr) : null
+})
+
+// 检查是否是管理员
+const isAdmin = computed(() => {
+  return currentUser.value && currentUser.value.role === 'admin'
+})
 
 // 计算当前账套名称
 const currentLedgerName = computed(() => {

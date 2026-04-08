@@ -37,7 +37,7 @@
       <!-- 维度筛选 -->
       <div class="mb-6">
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">维度筛选</h3>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label for="member-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">成员</label>
             <select id="member-filter" v-model="filters.member" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
@@ -64,6 +64,13 @@
             <select id="payment-channel-filter" v-model="filters.paymentChannel" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
               <option value="">全部支付渠道</option>
               <option v-for="channel in paymentChannels" :key="channel.id" :value="channel.name">{{ channel.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label for="category-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">分类</label>
+            <select id="category-filter" v-model="filters.category" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+              <option value="">全部分类</option>
+              <option v-for="category in allCategories" :key="category" :value="category">{{ category }}</option>
             </select>
           </div>
         </div>
@@ -164,7 +171,8 @@ const filters = ref({
   member: '',
   merchant: '',
   tag: '',
-  paymentChannel: ''
+  paymentChannel: '',
+  category: ''
 })
 
 // 成员列表
@@ -222,6 +230,11 @@ const filteredTransactions = computed(() => {
     result = result.filter(t => t.tag === filters.value.tag)
   }
   
+  // 分类过滤
+  if (filters.value.category) {
+    result = result.filter(t => t.category === filters.value.category)
+  }
+  
   return result
 })
 
@@ -231,7 +244,8 @@ const resetFilters = () => {
     member: '',
     merchant: '',
     tag: '',
-    paymentChannel: ''
+    paymentChannel: '',
+    category: ''
   }
 }
 
