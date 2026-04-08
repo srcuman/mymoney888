@@ -1,8 +1,9 @@
 # MyMoney888 数据库设计文档
 
 ## 版本信息
-- **版本**: 3.0.0
+- **版本**: 3.3.0
 - **创建日期**: 2026-03-28
+- **最后更新**: 2026-04-08
 - **数据库类型**: MySQL/MariaDB 8.0+
 - **字符集**: utf8mb4
 - **排序规则**: utf8mb4_unicode_ci
@@ -33,9 +34,14 @@
 ```
 mymoney888 (数据库)
 ├── users (用户表)
+├── ledgers (账套表)
+├── payment_channels (支付渠道表)
 ├── accounts (账户表)
 ├── categories (分类表)
 ├── transactions (交易记录表)
+├── sync_logs (同步日志表)
+├── user_settings (用户设置表)
+├── defaults (默认值设置表)
 ├── credit_cards (信用卡表)
 ├── credit_card_bills (信用卡账单表)
 ├── loans (贷款表)
@@ -48,8 +54,6 @@ mymoney888 (数据库)
 ├── transaction_merchants (交易商家关联表)
 ├── transaction_projects (交易项目关联表)
 ├── transaction_members (交易成员关联表)
-├── sync_logs (同步日志表)
-├── user_settings (用户设置表)
 ├── v_account_balance (账户余额视图)
 └── v_user_statistics (用户统计视图)
 ```
@@ -68,18 +72,60 @@ mymoney888 (数据库)
 | name | VARCHAR(100) | NOT NULL | 用户姓名 |
 | email | VARCHAR(100) | UNIQUE, NOT NULL | 用户邮箱 |
 | password_hash | VARCHAR(255) | NOT NULL | 密码哈希值 |
+| role | ENUM | DEFAULT 'user' | 用户角色 (admin/user) |
 | created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
 | updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
 | last_login_at | TIMESTAMP | NULL | 最后登录时间 |
 | is_active | TINYINT(1) | DEFAULT 1 | 是否激活 (1=激活, 0=禁用) |
 
 **设计说明**:
-- 使用email作为唯一标识符
-- 密码使用bcrypt等算法加密存储
-- 支持用户账户的启用/禁用
-- 记录用户最后登录时间
+- 增加role字段，支持管理员和普通用户角色
+- 首个注册账户默认为管理员
+- 已有管理员时，只能由管理员添加新管理员
 
-### 2. accounts (账户表)
+### 2. ledgers (账套表)
+
+存储用户的账套信息，支持多账套管理。
+
+| 字段名 | 类型 | 约束 | 说明 |
+|--------|------|------|------|
+| id | INT | PRIMARY KEY, AUTO_INCREMENT | 账套ID |
+| user_id | INT | FOREIGN KEY, NOT NULL | 用户ID |
+| name | VARCHAR(100) | NOT NULL | 账套名称 |
+| description | TEXT | NULL | 账套描述 |
+| is_default | TINYINT(1) | DEFAULT 0 | 是否为默认账套 |
+| is_active | TINYINT(1) | DEFAULT 1 | 是否激活 |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
+
+**设计说明**:
+- 每个用户可以创建多个账套
+- 支持设置默认账套
+- 账套可被禁用而不删除历史数据
+
+### 3. payment_channels (支付渠道表)
+
+存储支付渠道信息。
+
+| 字段名 | 类型 | 约束 | 说明 |
+|--------|------|------|------|
+| id | INT | PRIMARY KEY, AUTO_INCREMENT | 支付渠道ID |
+| user_id | INT | FOREIGN KEY, NOT NULL | 用户ID |
+| name | VARCHAR(100) | NOT NULL | 支付渠道名称 |
+| code | VARCHAR(50) | NULL | 支付渠道代码 |
+| icon | VARCHAR(50) | NULL | 支付渠道图标 |
+| color | VARCHAR(20) | NULL | 支付渠道颜色 |
+| is_default | TINYINT(1) | DEFAULT 0 | 是否为默认支付渠道 |
+| is_active | TINYINT(1) | DEFAULT 1 | 是否激活 |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
+
+**设计说明**:
+- 支持多种支付渠道（支付宝、微信支付、云闪付等）
+- 可设置默认支付渠道
+- 支持自定义图标和颜色
+
+### 4. accounts (账户表)
 
 存储用户的各类账户信息。
 
@@ -87,6 +133,7 @@ mymoney888 (数据库)
 |--------|------|------|------|
 | id | INT | PRIMARY KEY, AUTO_INCREMENT | 账户ID |
 | user_id | INT | FOREIGN KEY, NOT NULL | 用户ID |
+| ledger_id | INT | FOREIGN KEY, NULL | 账套ID |
 | name | VARCHAR(100) | NOT NULL | 账户名称 |
 | balance | DECIMAL(15,2) | DEFAULT 0.00 | 账户余额 |
 | account_type | VARCHAR(50) | DEFAULT 'general' | 账户类型 |
@@ -104,12 +151,12 @@ mymoney888 (数据库)
 - `credit_card`: 信用卡账户
 
 **设计说明**:
-- 每个账户关联到一个用户
+- 每个账户关联到一个用户和一个账套
 - 余额字段使用DECIMAL类型确保精度
 - 支持多种账户类型
 - 账户可被禁用而不删除历史数据
 
-### 3. categories (分类表)
+### 5. categories (分类表)
 
 存储收支分类信息，支持多级分类。
 
@@ -135,7 +182,7 @@ mymoney888 (数据库)
 - 支持自定义图标和颜色
 - 可按sort_order排序显示
 
-### 4. transactions (交易记录表)
+### 6. transactions (交易记录表)
 
 存储所有交易记录，是系统的核心表。
 
@@ -143,9 +190,14 @@ mymoney888 (数据库)
 |--------|------|------|------|
 | id | INT | PRIMARY KEY, AUTO_INCREMENT | 交易ID |
 | user_id | INT | FOREIGN KEY, NOT NULL | 用户ID |
+| ledger_id | INT | FOREIGN KEY, NULL | 账套ID |
 | account_id | INT | FOREIGN KEY, NOT NULL | 账户ID |
+| from_account_id | INT | FOREIGN KEY, NULL | 转出账户ID（转账用） |
+| to_account_id | INT | FOREIGN KEY, NULL | 转入账户ID（转账用） |
 | category_id | INT | FOREIGN KEY, NULL | 分类ID |
-| type | ENUM | NOT NULL | 交易类型 (expense/income) |
+| payment_channel_id | INT | FOREIGN KEY, NULL | 支付渠道ID |
+| type | ENUM | NOT NULL | 交易类型 (expense/income/transfer) |
+| transfer_type | ENUM | NULL | 转账类型 (internal/external) |
 | amount | DECIMAL(15,2) | NOT NULL | 交易金额 |
 | description | TEXT | NULL | 交易描述 |
 | transaction_date | DATE | NOT NULL | 交易日期 |
@@ -163,6 +215,11 @@ mymoney888 (数据库)
 **交易类型枚举值**:
 - `expense`: 支出
 - `income`: 收入
+- `transfer`: 转账
+
+**转账类型枚举值**:
+- `internal`: 内部转账（同一用户账户间）
+- `external`: 外部转账（不同用户账户间）
 
 **交易状态枚举值**:
 - `pending`: 待处理
@@ -181,8 +238,9 @@ mymoney888 (数据库)
 - 使用JSON字段存储标签和附件
 - 支持周期性交易
 - 记录同步时间用于数据同步
+- 支持转账功能，通过from_account_id和to_account_id实现
 
-### 5. sync_logs (同步日志表)
+### 7. sync_logs (同步日志表)
 
 记录所有数据同步操作的日志。
 
@@ -215,7 +273,7 @@ mymoney888 (数据库)
 - 记录同步状态和错误信息
 - 使用JSON字段存储详细同步数据
 
-### 6. user_settings (用户设置表)
+### 8. user_settings (用户设置表)
 
 存储用户的个性化设置。
 
@@ -241,7 +299,32 @@ mymoney888 (数据库)
 - 同一用户的同一设置键唯一
 - 支持多种数据类型
 
-### 7. credit_cards (信用卡表)
+### 9. defaults (默认值设置表)
+
+存储用户的默认值设置，用于快速填充交易表单。
+
+| 字段名 | 类型 | 约束 | 说明 |
+|--------|------|------|------|
+| id | INT | PRIMARY KEY, AUTO_INCREMENT | 默认值ID |
+| user_id | INT | FOREIGN KEY, NOT NULL | 用户ID |
+| ledger_id | INT | FOREIGN KEY, NULL | 账套ID |
+| expense_category_id | INT | FOREIGN KEY, NULL | 默认支出分类ID |
+| income_category_id | INT | FOREIGN KEY, NULL | 默认收入分类ID |
+| member_id | INT | FOREIGN KEY, NULL | 默认成员ID |
+| merchant_id | INT | FOREIGN KEY, NULL | 默认商家ID |
+| project_id | INT | FOREIGN KEY, NULL | 默认项目ID |
+| payment_channel_id | INT | FOREIGN KEY, NULL | 默认支付渠道ID |
+| account_id | INT | FOREIGN KEY, NULL | 默认账户ID |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
+
+**设计说明**:
+- 每个用户可以设置默认值
+- 支持按账套设置不同的默认值
+- 默认值会在创建新交易时自动填充
+- 包含常用维度的默认值设置
+
+### 10. credit_cards (信用卡表)
 
 存储信用卡账户信息。
 
@@ -269,7 +352,7 @@ mymoney888 (数据库)
 - 卡号存储脱敏后的信息
 - 支持多种卡片类型
 
-### 8. credit_card_bills (信用卡账单表)
+### 11. credit_card_bills (信用卡账单表)
 
 存储信用卡账单信息。
 
@@ -300,7 +383,7 @@ mymoney888 (数据库)
 - 支持部分还款和逾期状态
 - 记录交易笔数用于统计分析
 
-### 9. loans (贷款表)
+### 12. loans (贷款表)
 
 存储贷款信息。
 
@@ -345,7 +428,7 @@ mymoney888 (数据库)
 - 追踪还款进度和剩余本金
 - 支持等额本息等还款方式
 
-### 10. loan_payments (贷款还款记录表)
+### 13. loan_payments (贷款还款记录表)
 
 存储贷款还款记录。
 
@@ -377,7 +460,7 @@ mymoney888 (数据库)
 - 追踪剩余本金
 - 支持多种还款状态
 
-### 11. installment_templates (分期模板表)
+### 14. installment_templates (分期模板表)
 
 存储分期模板，用于快速创建分期记录。
 
@@ -403,7 +486,7 @@ mymoney888 (数据库)
 - 关联到分类和账户
 - 记录分期总额、期数、每期金额
 
-### 12. installments (分期记录表)
+### 15. installments (分期记录表)
 
 存储分期记录详情。
 
@@ -438,7 +521,7 @@ mymoney888 (数据库)
 - 记录每期的还款状态
 - 支持部分还款和逾期状态
 
-### 13. merchants (商家表)
+### 16. merchants (商家表)
 
 存储商家信息。
 
@@ -463,7 +546,7 @@ mymoney888 (数据库)
 - 支持商家联系方式存储
 - 支持商家收藏功能
 
-### 14. projects (项目表)
+### 17. projects (项目表)
 
 存储项目信息。
 
@@ -495,7 +578,7 @@ mymoney888 (数据库)
 - 支持项目状态管理
 - 支持项目颜色标识
 
-### 15. members (成员表)
+### 18. members (成员表)
 
 存储成员信息（用于多成员管理）。
 
@@ -518,7 +601,7 @@ mymoney888 (数据库)
 - 支持成员联系方式存储
 - 支持成员头像
 
-### 16. transaction_merchants (交易商家关联表)
+### 19. transaction_merchants (交易商家关联表)
 
 关联交易和商家。
 
@@ -529,7 +612,7 @@ mymoney888 (数据库)
 | merchant_id | INT | FOREIGN KEY, NOT NULL | 商家ID |
 | created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
 
-### 17. transaction_projects (交易项目关联表)
+### 20. transaction_projects (交易项目关联表)
 
 关联交易和项目。
 
@@ -541,7 +624,7 @@ mymoney888 (数据库)
 | amount | DECIMAL(15,2) | NOT NULL | 项目分配金额 |
 | created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
 
-### 18. transaction_members (交易成员关联表)
+### 21. transaction_members (交易成员关联表)
 
 关联交易和成员。
 
@@ -1027,6 +1110,7 @@ const syncStatus = {
 ```sql
 -- accounts表
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+FOREIGN KEY (ledger_id) REFERENCES ledgers(id) ON DELETE SET NULL
 
 -- categories表
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -1034,14 +1118,81 @@ FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL
 
 -- transactions表
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+FOREIGN KEY (ledger_id) REFERENCES ledgers(id) ON DELETE SET NULL
 FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT
+FOREIGN KEY (from_account_id) REFERENCES accounts(id) ON DELETE SET NULL
+FOREIGN KEY (to_account_id) REFERENCES accounts(id) ON DELETE SET NULL
 FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+FOREIGN KEY (payment_channel_id) REFERENCES payment_channels(id) ON DELETE SET NULL
 
 -- sync_logs表
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 
 -- user_settings表
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+-- defaults表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+FOREIGN KEY (ledger_id) REFERENCES ledgers(id) ON DELETE SET NULL
+FOREIGN KEY (expense_category_id) REFERENCES categories(id) ON DELETE SET NULL
+FOREIGN KEY (income_category_id) REFERENCES categories(id) ON DELETE SET NULL
+FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE SET NULL
+FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE SET NULL
+FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
+FOREIGN KEY (payment_channel_id) REFERENCES payment_channels(id) ON DELETE SET NULL
+FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+
+-- payment_channels表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+-- ledgers表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+-- credit_cards表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+
+-- credit_card_bills表
+FOREIGN KEY (credit_card_id) REFERENCES credit_cards(id) ON DELETE CASCADE
+
+-- loans表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+
+-- loan_payments表
+FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE
+FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+
+-- installment_templates表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
+
+-- installments表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+FOREIGN KEY (template_id) REFERENCES installment_templates(id) ON DELETE SET NULL
+FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+
+-- merchants表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+-- projects表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+-- members表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+-- transaction_merchants表
+FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE
+
+-- transaction_projects表
+FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+
+-- transaction_members表
+FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
 ```
 
 ### 唯一性约束
@@ -1160,7 +1311,7 @@ DELETE FROM sync_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY);
 
 ## 总结
 
-本数据库设计为MyMoney888 v3.0提供了完整的数据持久化和同步解决方案：
+本数据库设计为MyMoney888 v3.3.0提供了完整的数据持久化和同步解决方案：
 
 1. **完整的表结构设计**: 覆盖所有业务场景
 2. **智能同步机制**: 支持双向同步和冲突解决
