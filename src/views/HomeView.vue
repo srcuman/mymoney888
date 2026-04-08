@@ -24,14 +24,14 @@
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
+          <div v-if="transactionType !== 'transfer'">
             <label for="category" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">分类</label>
-            <select id="category" v-model="transaction.category" :required="transactionType !== 'transfer'" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+            <select id="category" v-model="transaction.category" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
               <option value="">请选择分类</option>
               <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
             </select>
           </div>
-          <div>
+          <div :class="transactionType === 'transfer' ? 'md:col-span-2' : ''">
             <label :for="transactionType === 'transfer' ? 'from-account' : 'account'" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ transactionType === 'transfer' ? '转出账户' : '账户' }}
             </label>
@@ -47,6 +47,29 @@
             <select id="payment-channel" v-model="transaction.paymentChannel" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
               <option value="">请选择支付渠道</option>
               <option v-for="channel in paymentChannels" :key="channel.id" :value="channel.name">{{ channel.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label for="member" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">成员</label>
+            <select id="member" v-model="transaction.member" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+              <option value="">请选择成员</option>
+              <option v-for="member in members" :key="member.id" :value="member.name">{{ member.name }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="merchant" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">商家</label>
+            <select id="merchant" v-model="transaction.merchant" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+              <option value="">请选择商家</option>
+              <option v-for="merchant in merchants" :key="merchant.id" :value="merchant.name">{{ merchant.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label for="tag" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">标签</label>
+            <select id="tag" v-model="transaction.tag" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+              <option value="">请选择标签</option>
+              <option v-for="tag in tags" :key="tag.id" :value="tag.name">{{ tag.name }}</option>
             </select>
           </div>
         </div>
@@ -152,7 +175,10 @@ const transaction = ref({
   account: '',
   toAccount: '',
   description: '',
-  paymentChannel: ''
+  paymentChannel: '',
+  member: '',
+  merchant: '',
+  tag: ''
 })
 
 // 分类列表
@@ -168,6 +194,15 @@ const accounts = ref([
 
 // 支付渠道列表
 const paymentChannels = ref([])
+
+// 成员列表
+const members = ref([])
+
+// 商家列表
+const merchants = ref([])
+
+// 标签列表
+const tags = ref([])
 
 // 交易记录
 const transactions = ref([
@@ -200,6 +235,9 @@ const addTransaction = () => {
     toAccount: transactionType.value === 'transfer' ? parseInt(transaction.value.toAccount) : null,
     description: transaction.value.description,
     paymentChannel: transaction.value.paymentChannel,
+    member: transaction.value.member,
+    merchant: transaction.value.merchant,
+    tag: transaction.value.tag,
     date: new Date().toISOString().split('T')[0]
   }
   transactions.value.unshift(newTransaction)
@@ -236,7 +274,10 @@ const addTransaction = () => {
     account: '',
     toAccount: '',
     description: '',
-    paymentChannel: ''
+    paymentChannel: '',
+    member: '',
+    merchant: '',
+    tag: ''
   }
   transactionType.value = 'expense'
 }
@@ -250,7 +291,10 @@ const editTransaction = (editTransaction) => {
     account: editTransaction.account.toString(),
     toAccount: editTransaction.toAccount ? editTransaction.toAccount.toString() : '',
     description: editTransaction.description,
-    paymentChannel: editTransaction.paymentChannel || ''
+    paymentChannel: editTransaction.paymentChannel || '',
+    member: editTransaction.member || '',
+    merchant: editTransaction.merchant || '',
+    tag: editTransaction.tag || ''
   }
   // 从列表中删除该交易
   transactions.value = transactions.value.filter(t => t.id !== editTransaction.id)
@@ -286,7 +330,10 @@ const copyTransaction = (copyTransaction) => {
     account: copyTransaction.account.toString(),
     toAccount: copyTransaction.toAccount ? copyTransaction.toAccount.toString() : '',
     description: copyTransaction.description,
-    paymentChannel: copyTransaction.paymentChannel || ''
+    paymentChannel: copyTransaction.paymentChannel || '',
+    member: copyTransaction.member || '',
+    merchant: copyTransaction.merchant || '',
+    tag: copyTransaction.tag || ''
   }
 }
 
@@ -363,6 +410,9 @@ onMounted(() => {
   if (savedDimensions) {
     const dimensions = JSON.parse(savedDimensions)
     paymentChannels.value = dimensions.paymentChannels || []
+    members.value = dimensions.members || []
+    merchants.value = dimensions.merchants || []
+    tags.value = dimensions.tags || []
   }
   
   // 应用默认值

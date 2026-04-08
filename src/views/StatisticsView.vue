@@ -37,7 +37,7 @@
       <!-- 维度筛选 -->
       <div class="mb-6">
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">维度筛选</h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label for="member-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">成员</label>
             <select id="member-filter" v-model="filters.member" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
@@ -53,10 +53,17 @@
             </select>
           </div>
           <div>
-            <label for="category-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">项目分类</label>
-            <select id="category-filter" v-model="filters.category" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
-              <option value="">全部分类</option>
-              <option v-for="category in allCategories" :key="category" :value="category">{{ category }}</option>
+            <label for="tag-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">标签</label>
+            <select id="tag-filter" v-model="filters.tag" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+              <option value="">全部标签</option>
+              <option v-for="tag in tags" :key="tag.id" :value="tag.name">{{ tag.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label for="payment-channel-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">支付渠道</label>
+            <select id="payment-channel-filter" v-model="filters.paymentChannel" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+              <option value="">全部支付渠道</option>
+              <option v-for="channel in paymentChannels" :key="channel.id" :value="channel.name">{{ channel.name }}</option>
             </select>
           </div>
         </div>
@@ -156,7 +163,8 @@ const activeTimeRange = ref('thisMonth')
 const filters = ref({
   member: '',
   merchant: '',
-  category: ''
+  tag: '',
+  paymentChannel: ''
 })
 
 // 成员列表
@@ -164,6 +172,18 @@ const members = ref([])
 
 // 商家列表
 const merchants = ref([])
+
+// 标签列表
+const tags = ref([])
+
+// 支付渠道列表
+const paymentChannels = ref([])
+
+// 收入分类列表
+const incomeCategoryList = ref([])
+
+// 支出分类列表
+const expenseCategoryList = ref([])
 
 // 所有分类列表
 const allCategories = computed(() => {
@@ -197,9 +217,9 @@ const filteredTransactions = computed(() => {
     result = result.filter(t => t.merchant === filters.value.merchant)
   }
   
-  // 分类过滤
-  if (filters.value.category) {
-    result = result.filter(t => t.category === filters.value.category)
+  // 标签过滤
+  if (filters.value.tag) {
+    result = result.filter(t => t.tag === filters.value.tag)
   }
   
   return result
@@ -210,7 +230,8 @@ const resetFilters = () => {
   filters.value = {
     member: '',
     merchant: '',
-    category: ''
+    tag: '',
+    paymentChannel: ''
   }
 }
 
@@ -261,8 +282,14 @@ const expenseCategories = computed(() => {
   const totalExpense = expenses.reduce((total, t) => total + t.amount, 0)
   
   const categoryMap = {}
+  // 先初始化所有支出分类
+  expenseCategoryList.value.forEach(category => {
+    categoryMap[category.name] = 0
+  })
+  
+  // 统计各分类金额
   expenses.forEach(t => {
-    if (categoryMap[t.category]) {
+    if (categoryMap[t.category] !== undefined) {
       categoryMap[t.category] += t.amount
     } else {
       categoryMap[t.category] = t.amount
@@ -282,8 +309,14 @@ const incomeCategories = computed(() => {
   const totalIncome = incomes.reduce((total, t) => total + t.amount, 0)
   
   const categoryMap = {}
+  // 先初始化所有收入分类
+  incomeCategoryList.value.forEach(category => {
+    categoryMap[category.name] = 0
+  })
+  
+  // 统计各分类金额
   incomes.forEach(t => {
-    if (categoryMap[t.category]) {
+    if (categoryMap[t.category] !== undefined) {
       categoryMap[t.category] += t.amount
     } else {
       categoryMap[t.category] = t.amount
@@ -334,6 +367,10 @@ onMounted(() => {
     const dimensions = JSON.parse(savedDimensions)
     members.value = dimensions.members || []
     merchants.value = dimensions.merchants || []
+    tags.value = dimensions.tags || []
+    paymentChannels.value = dimensions.paymentChannels || []
+    incomeCategoryList.value = dimensions.incomeCategories || []
+    expenseCategoryList.value = dimensions.expenseCategories || []
   }
   
   // 初始化时间范围为本月

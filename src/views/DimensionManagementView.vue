@@ -677,8 +677,10 @@ onMounted(() => {
     merchants.value = dimensions.merchants || []
     tags.value = dimensions.tags || []
     paymentChannels.value = dimensions.paymentChannels || []
-  } else {
-    // 默认分类
+  }
+  
+  // 确保默认数据存在
+  if (expenseCategories.value.length === 0) {
     expenseCategories.value = [
       { id: '1', name: '餐饮', type: 'expense', children: [
         { id: '1-1', name: '早餐', type: 'expense' },
@@ -751,6 +753,9 @@ onMounted(() => {
       ]},
       { id: '10', name: '其他', type: 'expense' }
     ]
+  }
+  
+  if (incomeCategories.value.length === 0) {
     incomeCategories.value = [
       { id: '1', name: '工资', type: 'income', children: [
         { id: '1-1', name: '月薪', type: 'income' },
@@ -777,7 +782,9 @@ onMounted(() => {
       ]},
       { id: '5', name: '其他', type: 'income' }
     ]
-    // 默认商家
+  }
+  
+  if (merchants.value.length === 0) {
     merchants.value = [
       { id: '1', name: '星巴克' },
       { id: '2', name: '麦当劳' },
@@ -800,7 +807,9 @@ onMounted(() => {
       { id: '19', name: '房租' },
       { id: '20', name: '水电费' }
     ]
-    // 默认支付渠道
+  }
+  
+  if (paymentChannels.value.length === 0) {
     paymentChannels.value = [
       { id: '1', name: '支付宝' },
       { id: '2', name: '微信支付' },
@@ -810,13 +819,17 @@ onMounted(() => {
       { id: '6', name: '信用卡' },
       { id: '7', name: '其他' }
     ]
-    // 默认成员
+  }
+  
+  if (members.value.length === 0) {
     members.value = [
       { id: '1', name: '自己' },
       { id: '2', name: '家人' },
       { id: '3', name: '朋友' }
     ]
-    // 默认标签
+  }
+  
+  if (tags.value.length === 0) {
     tags.value = [
       { id: '1', name: '日常' },
       { id: '2', name: '紧急' },
@@ -824,8 +837,9 @@ onMounted(() => {
       { id: '4', name: '计划外' },
       { id: '5', name: '重要' }
     ]
-    saveDimensions()
   }
+  
+  saveDimensions()
   
   // 加载默认值
   const savedDefaults = localStorage.getItem('defaults')

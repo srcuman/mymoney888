@@ -38,6 +38,15 @@
         </select>
       </div>
     </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label for="payment-channel" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">支付渠道</label>
+        <select id="payment-channel" v-model="transaction.paymentChannel" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+          <option value="">请选择支付渠道</option>
+          <option v-for="channel in paymentChannels" :key="channel.id" :value="channel.name">{{ channel.name }}</option>
+        </select>
+      </div>
+    </div>
     <div v-if="transactionType === 'transfer'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <label for="to-account" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">转入账户</label>
@@ -102,6 +111,7 @@ const transaction = ref({
   member: '',
   merchant: '',
   tag: '',
+  paymentChannel: '',
   description: ''
 })
 
@@ -125,6 +135,9 @@ const merchants = ref([])
 // 标签列表
 const tags = ref([])
 
+// 支付渠道列表
+const paymentChannels = ref([])
+
 // 交易记录
 const transactions = ref([])
 
@@ -140,6 +153,7 @@ const addTransaction = () => {
     member: transaction.value.member,
     merchant: transaction.value.merchant,
     tag: transaction.value.tag,
+    paymentChannel: transaction.value.paymentChannel,
     description: transaction.value.description,
     date: new Date().toISOString().split('T')[0]
   }
@@ -179,6 +193,7 @@ const addTransaction = () => {
     member: '',
     merchant: '',
     tag: '',
+    paymentChannel: '',
     description: ''
   }
   transactionType.value = 'expense'
@@ -204,6 +219,7 @@ onMounted(() => {
     members.value = dimensions.members || []
     merchants.value = dimensions.merchants || []
     tags.value = dimensions.tags || []
+    paymentChannels.value = dimensions.paymentChannels || []
   }
 })
 </script>

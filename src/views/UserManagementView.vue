@@ -149,16 +149,21 @@ const deleteUser = (username) => {
 }
 
 onMounted(() => {
-  // 检查当前用户是否是管理员
-  if (!isAdmin.value) {
-    router.push('/')
-    return
-  }
-  
   // 从本地存储加载数据
   const savedUsers = localStorage.getItem('users')
   if (savedUsers) {
     users.value = JSON.parse(savedUsers)
+  }
+  
+  // 检查当前用户是否是管理员
+  if (!isAdmin.value) {
+    // 检查是否有用户数据
+    if (users.value.length === 0) {
+      // 没有用户时，允许访问用户管理页面进行初始设置
+      return
+    }
+    router.push('/')
+    return
   }
 })
 </script>
