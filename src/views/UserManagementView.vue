@@ -66,7 +66,21 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+// 当前用户
+const currentUser = computed(() => {
+  const userStr = localStorage.getItem('user')
+  return userStr ? JSON.parse(userStr) : null
+})
+
+// 检查是否是管理员
+const isAdmin = computed(() => {
+  return currentUser.value && currentUser.value.role === 'admin'
+})
 
 // 用户列表
 const users = ref([])
@@ -135,6 +149,12 @@ const deleteUser = (username) => {
 }
 
 onMounted(() => {
+  // 检查当前用户是否是管理员
+  if (!isAdmin.value) {
+    router.push('/')
+    return
+  }
+  
   // 从本地存储加载数据
   const savedUsers = localStorage.getItem('users')
   if (savedUsers) {

@@ -70,6 +70,22 @@
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
           <h1 class="text-lg font-semibold text-gray-900 dark:text-white">{{ currentPageTitle }}</h1>
           <div class="flex items-center space-x-4">
+            <!-- 账套切换 -->
+            <div class="relative">
+              <button @click="showLedgerDropdown = !showLedgerDropdown" class="flex items-center px-3 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-md text-sm font-medium">
+                {{ currentLedgerName }}
+                <span class="ml-2">▼</span>
+              </button>
+              <div v-if="showLedgerDropdown" class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-50">
+                <div v-for="ledger in ledgers" :key="ledger.id" class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer" @click="switchToLedger(ledger.id); showLedgerDropdown = false">
+                  <span :class="currentLedgerId === ledger.id ? 'font-bold text-primary' : ''">{{ ledger.name }}</span>
+                  <span v-if="currentLedgerId === ledger.id" class="ml-2 text-xs text-primary">当前</span>
+                </div>
+                <div class="border-t border-gray-200 dark:border-gray-700 px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer" @click="$router.push('/ledger-management'); showLedgerDropdown = false">
+                  <span class="text-primary">管理账套</span>
+                </div>
+              </div>
+            </div>
             <!-- 快速记账按钮 -->
             <button @click="showQuickAddModal = true" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary dark:bg-blue-600 dark:hover:bg-blue-700">
               <span class="mr-2">➕</span>
@@ -83,8 +99,7 @@
 
       <!-- 主要内容 -->
       <main class="flex-1 container mx-auto px-4 py-6">
-        <router-view v-if="isAuthenticated" />
-        <router-view v-else v-slot="{ Component }">
+        <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
             <component :is="Component" />
           </transition>
@@ -116,6 +131,11 @@ const router = useRouter()
 const route = useRoute()
 const isAuthenticated = ref(false)
 const showQuickAddModal = ref(false)
+
+// 账套相关状态
+const ledgers = ref([])
+const currentLedgerId = ref(null)
+const showLedgerDropdown = ref(false)
 
 const checkAuth = () => {
   const user = localStorage.getItem('user')
@@ -150,11 +170,60 @@ const isActive = (path) => {
     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
 }
 
+// 计算当前账套名称
+const currentLedgerName = computed(() => {
+  const currentLedger = ledgers.value.find(ledger => ledger.id === currentLedgerId.value)
+  return currentLedger ? currentLedger.name : '默认账套'
+})
+
+// 切换账套
+const switchToLedger = (ledgerId) => {
+  currentLedgerId.value = ledgerId
+  localStorage.setItem('currentLedgerId', ledgerId)
+  // 触发事件通知其他组件
+  window.dispatchEvent(new CustomEvent('ledgerChanged', { detail: { ledgerId } }))
+}
+
+// 加载账套数据
+const loadLedgers = () => {
+  const savedLedgers = localStorage.getItem('ledgers')
+  const savedCurrentLedgerId = localStorage.getItem('currentLedgerId')
+  
+  if (savedLedgers) {
+    ledgers.value = JSON.parse(savedLedgers)
+  } else {
+    // 默认创建一个账套
+    const defaultLedger = {
+      id: '1',
+      name: '默认账套',
+      description: '系统默认账套',
+      createdAt: new Date().toLocaleString()
+    }
+    ledgers.value = [defaultLedger]
+    localStorage.setItem('ledgers', JSON.stringify(ledgers.value))
+  }
+  
+  if (savedCurrentLedgerId) {
+    currentLedgerId.value = savedCurrentLedgerId
+  } else if (ledgers.value.length > 0) {
+    currentLedgerId.value = ledgers.value[0].id
+    localStorage.setItem('currentLedgerId', currentLedgerId.value)
+  }
+}
+
 onMounted(() => {
   checkAuth()
+  loadLedgers()
+  
   // 监听路由变化，检查登录状态
   router.afterEach(() => {
     checkAuth()
+  })
+  
+  // 监听账套变化，更新当前账套信息
+  window.addEventListener('ledgerChanged', (event) => {
+    const { ledgerId } = event.detail
+    currentLedgerId.value = ledgerId
   })
 })
 

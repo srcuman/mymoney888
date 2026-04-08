@@ -111,10 +111,14 @@ const handleRegister = () => {
     return
   }
   
+  // 检查是否已有管理员账户
+  const hasAdmin = existingUsers.some(user => user.role === 'admin')
+  
   // 保存用户信息
   const user = {
     username: username.value,
-    name: name.value
+    name: name.value,
+    role: existingUsers.length === 0 ? 'admin' : 'user' // 首个注册账户默认是管理员
   }
   
   // 保存到本地存储

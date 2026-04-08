@@ -34,6 +34,39 @@
         </div>
       </div>
       
+      <!-- 维度筛选 -->
+      <div class="mb-6">
+        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">维度筛选</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label for="member-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">成员</label>
+            <select id="member-filter" v-model="filters.member" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+              <option value="">全部成员</option>
+              <option v-for="member in members" :key="member.id" :value="member.name">{{ member.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label for="merchant-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">商家</label>
+            <select id="merchant-filter" v-model="filters.merchant" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+              <option value="">全部商家</option>
+              <option v-for="merchant in merchants" :key="merchant.id" :value="merchant.name">{{ merchant.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label for="category-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">项目分类</label>
+            <select id="category-filter" v-model="filters.category" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
+              <option value="">全部分类</option>
+              <option v-for="category in allCategories" :key="category" :value="category">{{ category }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-3 flex justify-end">
+          <button @click="resetFilters" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-md text-sm font-medium">
+            重置筛选
+          </button>
+        </div>
+      </div>
+      
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">支出分类</h3>
@@ -119,15 +152,67 @@ const dateRange = ref({
 // 活跃时间范围
 const activeTimeRange = ref('thisMonth')
 
+// 筛选条件
+const filters = ref({
+  member: '',
+  merchant: '',
+  category: ''
+})
+
+// 成员列表
+const members = ref([])
+
+// 商家列表
+const merchants = ref([])
+
+// 所有分类列表
+const allCategories = computed(() => {
+  const categories = new Set()
+  transactions.value.forEach(t => {
+    if (t.category) {
+      categories.add(t.category)
+    }
+  })
+  return Array.from(categories)
+})
+
 // 过滤后的交易记录
 const filteredTransactions = computed(() => {
-  if (!dateRange.value.start || !dateRange.value.end) {
-    return transactions.value
+  let result = transactions.value
+  
+  // 时间范围过滤
+  if (dateRange.value.start && dateRange.value.end) {
+    result = result.filter(t => {
+      return t.date >= dateRange.value.start && t.date <= dateRange.value.end
+    })
   }
-  return transactions.value.filter(t => {
-    return t.date >= dateRange.value.start && t.date <= dateRange.value.end
-  })
+  
+  // 成员过滤
+  if (filters.value.member) {
+    result = result.filter(t => t.member === filters.value.member)
+  }
+  
+  // 商家过滤
+  if (filters.value.merchant) {
+    result = result.filter(t => t.merchant === filters.value.merchant)
+  }
+  
+  // 分类过滤
+  if (filters.value.category) {
+    result = result.filter(t => t.category === filters.value.category)
+  }
+  
+  return result
 })
+
+// 重置筛选条件
+const resetFilters = () => {
+  filters.value = {
+    member: '',
+    merchant: '',
+    category: ''
+  }
+}
 
 // 设置时间范围
 const setTimeRange = (range) => {
@@ -239,8 +324,16 @@ const totalTransactions = computed(() => {
 onMounted(() => {
   // 从本地存储加载数据
   const savedTransactions = localStorage.getItem('transactions')
+  const savedDimensions = localStorage.getItem('dimensions')
+  
   if (savedTransactions) {
     transactions.value = JSON.parse(savedTransactions)
+  }
+  
+  if (savedDimensions) {
+    const dimensions = JSON.parse(savedDimensions)
+    members.value = dimensions.members || []
+    merchants.value = dimensions.merchants || []
   }
   
   // 初始化时间范围为本月

@@ -17,6 +17,12 @@
           <button @click="activeTab = 'tags'" :class="activeTab === 'tags' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-4 py-2 rounded-md font-medium">
             标签
           </button>
+          <button @click="activeTab = 'payment-channels'" :class="activeTab === 'payment-channels' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-4 py-2 rounded-md font-medium">
+            支付渠道
+          </button>
+          <button @click="activeTab = 'defaults'" :class="activeTab === 'defaults' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-4 py-2 rounded-md font-medium">
+            默认值设置
+          </button>
         </div>
 
         <!-- 收支分类 -->
@@ -143,6 +149,81 @@
             </div>
           </div>
         </div>
+
+        <!-- 支付渠道 -->
+        <div v-if="activeTab === 'payment-channels'">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">支付渠道管理</h3>
+            <button @click="showAddPaymentChannelModal = true" class="px-3 py-1 bg-primary text-white rounded-md hover:bg-blue-700 text-sm font-medium">
+              添加支付渠道
+            </button>
+          </div>
+          <div class="space-y-3">
+            <div v-for="channel in paymentChannels" :key="channel.id" class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+              <span class="text-gray-900 dark:text-white">{{ channel.name }}</span>
+              <div class="flex space-x-2">
+                <button @click="editPaymentChannel(channel)" class="text-primary hover:text-blue-700 dark:hover:text-blue-400">编辑</button>
+                <button @click="deletePaymentChannel(channel.id)" class="text-danger hover:text-red-700 dark:hover:text-red-400">删除</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 默认值设置 -->
+        <div v-if="activeTab === 'defaults'">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">默认值设置</h3>
+            <button @click="saveDefaults" class="px-3 py-1 bg-primary text-white rounded-md hover:bg-blue-700 text-sm font-medium">
+              保存默认值
+            </button>
+          </div>
+          <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">默认支出分类</label>
+                <select v-model="defaults.expenseCategory" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+                  <option value="">请选择</option>
+                  <option v-for="category in expenseCategories" :key="category.id" :value="category.name">{{ category.name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">默认收入分类</label>
+                <select v-model="defaults.incomeCategory" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+                  <option value="">请选择</option>
+                  <option v-for="category in incomeCategories" :key="category.id" :value="category.name">{{ category.name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">默认成员</label>
+                <select v-model="defaults.member" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+                  <option value="">请选择</option>
+                  <option v-for="member in members" :key="member.id" :value="member.name">{{ member.name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">默认商家</label>
+                <select v-model="defaults.merchant" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+                  <option value="">请选择</option>
+                  <option v-for="merchant in merchants" :key="merchant.id" :value="merchant.name">{{ merchant.name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">默认标签</label>
+                <select v-model="defaults.tag" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+                  <option value="">请选择</option>
+                  <option v-for="tag in tags" :key="tag.id" :value="tag.name">{{ tag.name }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">默认支付渠道</label>
+                <select v-model="defaults.paymentChannel" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+                  <option value="">请选择</option>
+                  <option v-for="channel in paymentChannels" :key="channel.id" :value="channel.name">{{ channel.name }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -244,6 +325,27 @@
         </form>
       </div>
     </div>
+
+    <!-- 添加/编辑支付渠道 -->
+    <div v-if="showAddPaymentChannelModal || showEditPaymentChannelModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">{{ showEditPaymentChannelModal ? '编辑支付渠道' : '添加支付渠道' }}</h3>
+        <form @submit.prevent="savePaymentChannel" class="space-y-4">
+          <div>
+            <label for="payment-channel-name" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">支付渠道名称</label>
+            <input type="text" id="payment-channel-name" v-model="paymentChannelForm.name" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+          </div>
+          <div class="flex justify-end space-x-3">
+            <button type="button" @click="showAddPaymentChannelModal = false; showEditPaymentChannelModal = false; resetPaymentChannelForm()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md text-sm font-medium">
+              取消
+            </button>
+            <button type="submit" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary dark:bg-blue-600 dark:hover:bg-blue-700">
+              保存
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -266,6 +368,9 @@ const merchants = ref([])
 // 标签
 const tags = ref([])
 
+// 支付渠道
+const paymentChannels = ref([])
+
 // 展开的分类
 const expandedCategories = ref([])
 
@@ -280,12 +385,25 @@ const showEditMemberModal = ref(false)
 const showAddMerchantModal = ref(false)
 const showEditMerchantModal = ref(false)
 const showAddTagModal = ref(false)
+const showAddPaymentChannelModal = ref(false)
+const showEditPaymentChannelModal = ref(false)
 
 // 表单数据
 const categoryForm = ref({ id: null, name: '', type: 'expense', parentId: null })
 const memberForm = ref({ id: null, name: '' })
 const merchantForm = ref({ id: null, name: '' })
 const tagForm = ref({ id: null, name: '' })
+const paymentChannelForm = ref({ id: null, name: '' })
+
+// 默认值设置
+const defaults = ref({
+  expenseCategory: '',
+  incomeCategory: '',
+  member: '',
+  merchant: '',
+  tag: '',
+  paymentChannel: ''
+})
 
 // 父分类列表
 const parentCategories = computed(() => {
@@ -297,6 +415,7 @@ const resetCategoryForm = () => { categoryForm.value = { id: null, name: '', typ
 const resetMemberForm = () => { memberForm.value = { id: null, name: '' } }
 const resetMerchantForm = () => { merchantForm.value = { id: null, name: '' } }
 const resetTagForm = () => { tagForm.value = { id: null, name: '' } }
+const resetPaymentChannelForm = () => { paymentChannelForm.value = { id: null, name: '' } }
 
 // 切换分类展开/折叠
 const toggleCategory = (categoryId) => {
@@ -497,6 +616,37 @@ const deleteTag = (tagId) => {
   saveDimensions()
 }
 
+// 编辑支付渠道
+const editPaymentChannel = (channel) => {
+  paymentChannelForm.value = { ...channel }
+  showEditPaymentChannelModal.value = true
+  showAddPaymentChannelModal.value = false
+}
+
+// 保存支付渠道
+const savePaymentChannel = () => {
+  if (showEditPaymentChannelModal.value) {
+    const index = paymentChannels.value.findIndex(c => c.id === paymentChannelForm.value.id)
+    if (index !== -1) paymentChannels.value[index] = { ...paymentChannelForm.value }
+  } else {
+    const newChannel = {
+      id: Date.now().toString(),
+      name: paymentChannelForm.value.name
+    }
+    paymentChannels.value.push(newChannel)
+  }
+  saveDimensions()
+  showAddPaymentChannelModal.value = false
+  showEditPaymentChannelModal.value = false
+  resetPaymentChannelForm()
+}
+
+// 删除支付渠道
+const deletePaymentChannel = (channelId) => {
+  paymentChannels.value = paymentChannels.value.filter(c => c.id !== channelId)
+  saveDimensions()
+}
+
 // 保存维度数据
 const saveDimensions = () => {
   const dimensions = {
@@ -504,9 +654,16 @@ const saveDimensions = () => {
     incomeCategories: incomeCategories.value,
     members: members.value,
     merchants: merchants.value,
-    tags: tags.value
+    tags: tags.value,
+    paymentChannels: paymentChannels.value
   }
   localStorage.setItem('dimensions', JSON.stringify(dimensions))
+}
+
+// 保存默认值
+const saveDefaults = () => {
+  localStorage.setItem('defaults', JSON.stringify(defaults.value))
+  alert('默认值保存成功')
 }
 
 onMounted(() => {
@@ -519,6 +676,7 @@ onMounted(() => {
     members.value = dimensions.members || []
     merchants.value = dimensions.merchants || []
     tags.value = dimensions.tags || []
+    paymentChannels.value = dimensions.paymentChannels || []
   } else {
     // 默认分类
     expenseCategories.value = [
@@ -527,41 +685,152 @@ onMounted(() => {
         { id: '1-2', name: '午餐', type: 'expense' },
         { id: '1-3', name: '晚餐', type: 'expense' },
         { id: '1-4', name: '外卖', type: 'expense' },
-        { id: '1-5', name: '零食', type: 'expense' }
+        { id: '1-5', name: '零食', type: 'expense' },
+        { id: '1-6', name: '水果', type: 'expense' },
+        { id: '1-7', name: '饮料', type: 'expense' },
+        { id: '1-8', name: '聚餐', type: 'expense' }
       ]},
       { id: '2', name: '交通', type: 'expense', children: [
         { id: '2-1', name: '公交', type: 'expense' },
         { id: '2-2', name: '地铁', type: 'expense' },
         { id: '2-3', name: '打车', type: 'expense' },
         { id: '2-4', name: '加油', type: 'expense' },
-        { id: '2-5', name: '停车', type: 'expense' }
+        { id: '2-5', name: '停车', type: 'expense' },
+        { id: '2-6', name: '路桥费', type: 'expense' },
+        { id: '2-7', name: '保养', type: 'expense' },
+        { id: '2-8', name: '维修', type: 'expense' }
       ]},
       { id: '3', name: '购物', type: 'expense', children: [
         { id: '3-1', name: '服饰', type: 'expense' },
         { id: '3-2', name: '电子产品', type: 'expense' },
         { id: '3-3', name: '家居用品', type: 'expense' },
-        { id: '3-4', name: '化妆品', type: 'expense' }
+        { id: '3-4', name: '化妆品', type: 'expense' },
+        { id: '3-5', name: '护肤品', type: 'expense' },
+        { id: '3-6', name: '日用品', type: 'expense' },
+        { id: '3-7', name: '礼品', type: 'expense' },
+        { id: '3-8', name: '其他购物', type: 'expense' }
       ]},
       { id: '4', name: '娱乐', type: 'expense', children: [
         { id: '4-1', name: '电影', type: 'expense' },
         { id: '4-2', name: '游戏', type: 'expense' },
         { id: '4-3', name: '旅游', type: 'expense' },
-        { id: '4-4', name: '运动', type: 'expense' }
+        { id: '4-4', name: '运动', type: 'expense' },
+        { id: '4-5', name: 'KTV', type: 'expense' },
+        { id: '4-6', name: '桌游', type: 'expense' },
+        { id: '4-7', name: '健身', type: 'expense' },
+        { id: '4-8', name: '其他娱乐', type: 'expense' }
       ]},
-      { id: '5', name: '医疗', type: 'expense' },
-      { id: '6', name: '教育', type: 'expense' },
-      { id: '7', name: '其他', type: 'expense' }
+      { id: '5', name: '医疗', type: 'expense', children: [
+        { id: '5-1', name: '药品', type: 'expense' },
+        { id: '5-2', name: '检查', type: 'expense' },
+        { id: '5-3', name: '治疗', type: 'expense' },
+        { id: '5-4', name: '其他医疗', type: 'expense' }
+      ]},
+      { id: '6', name: '教育', type: 'expense', children: [
+        { id: '6-1', name: '学费', type: 'expense' },
+        { id: '6-2', name: '书籍', type: 'expense' },
+        { id: '6-3', name: '培训', type: 'expense' },
+        { id: '6-4', name: '其他教育', type: 'expense' }
+      ]},
+      { id: '7', name: '住房', type: 'expense', children: [
+        { id: '7-1', name: '房租', type: 'expense' },
+        { id: '7-2', name: '水电气', type: 'expense' },
+        { id: '7-3', name: '物业', type: 'expense' },
+        { id: '7-4', name: '网络', type: 'expense' },
+        { id: '7-5', name: '其他住房', type: 'expense' }
+      ]},
+      { id: '8', name: '通讯', type: 'expense', children: [
+        { id: '8-1', name: '手机话费', type: 'expense' },
+        { id: '8-2', name: '宽带', type: 'expense' },
+        { id: '8-3', name: '其他通讯', type: 'expense' }
+      ]},
+      { id: '9', name: '人情', type: 'expense', children: [
+        { id: '9-1', name: '红包', type: 'expense' },
+        { id: '9-2', name: '送礼', type: 'expense' },
+        { id: '9-3', name: '其他人情', type: 'expense' }
+      ]},
+      { id: '10', name: '其他', type: 'expense' }
     ]
     incomeCategories.value = [
-      { id: '1', name: '工资', type: 'income' },
+      { id: '1', name: '工资', type: 'income', children: [
+        { id: '1-1', name: '月薪', type: 'income' },
+        { id: '1-2', name: '奖金', type: 'income' },
+        { id: '1-3', name: '补贴', type: 'income' },
+        { id: '1-4', name: '其他工资', type: 'income' }
+      ]},
       { id: '2', name: '投资', type: 'income', children: [
         { id: '2-1', name: '股票', type: 'income' },
         { id: '2-2', name: '基金', type: 'income' },
-        { id: '2-3', name: '理财', type: 'income' }
+        { id: '2-3', name: '理财', type: 'income' },
+        { id: '2-4', name: '利息', type: 'income' },
+        { id: '2-5', name: '其他投资', type: 'income' }
       ]},
-      { id: '3', name: '其他', type: 'income' }
+      { id: '3', name: '兼职', type: 'income', children: [
+        { id: '3-1', name: '副业', type: 'income' },
+        { id: '3-2', name: '外包', type: 'income' },
+        { id: '3-3', name: '其他兼职', type: 'income' }
+      ]},
+      { id: '4', name: '礼金', type: 'income', children: [
+        { id: '4-1', name: '红包', type: 'income' },
+        { id: '4-2', name: '礼物', type: 'income' },
+        { id: '4-3', name: '其他礼金', type: 'income' }
+      ]},
+      { id: '5', name: '其他', type: 'income' }
+    ]
+    // 默认商家
+    merchants.value = [
+      { id: '1', name: '星巴克' },
+      { id: '2', name: '麦当劳' },
+      { id: '3', name: '肯德基' },
+      { id: '4', name: '永辉超市' },
+      { id: '5', name: '沃尔玛' },
+      { id: '6', name: '淘宝' },
+      { id: '7', name: '京东' },
+      { id: '8', name: '美团' },
+      { id: '9', name: '饿了么' },
+      { id: '10', name: '滴滴出行' },
+      { id: '11', name: '地铁' },
+      { id: '12', name: '公交' },
+      { id: '13', name: '中石化' },
+      { id: '14', name: '中石油' },
+      { id: '15', name: '电影院' },
+      { id: '16', name: '健身房' },
+      { id: '17', name: '医院' },
+      { id: '18', name: '学校' },
+      { id: '19', name: '房租' },
+      { id: '20', name: '水电费' }
+    ]
+    // 默认支付渠道
+    paymentChannels.value = [
+      { id: '1', name: '支付宝' },
+      { id: '2', name: '微信支付' },
+      { id: '3', name: '云闪付' },
+      { id: '4', name: '现金' },
+      { id: '5', name: '银行卡' },
+      { id: '6', name: '信用卡' },
+      { id: '7', name: '其他' }
+    ]
+    // 默认成员
+    members.value = [
+      { id: '1', name: '自己' },
+      { id: '2', name: '家人' },
+      { id: '3', name: '朋友' }
+    ]
+    // 默认标签
+    tags.value = [
+      { id: '1', name: '日常' },
+      { id: '2', name: '紧急' },
+      { id: '3', name: '计划内' },
+      { id: '4', name: '计划外' },
+      { id: '5', name: '重要' }
     ]
     saveDimensions()
+  }
+  
+  // 加载默认值
+  const savedDefaults = localStorage.getItem('defaults')
+  if (savedDefaults) {
+    defaults.value = JSON.parse(savedDefaults)
   }
 })
 </script>

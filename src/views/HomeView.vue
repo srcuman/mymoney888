@@ -20,7 +20,7 @@
           </div>
           <div>
             <label for="amount" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">金额</label>
-            <input type="number" id="amount" v-model.number="transaction.amount" required min="0.01" step="0.01" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+            <input type="text" id="amount" v-model="transaction.amount" required @keypress.enter="calculateAmount" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -38,6 +38,15 @@
             <select :id="transactionType === 'transfer' ? 'from-account' : 'account'" v-model="transaction.account" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
               <option value="">请选择账户</option>
               <option v-for="account in accounts" :key="account.id" :value="account.id">{{ account.name }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="payment-channel" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">支付渠道</label>
+            <select id="payment-channel" v-model="transaction.paymentChannel" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+              <option value="">请选择支付渠道</option>
+              <option v-for="channel in paymentChannels" :key="channel.id" :value="channel.name">{{ channel.name }}</option>
             </select>
           </div>
         </div>
@@ -142,7 +151,8 @@ const transaction = ref({
   category: '',
   account: '',
   toAccount: '',
-  description: ''
+  description: '',
+  paymentChannel: ''
 })
 
 // 分类列表
@@ -155,6 +165,9 @@ const accounts = ref([
   { id: 3, name: '支付宝', balance: 2000 },
   { id: 4, name: '微信', balance: 1500 }
 ])
+
+// 支付渠道列表
+const paymentChannels = ref([])
 
 // 交易记录
 const transactions = ref([
@@ -181,11 +194,12 @@ const addTransaction = () => {
   const newTransaction = {
     id: transactions.value.length + 1,
     type: transactionType.value,
-    amount: transaction.value.amount,
+    amount: parseFloat(transaction.value.amount),
     category: transaction.value.category,
     account: parseInt(transaction.value.account),
     toAccount: transactionType.value === 'transfer' ? parseInt(transaction.value.toAccount) : null,
     description: transaction.value.description,
+    paymentChannel: transaction.value.paymentChannel,
     date: new Date().toISOString().split('T')[0]
   }
   transactions.value.unshift(newTransaction)
@@ -221,7 +235,8 @@ const addTransaction = () => {
     category: '',
     account: '',
     toAccount: '',
-    description: ''
+    description: '',
+    paymentChannel: ''
   }
   transactionType.value = 'expense'
 }
@@ -234,7 +249,8 @@ const editTransaction = (editTransaction) => {
     category: editTransaction.category,
     account: editTransaction.account.toString(),
     toAccount: editTransaction.toAccount ? editTransaction.toAccount.toString() : '',
-    description: editTransaction.description
+    description: editTransaction.description,
+    paymentChannel: editTransaction.paymentChannel || ''
   }
   // 从列表中删除该交易
   transactions.value = transactions.value.filter(t => t.id !== editTransaction.id)
@@ -269,7 +285,33 @@ const copyTransaction = (copyTransaction) => {
     category: copyTransaction.category,
     account: copyTransaction.account.toString(),
     toAccount: copyTransaction.toAccount ? copyTransaction.toAccount.toString() : '',
-    description: copyTransaction.description
+    description: copyTransaction.description,
+    paymentChannel: copyTransaction.paymentChannel || ''
+  }
+}
+
+// 金额计算功能
+const calculateAmount = () => {
+  const input = transaction.value.amount
+  if (!input) return
+  
+  // 只允许数字、四则运算符号和括号
+  const safeRegex = /^[0-9+\-*/().\s]+$/
+  if (!safeRegex.test(input)) {
+    alert('请输入有效的算术表达式')
+    return
+  }
+  
+  try {
+    // 使用Function构造函数代替eval，更安全
+    const result = new Function('return ' + input)()
+    if (typeof result === 'number' && !isNaN(result)) {
+      transaction.value.amount = result.toFixed(2)
+    } else {
+      alert('计算结果无效')
+    }
+  } catch (error) {
+    alert('计算错误，请检查表达式')
   }
 }
 
@@ -309,11 +351,30 @@ onMounted(() => {
   // 从本地存储加载数据
   const savedAccounts = localStorage.getItem('accounts')
   const savedTransactions = localStorage.getItem('transactions')
+  const savedDimensions = localStorage.getItem('dimensions')
+  const savedDefaults = localStorage.getItem('defaults')
+  
   if (savedAccounts) {
     accounts.value = JSON.parse(savedAccounts)
   }
   if (savedTransactions) {
     transactions.value = JSON.parse(savedTransactions)
+  }
+  if (savedDimensions) {
+    const dimensions = JSON.parse(savedDimensions)
+    paymentChannels.value = dimensions.paymentChannels || []
+  }
+  
+  // 应用默认值
+  if (savedDefaults) {
+    const defaults = JSON.parse(savedDefaults)
+    transaction.value = {
+      ...transaction.value,
+      category: defaults.expenseCategory || '',
+      member: defaults.member || '',
+      merchant: defaults.merchant || '',
+      paymentChannel: defaults.paymentChannel || ''
+    }
   }
 })
 </script>
