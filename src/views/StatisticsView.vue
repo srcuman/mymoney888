@@ -39,39 +39,54 @@
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">维度筛选</h3>
         <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
-            <label for="member-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">成员</label>
-            <select id="member-filter" v-model="filters.member" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
-              <option value="">全部成员</option>
-              <option v-for="member in members" :key="member.id" :value="member.name">{{ member.name }}</option>
-            </select>
+            <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">成员</label>
+            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
+              <div v-for="member in members" :key="member.id" class="flex items-center mb-1">
+                <input type="checkbox" :id="'member-' + member.id" :value="member.name" v-model="filters.member" class="mr-2">
+                <label :for="'member-' + member.id" class="text-sm text-gray-700 dark:text-gray-300">{{ member.name }}</label>
+              </div>
+              <div v-if="members.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无成员数据</div>
+            </div>
           </div>
           <div>
-            <label for="merchant-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">商家</label>
-            <select id="merchant-filter" v-model="filters.merchant" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
-              <option value="">全部商家</option>
-              <option v-for="merchant in merchants" :key="merchant.id" :value="merchant.name">{{ merchant.name }}</option>
-            </select>
+            <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">商家</label>
+            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
+              <div v-for="merchant in merchants" :key="merchant.id" class="flex items-center mb-1">
+                <input type="checkbox" :id="'merchant-' + merchant.id" :value="merchant.name" v-model="filters.merchant" class="mr-2">
+                <label :for="'merchant-' + merchant.id" class="text-sm text-gray-700 dark:text-gray-300">{{ merchant.name }}</label>
+              </div>
+              <div v-if="merchants.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无商家数据</div>
+            </div>
           </div>
           <div>
-            <label for="tag-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">标签</label>
-            <select id="tag-filter" v-model="filters.tag" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
-              <option value="">全部标签</option>
-              <option v-for="tag in tags" :key="tag.id" :value="tag.name">{{ tag.name }}</option>
-            </select>
+            <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">标签</label>
+            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
+              <div v-for="tag in tags" :key="tag.id" class="flex items-center mb-1">
+                <input type="checkbox" :id="'tag-' + tag.id" :value="tag.name" v-model="filters.tag" class="mr-2">
+                <label :for="'tag-' + tag.id" class="text-sm text-gray-700 dark:text-gray-300">{{ tag.name }}</label>
+              </div>
+              <div v-if="tags.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无标签数据</div>
+            </div>
           </div>
           <div>
-            <label for="payment-channel-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">支付渠道</label>
-            <select id="payment-channel-filter" v-model="filters.paymentChannel" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
-              <option value="">全部支付渠道</option>
-              <option v-for="channel in paymentChannels" :key="channel.id" :value="channel.name">{{ channel.name }}</option>
-            </select>
+            <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">支付渠道</label>
+            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
+              <div v-for="channel in paymentChannels" :key="channel.id" class="flex items-center mb-1">
+                <input type="checkbox" :id="'channel-' + channel.id" :value="channel.name" v-model="filters.paymentChannel" class="mr-2">
+                <label :for="'channel-' + channel.id" class="text-sm text-gray-700 dark:text-gray-300">{{ channel.name }}</label>
+              </div>
+              <div v-if="paymentChannels.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无支付渠道数据</div>
+            </div>
           </div>
           <div>
-            <label for="category-filter" class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">分类</label>
-            <select id="category-filter" v-model="filters.category" class="w-full px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
-              <option value="">全部分类</option>
-              <option v-for="category in allCategories" :key="category" :value="category">{{ category }}</option>
-            </select>
+            <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">分类</label>
+            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
+              <div v-for="category in allCategories" :key="category" class="flex items-center mb-1">
+                <input type="checkbox" :id="'category-' + category" :value="category" v-model="filters.category" class="mr-2">
+                <label :for="'category-' + category" class="text-sm text-gray-700 dark:text-gray-300">{{ category }}</label>
+              </div>
+              <div v-if="allCategories.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无分类数据</div>
+            </div>
           </div>
         </div>
         <div class="mt-3 flex justify-end">
@@ -168,11 +183,11 @@ const activeTimeRange = ref('thisMonth')
 
 // 筛选条件
 const filters = ref({
-  member: '',
-  merchant: '',
-  tag: '',
-  paymentChannel: '',
-  category: ''
+  member: [],
+  merchant: [],
+  tag: [],
+  paymentChannel: [],
+  category: []
 })
 
 // 成员列表
@@ -215,24 +230,29 @@ const filteredTransactions = computed(() => {
     })
   }
   
-  // 成员过滤
-  if (filters.value.member) {
-    result = result.filter(t => t.member === filters.value.member)
+  // 成员过滤（多选）
+  if (filters.value.member.length > 0) {
+    result = result.filter(t => filters.value.member.includes(t.member))
   }
   
-  // 商家过滤
-  if (filters.value.merchant) {
-    result = result.filter(t => t.merchant === filters.value.merchant)
+  // 商家过滤（多选）
+  if (filters.value.merchant.length > 0) {
+    result = result.filter(t => filters.value.merchant.includes(t.merchant))
   }
   
-  // 标签过滤
-  if (filters.value.tag) {
-    result = result.filter(t => t.tag === filters.value.tag)
+  // 标签过滤（多选）
+  if (filters.value.tag.length > 0) {
+    result = result.filter(t => filters.value.tag.includes(t.tag))
   }
   
-  // 分类过滤
-  if (filters.value.category) {
-    result = result.filter(t => t.category === filters.value.category)
+  // 支付渠道过滤（多选）
+  if (filters.value.paymentChannel.length > 0) {
+    result = result.filter(t => filters.value.paymentChannel.includes(t.paymentChannel))
+  }
+  
+  // 分类过滤（多选）
+  if (filters.value.category.length > 0) {
+    result = result.filter(t => filters.value.category.includes(t.category))
   }
   
   return result
@@ -241,11 +261,11 @@ const filteredTransactions = computed(() => {
 // 重置筛选条件
 const resetFilters = () => {
   filters.value = {
-    member: '',
-    merchant: '',
-    tag: '',
-    paymentChannel: '',
-    category: ''
+    member: [],
+    merchant: [],
+    tag: [],
+    paymentChannel: [],
+    category: []
   }
 }
 

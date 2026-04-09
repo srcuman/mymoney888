@@ -16,7 +16,10 @@
             </div>
             <div>
               <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ account.name }}</h3>
-              <p class="text-sm text-gray-500 dark:text-gray-400">余额: ¥{{ account.balance.toFixed(2) }}</p>
+              <div class="flex items-center text-sm">
+                <span class="text-gray-500 dark:text-gray-400 mr-4">余额: ¥{{ account.balance.toFixed(2) }}</span>
+                <span class="text-gray-500 dark:text-gray-400">类别: {{ accountCategories.find(c => c.value === account.category)?.label || '其他' }}</span>
+              </div>
             </div>
           </div>
           <div class="flex space-x-2">
@@ -44,6 +47,12 @@
             <label for="account-balance" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">初始余额</label>
             <input type="number" id="account-balance" v-model.number="formData.balance" required min="0" step="0.01" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           </div>
+          <div>
+            <label for="account-category" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">账户类别</label>
+            <select id="account-category" v-model="formData.category" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+              <option v-for="category in accountCategories" :key="category.value" :value="category.value">{{ category.label }}</option>
+            </select>
+          </div>
           <div class="flex justify-end space-x-3">
             <button type="button" @click="showAddAccountModal = false; showEditAccountModal = false; resetForm()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md text-sm font-medium">
               取消
@@ -61,12 +70,22 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 
+// 账户类别列表
+const accountCategories = [
+  { value: 'cash', label: '现金' },
+  { value: 'bank', label: '银行账户' },
+  { value: 'credit_card', label: '信用卡' },
+  { value: 'investment', label: '投资账户' },
+  { value: 'loan', label: '贷款账户' },
+  { value: 'other', label: '其他' }
+]
+
 // 账户列表
 const accounts = ref([
-  { id: 1, name: '现金', balance: 1000 },
-  { id: 2, name: '银行卡', balance: 5000 },
-  { id: 3, name: '支付宝', balance: 2000 },
-  { id: 4, name: '微信', balance: 1500 }
+  { id: 1, name: '现金', balance: 1000, category: 'cash' },
+  { id: 2, name: '银行卡', balance: 5000, category: 'bank' },
+  { id: 3, name: '支付宝', balance: 2000, category: 'other' },
+  { id: 4, name: '微信', balance: 1500, category: 'other' }
 ])
 
 // 模态框状态
@@ -77,7 +96,8 @@ const showEditAccountModal = ref(false)
 const formData = ref({
   id: null,
   name: '',
-  balance: 0
+  balance: 0,
+  category: 'other'
 })
 
 // 重置表单
@@ -85,7 +105,8 @@ const resetForm = () => {
   formData.value = {
     id: null,
     name: '',
-    balance: 0
+    balance: 0,
+    category: 'other'
   }
 }
 
@@ -109,7 +130,8 @@ const saveAccount = () => {
     const newAccount = {
       id: accounts.value.length + 1,
       name: formData.value.name,
-      balance: formData.value.balance
+      balance: formData.value.balance,
+      category: formData.value.category
     }
     accounts.value.push(newAccount)
   }

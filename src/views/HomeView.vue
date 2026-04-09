@@ -181,8 +181,16 @@ const transaction = ref({
   tag: ''
 })
 
-// 分类列表
-const categories = ['餐饮', '交通', '购物', '娱乐', '医疗', '教育', '工资', '投资', '其他']
+// 支出分类列表
+const expenseCategories = ['餐饮', '交通', '购物', '娱乐', '医疗', '教育', '其他']
+
+// 收入分类列表
+const incomeCategories = ['工资', '投资', '其他']
+
+// 根据交易类型获取分类列表
+const categories = computed(() => {
+  return transactionType.value === 'income' ? incomeCategories : expenseCategories
+})
 
 // 账户列表
 const accounts = ref([

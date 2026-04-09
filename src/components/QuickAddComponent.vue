@@ -21,14 +21,14 @@
       </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
+      <div v-if="transactionType !== 'transfer'">
         <label for="category" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">分类</label>
-        <select id="category" v-model="transaction.category" :required="transactionType !== 'transfer'" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+        <select id="category" v-model="transaction.category" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           <option value="">请选择分类</option>
           <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
         </select>
       </div>
-      <div>
+      <div :class="transactionType === 'transfer' ? 'md:col-span-2' : ''">
         <label :for="transactionType === 'transfer' ? 'from-account' : 'account'" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ transactionType === 'transfer' ? '转出账户' : '账户' }}
         </label>
@@ -95,7 +95,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
 const emit = defineEmits(['close'])
 
@@ -115,8 +115,16 @@ const transaction = ref({
   description: ''
 })
 
-// 分类列表
-const categories = ['餐饮', '交通', '购物', '娱乐', '医疗', '教育', '工资', '投资', '其他']
+// 支出分类列表
+const expenseCategories = ['餐饮', '交通', '购物', '娱乐', '医疗', '教育', '其他']
+
+// 收入分类列表
+const incomeCategories = ['工资', '投资', '其他']
+
+// 根据交易类型获取分类列表
+const categories = computed(() => {
+  return transactionType.value === 'income' ? incomeCategories : expenseCategories
+})
 
 // 账户列表
 const accounts = ref([
