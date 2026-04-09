@@ -22,6 +22,15 @@
             <button @click="setTimeRange('lastMonth')" :class="activeTimeRange === 'lastMonth' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-3 py-1 rounded-md text-sm font-medium">
               上月
             </button>
+            <button @click="setTimeRange('thisYear')" :class="activeTimeRange === 'thisYear' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-3 py-1 rounded-md text-sm font-medium">
+              今年
+            </button>
+            <button @click="setTimeRange('lastYear')" :class="activeTimeRange === 'lastYear' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-3 py-1 rounded-md text-sm font-medium">
+              去年
+            </button>
+            <button @click="setTimeRange('twoYearsAgo')" :class="activeTimeRange === 'twoYearsAgo' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-3 py-1 rounded-md text-sm font-medium">
+              前年
+            </button>
           </div>
           <div class="flex space-x-2">
             <input type="date" v-model="dateRange.start" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm">
@@ -41,6 +50,10 @@
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">成员</label>
             <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
+              <div v-if="members.length > 0" class="flex items-center mb-2">
+                <input type="checkbox" id="select-all-members" @change="toggleSelectAll('member')" class="mr-2">
+                <label for="select-all-members" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+              </div>
               <div v-for="member in members" :key="member.id" class="flex items-center mb-1">
                 <input type="checkbox" :id="'member-' + member.id" :value="member.name" v-model="filters.member" class="mr-2">
                 <label :for="'member-' + member.id" class="text-sm text-gray-700 dark:text-gray-300">{{ member.name }}</label>
@@ -51,6 +64,10 @@
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">商家</label>
             <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
+              <div v-if="merchants.length > 0" class="flex items-center mb-2">
+                <input type="checkbox" id="select-all-merchants" @change="toggleSelectAll('merchant')" class="mr-2">
+                <label for="select-all-merchants" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+              </div>
               <div v-for="merchant in merchants" :key="merchant.id" class="flex items-center mb-1">
                 <input type="checkbox" :id="'merchant-' + merchant.id" :value="merchant.name" v-model="filters.merchant" class="mr-2">
                 <label :for="'merchant-' + merchant.id" class="text-sm text-gray-700 dark:text-gray-300">{{ merchant.name }}</label>
@@ -61,6 +78,10 @@
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">标签</label>
             <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
+              <div v-if="tags.length > 0" class="flex items-center mb-2">
+                <input type="checkbox" id="select-all-tags" @change="toggleSelectAll('tag')" class="mr-2">
+                <label for="select-all-tags" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+              </div>
               <div v-for="tag in tags" :key="tag.id" class="flex items-center mb-1">
                 <input type="checkbox" :id="'tag-' + tag.id" :value="tag.name" v-model="filters.tag" class="mr-2">
                 <label :for="'tag-' + tag.id" class="text-sm text-gray-700 dark:text-gray-300">{{ tag.name }}</label>
@@ -71,6 +92,10 @@
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">支付渠道</label>
             <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
+              <div v-if="paymentChannels.length > 0" class="flex items-center mb-2">
+                <input type="checkbox" id="select-all-channels" @change="toggleSelectAll('paymentChannel')" class="mr-2">
+                <label for="select-all-channels" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+              </div>
               <div v-for="channel in paymentChannels" :key="channel.id" class="flex items-center mb-1">
                 <input type="checkbox" :id="'channel-' + channel.id" :value="channel.name" v-model="filters.paymentChannel" class="mr-2">
                 <label :for="'channel-' + channel.id" class="text-sm text-gray-700 dark:text-gray-300">{{ channel.name }}</label>
@@ -81,6 +106,10 @@
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">分类</label>
             <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
+              <div v-if="allCategories.length > 0" class="flex items-center mb-2">
+                <input type="checkbox" id="select-all-categories" @change="toggleSelectAll('category')" class="mr-2">
+                <label for="select-all-categories" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+              </div>
               <div v-for="category in allCategories" :key="category" class="flex items-center mb-1">
                 <input type="checkbox" :id="'category-' + category" :value="category" v-model="filters.category" class="mr-2">
                 <label :for="'category-' + category" class="text-sm text-gray-700 dark:text-gray-300">{{ category }}</label>
@@ -96,42 +125,55 @@
         </div>
       </div>
       
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div>
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">支出分类</h3>
-          <div class="space-y-3">
-            <div v-for="(item, index) in expenseCategories" :key="index" class="flex justify-between items-center">
-              <span class="text-gray-700 dark:text-gray-300">{{ item.category }}</span>
-              <div class="flex items-center">
-                <span class="text-danger font-medium mr-2">{{ item.amount.toFixed(2) }}</span>
-                <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div class="bg-danger h-2 rounded-full" :style="{ width: item.percentage + '%' }"></div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="md:col-span-2">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">收支分类明细</h3>
+          <div class="space-y-6">
+            <div v-if="expenseCategories.length > 0">
+              <h4 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">支出分类</h4>
+              <div class="space-y-3">
+                <div v-for="(item, index) in expenseCategories" :key="index" class="flex justify-between items-center">
+                  <span class="text-gray-700 dark:text-gray-300">{{ item.category }}</span>
+                  <div class="flex items-center">
+                    <span class="text-danger font-medium mr-2">{{ item.amount.toFixed(2) }}</span>
+                    <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div class="bg-danger h-2 rounded-full" :style="{ width: item.percentage + '%' }"></div>
+                    </div>
+                  </div>
                 </div>
               </div>
+            </div>
+            <div v-if="incomeCategories.length > 0">
+              <h4 class="text-md font-medium text-gray-700 dark:text-gray-300 mb-2">收入分类</h4>
+              <div class="space-y-3">
+                <div v-for="(item, index) in incomeCategories" :key="index" class="flex justify-between items-center">
+                  <span class="text-gray-700 dark:text-gray-300">{{ item.category }}</span>
+                  <div class="flex items-center">
+                    <span class="text-secondary font-medium mr-2">{{ item.amount.toFixed(2) }}</span>
+                    <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div class="bg-secondary h-2 rounded-full" :style="{ width: item.percentage + '%' }"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-if="expenseCategories.length === 0 && incomeCategories.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+              根据筛选条件，暂无数据
             </div>
           </div>
         </div>
         <div>
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">收入分类</h3>
-          <div class="space-y-3">
-            <div v-for="(item, index) in incomeCategories" :key="index" class="flex justify-between items-center">
-              <span class="text-gray-700 dark:text-gray-300">{{ item.category }}</span>
-              <div class="flex items-center">
-                <span class="text-secondary font-medium mr-2">{{ item.amount.toFixed(2) }}</span>
-                <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div class="bg-secondary h-2 rounded-full" :style="{ width: item.percentage + '%' }"></div>
-                </div>
-              </div>
-            </div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">收支占比</h3>
+          <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 h-64 flex items-center justify-center">
+            <p class="text-gray-500 dark:text-gray-400">饼图：收支分类占比</p>
           </div>
         </div>
       </div>
-    </div>
-
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">月度趋势</h2>
-      <div class="h-64 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-        <p class="text-gray-500 dark:text-gray-400">月度收支趋势图表</p>
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">收支趋势</h3>
+        <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 h-64 flex items-center justify-center">
+          <p class="text-gray-500 dark:text-gray-400">柱状图：月度收支趋势</p>
+        </div>
       </div>
     </div>
 
@@ -211,11 +253,36 @@ const expenseCategoryList = ref([])
 // 所有分类列表
 const allCategories = computed(() => {
   const categories = new Set()
+  
+  // 从收入分类列表中添加分类
+  incomeCategoryList.value.forEach(category => {
+    categories.add(category.name)
+    // 添加子分类
+    if (category.subcategories) {
+      category.subcategories.forEach(subcategory => {
+        categories.add(subcategory.name)
+      })
+    }
+  })
+  
+  // 从支出分类列表中添加分类
+  expenseCategoryList.value.forEach(category => {
+    categories.add(category.name)
+    // 添加子分类
+    if (category.subcategories) {
+      category.subcategories.forEach(subcategory => {
+        categories.add(subcategory.name)
+      })
+    }
+  })
+  
+  // 从现有交易中添加分类（确保不遗漏）
   transactions.value.forEach(t => {
     if (t.category) {
       categories.add(t.category)
     }
   })
+  
   return Array.from(categories)
 })
 
@@ -299,6 +366,18 @@ const setTimeRange = (range) => {
       startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0]
       endDate = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0]
       break
+    case 'thisYear':
+      startDate = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0]
+      endDate = today.toISOString().split('T')[0]
+      break
+    case 'lastYear':
+      startDate = new Date(today.getFullYear() - 1, 0, 1).toISOString().split('T')[0]
+      endDate = new Date(today.getFullYear() - 1, 11, 31).toISOString().split('T')[0]
+      break
+    case 'twoYearsAgo':
+      startDate = new Date(today.getFullYear() - 2, 0, 1).toISOString().split('T')[0]
+      endDate = new Date(today.getFullYear() - 2, 11, 31).toISOString().split('T')[0]
+      break
   }
   
   dateRange.value.start = startDate
@@ -308,6 +387,30 @@ const setTimeRange = (range) => {
 // 应用日期范围
 const applyDateRange = () => {
   activeTimeRange.value = 'custom'
+}
+
+// 全选/取消全选
+const toggleSelectAll = (filterType) => {
+  const checkbox = document.getElementById(`select-all-${filterType === 'member' ? 'members' : filterType === 'merchant' ? 'merchants' : filterType === 'tag' ? 'tags' : filterType === 'paymentChannel' ? 'channels' : 'categories'}`)
+  const isChecked = checkbox.checked
+  
+  switch (filterType) {
+    case 'member':
+      filters.value.member = isChecked ? members.value.map(m => m.name) : []
+      break
+    case 'merchant':
+      filters.value.merchant = isChecked ? merchants.value.map(m => m.name) : []
+      break
+    case 'tag':
+      filters.value.tag = isChecked ? tags.value.map(t => t.name) : []
+      break
+    case 'paymentChannel':
+      filters.value.paymentChannel = isChecked ? paymentChannels.value.map(c => c.name) : []
+      break
+    case 'category':
+      filters.value.category = isChecked ? allCategories.value : []
+      break
+  }
 }
 
 // 计算支出分类统计

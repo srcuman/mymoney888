@@ -65,6 +65,34 @@
           </label>
         </div>
         <div>
+          <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">用户角色</label>
+          <div class="flex space-x-4">
+            <div class="flex items-center">
+              <input 
+                id="role-admin" 
+                type="radio" 
+                name="role" 
+                v-model="role"
+                value="admin"
+                class="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:bg-gray-600 dark:border-gray-500"
+              >
+              <label for="role-admin" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">管理员</label>
+            </div>
+            <div class="flex items-center">
+              <input 
+                id="role-user" 
+                type="radio" 
+                name="role" 
+                v-model="role"
+                value="user"
+                checked
+                class="h-4 w-4 text-primary focus:ring-primary border-gray-300 dark:bg-gray-600 dark:border-gray-500"
+              >
+              <label for="role-user" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">普通用户</label>
+            </div>
+          </div>
+        </div>
+        <div>
           <button 
             type="submit" 
             class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary dark:bg-blue-600 dark:hover:bg-blue-700"
@@ -95,6 +123,7 @@ const name = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const terms = ref(false)
+const role = ref('user')
 
 const handleRegister = () => {
   if (password.value !== confirmPassword.value) {
@@ -111,14 +140,11 @@ const handleRegister = () => {
     return
   }
   
-  // 检查是否已有管理员账户
-  const hasAdmin = existingUsers.some(user => user.role === 'admin')
-  
   // 保存用户信息
   const user = {
     username: username.value,
     name: name.value,
-    role: existingUsers.length === 0 ? 'admin' : 'user' // 首个注册账户默认是管理员
+    role: role.value
   }
   
   // 保存到本地存储

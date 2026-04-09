@@ -8,28 +8,33 @@
         </button>
       </div>
       
-      <div class="space-y-4">
-        <div v-for="account in accounts" :key="account.id" class="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
-          <div class="flex items-center">
-            <div class="w-12 h-12 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center mr-4">
-              <span class="text-primary dark:text-blue-400 font-bold text-lg">{{ account.name.charAt(0) }}</span>
-            </div>
-            <div>
-              <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ account.name }}</h3>
-              <div class="flex items-center text-sm">
-                <span class="text-gray-500 dark:text-gray-400 mr-4">余额: ¥{{ account.balance.toFixed(2) }}</span>
-                <span class="text-gray-500 dark:text-gray-400">类别: {{ accountCategories.find(c => c.value === account.category)?.label || '其他' }}</span>
+      <div class="space-y-6">
+        <div v-for="(categoryAccounts, categoryValue) in accountsByCategory" :key="categoryValue" class="space-y-2">
+          <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300">{{ accountCategories.find(c => c.value === categoryValue)?.label || '其他' }}</h3>
+          <div class="space-y-3">
+            <div v-for="account in categoryAccounts" :key="account.id" class="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
+              <div class="flex items-center">
+                <div class="w-12 h-12 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center mr-4">
+                  <span class="text-primary dark:text-blue-400 font-bold text-lg">{{ account.name.charAt(0) }}</span>
+                </div>
+                <div>
+                  <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ account.name }}</h3>
+                  <div class="text-sm text-gray-500 dark:text-gray-400">余额: ¥{{ account.balance.toFixed(2) }}</div>
+                </div>
+              </div>
+              <div class="flex space-x-2">
+                <button @click="editAccount(account)" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md text-sm font-medium">
+                  编辑
+                </button>
+                <button @click="deleteAccount(account.id)" class="px-3 py-1 bg-danger hover:bg-red-600 text-white rounded-md text-sm font-medium">
+                  删除
+                </button>
               </div>
             </div>
           </div>
-          <div class="flex space-x-2">
-            <button @click="editAccount(account)" class="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md text-sm font-medium">
-              编辑
-            </button>
-            <button @click="deleteAccount(account.id)" class="px-3 py-1 bg-danger hover:bg-red-600 text-white rounded-md text-sm font-medium">
-              删除
-            </button>
-          </div>
+        </div>
+        <div v-if="Object.keys(accountsByCategory).length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+          暂无账户，请添加账户
         </div>
       </div>
     </div>
@@ -68,7 +73,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
 // 账户类别列表
 const accountCategories = [
@@ -87,6 +92,18 @@ const accounts = ref([
   { id: 3, name: '支付宝', balance: 2000, category: 'other' },
   { id: 4, name: '微信', balance: 1500, category: 'other' }
 ])
+
+// 按类别分组账户
+const accountsByCategory = computed(() => {
+  const grouped = {}
+  accounts.value.forEach(account => {
+    if (!grouped[account.category]) {
+      grouped[account.category] = []
+    }
+    grouped[account.category].push(account)
+  })
+  return grouped
+})
 
 // 模态框状态
 const showAddAccountModal = ref(false)

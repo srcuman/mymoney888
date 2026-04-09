@@ -427,6 +427,9 @@ LEFT JOIN accounts a ON u.id = a.user_id
 LEFT JOIN transactions t ON a.id = t.account_id
 GROUP BY u.id, u.name;
 
+-- 允许在没有SUPER权限的情况下创建触发器和存储过程
+SET GLOBAL log_bin_trust_function_creators = 1;
+
 -- 创建触发器：更新账户余额
 DELIMITER //
 CREATE TRIGGER trg_update_account_balance_after_transaction
