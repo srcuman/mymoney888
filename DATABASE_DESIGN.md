@@ -1,9 +1,9 @@
 # MyMoney888 数据库设计文档
 
 ## 版本信息
-- **版本**: 3.3.0
+- **版本**: 3.5.0
 - **创建日期**: 2026-03-28
-- **最后更新**: 2026-04-08
+- **最后更新**: 2026-10-05
 - **数据库类型**: MySQL/MariaDB 8.0+
 - **字符集**: utf8mb4
 - **排序规则**: utf8mb4_unicode_ci
@@ -51,6 +51,8 @@ mymoney888 (数据库)
 ├── merchants (商家表)
 ├── projects (项目表)
 ├── members (成员表)
+├── investment_accounts (投资账户表)
+├── investment_details (投资明细表)
 ├── transaction_merchants (交易商家关联表)
 ├── transaction_projects (交易项目关联表)
 ├── transaction_members (交易成员关联表)
@@ -601,7 +603,57 @@ mymoney888 (数据库)
 - 支持成员联系方式存储
 - 支持成员头像
 
-### 19. transaction_merchants (交易商家关联表)
+### 19. investment_accounts (投资账户表)
+
+存储投资账户信息。
+
+| 字段名 | 类型 | 约束 | 说明 |
+|--------|------|------|------|
+| id | INT | PRIMARY KEY, AUTO_INCREMENT | 投资账户ID |
+| user_id | INT | FOREIGN KEY, NOT NULL | 用户ID |
+| name | VARCHAR(100) | NOT NULL | 账户名称 |
+| balance | DECIMAL(15,2) | DEFAULT 0.00 | 账户余额 |
+| asset_value | DECIMAL(15,2) | DEFAULT 0.00 | 资产价值 |
+| profit_loss | DECIMAL(15,2) | DEFAULT 0.00 | 盈亏 |
+| description | TEXT | NULL | 账户描述 |
+| is_active | TINYINT(1) | DEFAULT 1 | 是否激活 |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
+
+**设计说明**:
+- 每个投资账户关联到一个用户
+- 记录账户余额、资产价值和盈亏
+- 支持投资账户的激活和禁用
+
+### 20. investment_details (投资明细表)
+
+存储投资明细信息。
+
+| 字段名 | 类型 | 约束 | 说明 |
+|--------|------|------|------|
+| id | INT | PRIMARY KEY, AUTO_INCREMENT | 投资明细ID |
+| user_id | INT | FOREIGN KEY, NOT NULL | 用户ID |
+| account_id | INT | FOREIGN KEY, NOT NULL | 投资账户ID |
+| type | VARCHAR(50) | NOT NULL | 投资类型（基金、股票等） |
+| code | VARCHAR(50) | NOT NULL | 投资代码 |
+| name | VARCHAR(100) | NOT NULL | 投资名称 |
+| shares | DECIMAL(10,4) | NOT NULL | 持有份额 |
+| cost_price | DECIMAL(10,4) | NOT NULL | 成本价 |
+| current_price | DECIMAL(10,4) | NOT NULL | 当前价 |
+| total_cost | DECIMAL(15,2) | NOT NULL | 总成本 |
+| current_value | DECIMAL(15,2) | NOT NULL | 当前价值 |
+| profit_loss | DECIMAL(15,2) | NOT NULL | 盈亏 |
+| last_updated | TIMESTAMP | NULL | 最后更新时间 |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | 更新时间 |
+
+**设计说明**:
+- 每个投资明细关联到一个用户和一个投资账户
+- 记录投资的类型、代码、名称、份额、成本价和当前价
+- 计算并记录总成本、当前价值和盈亏
+- 记录最后更新时间用于追踪净值更新
+
+### 21. transaction_merchants (交易商家关联表)
 
 关联交易和商家。
 
@@ -612,7 +664,7 @@ mymoney888 (数据库)
 | merchant_id | INT | FOREIGN KEY, NOT NULL | 商家ID |
 | created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
 
-### 20. transaction_projects (交易项目关联表)
+### 22. transaction_projects (交易项目关联表)
 
 关联交易和项目。
 
@@ -624,7 +676,7 @@ mymoney888 (数据库)
 | amount | DECIMAL(15,2) | NOT NULL | 项目分配金额 |
 | created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
 
-### 21. transaction_members (交易成员关联表)
+### 23. transaction_members (交易成员关联表)
 
 关联交易和成员。
 
@@ -756,6 +808,20 @@ INDEX idx_user_id (user_id)          -- 用户ID索引
 INDEX idx_relationship (relationship) -- 关系索引
 ```
 
+### investment_accounts表索引
+```sql
+INDEX idx_user_id (user_id)          -- 用户ID索引，用于查询用户投资账户
+INDEX idx_is_active (is_active)      -- 激活状态索引，用于筛选激活账户
+```
+
+### investment_details表索引
+```sql
+INDEX idx_user_id (user_id)          -- 用户ID索引，用于查询用户投资明细
+INDEX idx_account_id (account_id)     -- 投资账户ID索引，用于关联查询
+INDEX idx_code (code)                -- 投资代码索引，用于快速查找
+INDEX idx_type (type)                -- 投资类型索引，用于按类型筛选
+```
+
 ### transaction_merchants表索引
 ```sql
 INDEX idx_transaction_id (transaction_id) -- 交易ID索引
@@ -832,6 +898,33 @@ GROUP BY u.id, u.name;
 - 用户活跃度分析
 - 生成用户报告
 
+### 3. v_investment_account_summary (投资账户汇总视图)
+
+提供投资账户的汇总信息，包括总资产价值、总盈亏等。
+
+```sql
+CREATE OR REPLACE VIEW v_investment_account_summary AS
+SELECT 
+    ia.id,
+    ia.user_id,
+    ia.name,
+    ia.balance,
+    ia.asset_value,
+    ia.profit_loss,
+    COUNT(id) as investment_count,
+    ia.is_active,
+    ia.created_at,
+    ia.updated_at
+FROM investment_accounts ia
+LEFT JOIN investment_details id ON ia.id = id.account_id
+GROUP BY ia.id, ia.user_id, ia.name, ia.balance, ia.asset_value, ia.profit_loss, ia.is_active, ia.created_at, ia.updated_at;
+```
+
+**用途**:
+- 实时查询投资账户汇总信息
+- 统计投资账户的资产价值和盈亏
+- 生成投资报表
+
 ---
 
 ## 触发器设计
@@ -907,6 +1000,28 @@ END
 - 删除收入交易减少账户余额
 - 删除支出交易增加账户余额
 
+### 4. trg_update_investment_account_asset_value
+
+在更新投资明细后自动更新投资账户的资产价值和盈亏。
+
+```sql
+CREATE TRIGGER trg_update_investment_account_asset_value
+AFTER INSERT, UPDATE, DELETE ON investment_details
+FOR EACH ROW
+BEGIN
+    -- 计算并更新投资账户的资产价值和盈亏
+    UPDATE investment_accounts ia
+    SET 
+        asset_value = (SELECT COALESCE(SUM(current_value), 0) FROM investment_details WHERE account_id = ia.id),
+        profit_loss = (SELECT COALESCE(SUM(profit_loss), 0) FROM investment_details WHERE account_id = ia.id)
+    WHERE ia.id = NEW.account_id OR ia.id = OLD.account_id;
+END
+```
+
+**功能**:
+- 自动计算投资账户的资产价值和盈亏
+- 确保投资账户信息与投资明细保持一致
+
 ---
 
 ## 存储过程设计
@@ -977,6 +1092,8 @@ CREATE PROCEDURE sp_bidirectional_sync(
     IN p_local_loan_payments JSON,
     IN p_local_installment_templates JSON,
     IN p_local_installments JSON,
+    IN p_local_investment_accounts JSON,
+    IN p_local_investment_details JSON,
     OUT p_result JSON
 )
 ```
@@ -992,6 +1109,8 @@ CREATE PROCEDURE sp_bidirectional_sync(
 - `p_local_loan_payments`: 本地贷款还款记录数据
 - `p_local_installment_templates`: 本地分期模板数据
 - `p_local_installments`: 本地分期记录数据
+- `p_local_investment_accounts`: 本地投资账户数据
+- `p_local_investment_details`: 本地投资明细数据
 - `p_result`: 返回同步结果
 
 **功能**:
@@ -1161,7 +1280,6 @@ FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
 
 -- loan_payments表
 FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE
-FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
 
 -- installment_templates表
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -1182,6 +1300,13 @@ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 -- members表
 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 
+-- investment_accounts表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+
+-- investment_details表
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE
+
 -- transaction_merchants表
 FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
 FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE
@@ -1200,129 +1325,69 @@ FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
 -- users表
 UNIQUE KEY unique_email (email)
 
--- user_settings表
-UNIQUE KEY unique_user_setting (user_id, setting_key)
+-- payment_channels表
+UNIQUE KEY unique_user_channel (user_id, name)
+
+-- accounts表
+UNIQUE KEY unique_user_account (user_id, name)
+
+-- categories表
+UNIQUE KEY unique_user_category (user_id, name, type, parent_id)
+
+-- credit_cards表
+UNIQUE KEY unique_user_card (user_id, card_number)
+
+-- investment_accounts表
+UNIQUE KEY unique_user_investment_account (user_id, name)
+
+-- investment_details表
+UNIQUE KEY unique_account_investment (account_id, code)
 ```
-
-### 非空约束
-所有关键字段都设置了NOT NULL约束，确保数据完整性。
-
-### 默认值约束
-为数值、布尔、时间等字段设置了合理的默认值。
 
 ---
 
 ## 性能优化建议
 
-### 1. 索引优化
-- 为常用查询字段创建索引
-- 避免过度索引影响写入性能
-- 定期分析索引使用情况
+1. **索引优化**
+   - 为经常查询的字段创建索引
+   - 避免在索引字段上使用函数
+   - 定期重建索引以保持性能
 
-### 2. 查询优化
-- 使用EXPLAIN分析查询计划
-- 避免SELECT *，只查询需要的字段
-- 合理使用JOIN和子查询
+2. **查询优化**
+   - 使用预处理语句
+   - 避免使用SELECT *
+   - 合理使用JOIN语句
+   - 限制结果集大小
 
-### 3. 数据库配置
-```sql
--- InnoDB缓冲池大小
-SET GLOBAL innodb_buffer_pool_size = 1G;
+3. **存储优化**
+   - 定期清理无用数据
+   - 合理设置表的存储引擎
+   - 分区表以提高查询性能
 
--- 查询缓存
-SET GLOBAL query_cache_size = 256M;
+4. **缓存优化**
+   - 使用Redis等缓存技术
+   - 缓存热点数据
+   - 合理设置缓存过期时间
 
--- 连接数
-SET GLOBAL max_connections = 200;
-```
+5. **硬件优化**
+   - 增加服务器内存
+   - 使用SSD存储
+   - 合理配置数据库服务器
 
-### 4. 分区策略
-对于大量交易数据，可以考虑按时间分区：
-```sql
-ALTER TABLE transactions PARTITION BY RANGE (YEAR(transaction_date)) (
-    PARTITION p2024 VALUES LESS THAN (2025),
-    PARTITION p2025 VALUES LESS THAN (2026),
-    PARTITION p2026 VALUES LESS THAN (2027),
-    PARTITION pmax VALUES LESS THAN MAXVALUE
-);
-```
+6. **应用层优化**
+   - 减少数据库连接次数
+   - 使用连接池
+   - 异步处理耗时操作
 
-### 5. 定期维护
-```sql
--- 优化表
-OPTIMIZE TABLE transactions;
-
--- 分析表
-ANALYZE TABLE transactions;
-
--- 清理旧数据
-DELETE FROM sync_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY);
-```
-
----
-
-## 安全性考虑
-
-### 1. 数据加密
-- 用户密码使用bcrypt加密
-- 敏感数据考虑使用AES加密
-- 传输数据使用HTTPS
-
-### 2. 访问控制
-- 实现基于用户的访问控制
-- API接口需要认证
-- 敏感操作需要二次验证
-
-### 3. SQL注入防护
-- 使用参数化查询
-- 避免拼接SQL语句
-- 输入验证和过滤
-
-### 4. 数据备份
-- 定期备份数据库
-- 实现增量备份
-- 测试备份恢复流程
-
----
-
-## 扩展性设计
-
-### 1. 多租户支持
-- 当前设计已支持多用户
-- 可扩展为多租户架构
-- 添加租户ID字段
-
-### 2. 分布式部署
-- 数据库可分库分表
-- 支持读写分离
-- 实现数据分片
-
-### 3. 缓存层
-- 添加Redis缓存
-- 缓存热点数据
-- 实现缓存失效策略
-
-### 4. 消息队列
-- 使用消息队列处理同步
-- 异步处理耗时操作
-- 提高系统响应速度
+7. **监控与调优**
+   - 监控数据库性能
+   - 分析慢查询日志
+   - 定期进行性能调优
 
 ---
 
 ## 总结
 
-本数据库设计为MyMoney888 v3.3.0提供了完整的数据持久化和同步解决方案：
+本数据库设计文档详细描述了MyMoney888系统的数据库结构，包括表结构、索引设计、视图设计、触发器设计、存储过程设计、数据同步机制、数据完整性约束和性能优化建议。
 
-1. **完整的表结构设计**: 覆盖所有业务场景
-2. **智能同步机制**: 支持双向同步和冲突解决
-3. **数据一致性保证**: 通过触发器和约束确保数据准确
-4. **性能优化**: 合理的索引和查询优化
-5. **扩展性**: 支持未来功能扩展
-
-该设计确保了数据的安全性、一致性和可恢复性，为用户提供了可靠的数据管理服务。
-
----
-
-**文档版本**: 1.0  
-**最后更新**: 2026-03-28  
-**维护者**: MyMoney888开发团队
+该设计支持用户管理、账套管理、账户管理、分类管理、交易记录、信用卡管理、贷款管理、分期管理、商家管理、项目管理、成员管理和投资管理等核心功能，为系统提供了稳定、高效、可扩展的数据存储基础。

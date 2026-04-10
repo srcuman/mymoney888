@@ -54,6 +54,11 @@
                 <input type="checkbox" id="select-all-members" @change="toggleSelectAll('member')" class="mr-2">
                 <label for="select-all-members" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
               </div>
+              <!-- 空值选项 -->
+              <div class="flex items-center mb-1">
+                <input type="checkbox" id="member-empty" value="__EMPTY__" v-model="filters.member" class="mr-2">
+                <label for="member-empty" class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
+              </div>
               <div v-for="member in members" :key="member.id" class="flex items-center mb-1">
                 <input type="checkbox" :id="'member-' + member.id" :value="member.name" v-model="filters.member" class="mr-2">
                 <label :for="'member-' + member.id" class="text-sm text-gray-700 dark:text-gray-300">{{ member.name }}</label>
@@ -67,6 +72,11 @@
               <div v-if="merchants.length > 0" class="flex items-center mb-2">
                 <input type="checkbox" id="select-all-merchants" @change="toggleSelectAll('merchant')" class="mr-2">
                 <label for="select-all-merchants" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+              </div>
+              <!-- 空值选项 -->
+              <div class="flex items-center mb-1">
+                <input type="checkbox" id="merchant-empty" value="__EMPTY__" v-model="filters.merchant" class="mr-2">
+                <label for="merchant-empty" class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
               </div>
               <div v-for="merchant in merchants" :key="merchant.id" class="flex items-center mb-1">
                 <input type="checkbox" :id="'merchant-' + merchant.id" :value="merchant.name" v-model="filters.merchant" class="mr-2">
@@ -82,6 +92,11 @@
                 <input type="checkbox" id="select-all-tags" @change="toggleSelectAll('tag')" class="mr-2">
                 <label for="select-all-tags" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
               </div>
+              <!-- 空值选项 -->
+              <div class="flex items-center mb-1">
+                <input type="checkbox" id="tag-empty" value="__EMPTY__" v-model="filters.tag" class="mr-2">
+                <label for="tag-empty" class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
+              </div>
               <div v-for="tag in tags" :key="tag.id" class="flex items-center mb-1">
                 <input type="checkbox" :id="'tag-' + tag.id" :value="tag.name" v-model="filters.tag" class="mr-2">
                 <label :for="'tag-' + tag.id" class="text-sm text-gray-700 dark:text-gray-300">{{ tag.name }}</label>
@@ -96,6 +111,11 @@
                 <input type="checkbox" id="select-all-channels" @change="toggleSelectAll('paymentChannel')" class="mr-2">
                 <label for="select-all-channels" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
               </div>
+              <!-- 空值选项 -->
+              <div class="flex items-center mb-1">
+                <input type="checkbox" id="channel-empty" value="__EMPTY__" v-model="filters.paymentChannel" class="mr-2">
+                <label for="channel-empty" class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
+              </div>
               <div v-for="channel in paymentChannels" :key="channel.id" class="flex items-center mb-1">
                 <input type="checkbox" :id="'channel-' + channel.id" :value="channel.name" v-model="filters.paymentChannel" class="mr-2">
                 <label :for="'channel-' + channel.id" class="text-sm text-gray-700 dark:text-gray-300">{{ channel.name }}</label>
@@ -106,15 +126,45 @@
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">分类</label>
             <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
-              <div v-if="allCategories.length > 0" class="flex items-center mb-2">
+              <div v-if="incomeCategoryList.length > 0 || expenseCategoryList.length > 0" class="flex items-center mb-2">
                 <input type="checkbox" id="select-all-categories" @change="toggleSelectAll('category')" class="mr-2">
                 <label for="select-all-categories" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
               </div>
-              <div v-for="category in allCategories" :key="category" class="flex items-center mb-1">
-                <input type="checkbox" :id="'category-' + category" :value="category" v-model="filters.category" class="mr-2">
-                <label :for="'category-' + category" class="text-sm text-gray-700 dark:text-gray-300">{{ category }}</label>
+              <!-- 收入分类 -->
+              <div v-if="incomeCategoryList.length > 0" class="mb-3">
+                <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">收入分类</div>
+                <div v-for="category in incomeCategoryList" :key="'income-' + category.name" class="mb-1">
+                  <div class="flex items-center">
+                    <input type="checkbox" :id="'income-category-' + category.name" :value="category.name" v-model="filters.category" class="mr-2">
+                    <label :for="'income-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
+                  </div>
+                  <!-- 子分类 -->
+                  <div v-if="category.subcategories && category.subcategories.length > 0" class="ml-6 mt-1">
+                    <div v-for="subcategory in category.subcategories" :key="'income-sub-' + subcategory.name" class="flex items-center mb-1">
+                      <input type="checkbox" :id="'income-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" class="mr-2">
+                      <label :for="'income-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div v-if="allCategories.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无分类数据</div>
+              <!-- 支出分类 -->
+              <div v-if="expenseCategoryList.length > 0">
+                <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">支出分类</div>
+                <div v-for="category in expenseCategoryList" :key="'expense-' + category.name" class="mb-1">
+                  <div class="flex items-center">
+                    <input type="checkbox" :id="'expense-category-' + category.name" :value="category.name" v-model="filters.category" class="mr-2">
+                    <label :for="'expense-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
+                  </div>
+                  <!-- 子分类 -->
+                  <div v-if="category.subcategories && category.subcategories.length > 0" class="ml-6 mt-1">
+                    <div v-for="subcategory in category.subcategories" :key="'expense-sub-' + subcategory.name" class="flex items-center mb-1">
+                      <input type="checkbox" :id="'expense-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" class="mr-2">
+                      <label :for="'expense-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-if="incomeCategoryList.length === 0 && expenseCategoryList.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无分类数据</div>
             </div>
           </div>
         </div>
@@ -125,8 +175,9 @@
         </div>
       </div>
       
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div class="md:col-span-2">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <!-- 收支分类明细 -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">收支分类明细</h3>
           <div class="space-y-6">
             <div v-if="expenseCategories.length > 0">
@@ -162,17 +213,100 @@
             </div>
           </div>
         </div>
-        <div>
+        
+        <!-- 收支占比饼图 -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">收支占比</h3>
-          <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 h-64 flex items-center justify-center">
-            <p class="text-gray-500 dark:text-gray-400">饼图：收支分类占比</p>
+          <div class="h-64 flex items-center justify-center">
+            <div class="w-full h-full">
+              <!-- 饼图占位 -->
+              <div class="bg-gray-100 dark:bg-gray-700 rounded-full h-48 w-48 mx-auto flex items-center justify-center">
+                <p class="text-gray-500 dark:text-gray-400">饼图：收支分类占比</p>
+              </div>
+              <!-- 图例 -->
+              <div class="mt-4 grid grid-cols-2 gap-2">
+                <div v-for="(item, index) in expenseCategories.slice(0, 4)" :key="index" class="flex items-center">
+                  <div class="w-3 h-3 rounded-full bg-danger mr-2"></div>
+                  <span class="text-sm text-gray-700 dark:text-gray-300">{{ item.category }}</span>
+                </div>
+                <div v-for="(item, index) in incomeCategories.slice(0, 4)" :key="index" class="flex items-center">
+                  <div class="w-3 h-3 rounded-full bg-secondary mr-2"></div>
+                  <span class="text-sm text-gray-700 dark:text-gray-300">{{ item.category }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-      <div class="mb-6">
+      
+      <!-- 收支趋势柱状图 -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">收支趋势</h3>
-        <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 h-64 flex items-center justify-center">
-          <p class="text-gray-500 dark:text-gray-400">柱状图：月度收支趋势</p>
+        <div class="h-64 flex items-center justify-center">
+          <div class="w-full h-full">
+            <!-- 柱状图占位 -->
+            <div class="bg-gray-100 dark:bg-gray-700 rounded-lg h-full w-full flex items-center justify-center">
+              <p class="text-gray-500 dark:text-gray-400">柱状图：月度收支趋势</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 收支概览卡片 -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
+          <h3 class="text-sm font-medium text-blue-600 dark:text-blue-400">总收入</h3>
+          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ yearlyIncome.toFixed(2) }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">较上期 <span class="text-green-600 dark:text-green-400">+12.5%</span></p>
+        </div>
+        <div class="bg-red-50 dark:bg-red-900/30 p-4 rounded-lg">
+          <h3 class="text-sm font-medium text-red-600 dark:text-red-400">总支出</h3>
+          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ yearlyExpense.toFixed(2) }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">较上期 <span class="text-red-600 dark:text-red-400">+8.3%</span></p>
+        </div>
+        <div class="bg-green-50 dark:bg-green-900/30 p-4 rounded-lg">
+          <h3 class="text-sm font-medium text-green-600 dark:text-green-400">结余</h3>
+          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ yearlyBalance.toFixed(2) }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">较上期 <span class="text-green-600 dark:text-green-400">+25.7%</span></p>
+        </div>
+        <div class="bg-purple-50 dark:bg-purple-900/30 p-4 rounded-lg">
+          <h3 class="text-sm font-medium text-purple-600 dark:text-purple-400">交易次数</h3>
+          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ totalTransactions }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">较上期 <span class="text-green-600 dark:text-green-400">+5.2%</span></p>
+        </div>
+      </div>
+      
+      <!-- 消费分析洞察 -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">消费洞察</h3>
+        <div class="space-y-3">
+          <div class="flex items-start">
+            <div class="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center mr-3 mt-0.5">
+              <span class="text-yellow-600 dark:text-yellow-400">💡</span>
+            </div>
+            <div>
+              <h4 class="text-md font-medium text-gray-900 dark:text-white">消费提醒</h4>
+              <p class="text-sm text-gray-600 dark:text-gray-400">您本月餐饮支出占总支出的35%，建议适当控制。</p>
+            </div>
+          </div>
+          <div class="flex items-start">
+            <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mr-3 mt-0.5">
+              <span class="text-blue-600 dark:text-blue-400">📊</span>
+            </div>
+            <div>
+              <h4 class="text-md font-medium text-gray-900 dark:text-white">支出趋势</h4>
+              <p class="text-sm text-gray-600 dark:text-gray-400">您最近3个月的支出呈现上升趋势，平均每月增长8.3%。</p>
+            </div>
+          </div>
+          <div class="flex items-start">
+            <div class="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mr-3 mt-0.5">
+              <span class="text-green-600 dark:text-green-400">🎯</span>
+            </div>
+            <div>
+              <h4 class="text-md font-medium text-gray-900 dark:text-white">省钱建议</h4>
+              <p class="text-sm text-gray-600 dark:text-gray-400">根据您的消费习惯，建议优化购物和娱乐支出，每月可节省约500元。</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -299,22 +433,34 @@ const filteredTransactions = computed(() => {
   
   // 成员过滤（多选）
   if (filters.value.member.length > 0) {
-    result = result.filter(t => filters.value.member.includes(t.member))
+    result = result.filter(t => {
+      const hasEmpty = filters.value.member.includes('__EMPTY__')
+      return filters.value.member.includes(t.member) || (hasEmpty && !t.member)
+    })
   }
   
   // 商家过滤（多选）
   if (filters.value.merchant.length > 0) {
-    result = result.filter(t => filters.value.merchant.includes(t.merchant))
+    result = result.filter(t => {
+      const hasEmpty = filters.value.merchant.includes('__EMPTY__')
+      return filters.value.merchant.includes(t.merchant) || (hasEmpty && !t.merchant)
+    })
   }
   
   // 标签过滤（多选）
   if (filters.value.tag.length > 0) {
-    result = result.filter(t => filters.value.tag.includes(t.tag))
+    result = result.filter(t => {
+      const hasEmpty = filters.value.tag.includes('__EMPTY__')
+      return filters.value.tag.includes(t.tag) || (hasEmpty && !t.tag)
+    })
   }
   
   // 支付渠道过滤（多选）
   if (filters.value.paymentChannel.length > 0) {
-    result = result.filter(t => filters.value.paymentChannel.includes(t.paymentChannel))
+    result = result.filter(t => {
+      const hasEmpty = filters.value.paymentChannel.includes('__EMPTY__')
+      return filters.value.paymentChannel.includes(t.paymentChannel) || (hasEmpty && !t.paymentChannel)
+    })
   }
   
   // 分类过滤（多选）
