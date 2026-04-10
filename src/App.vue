@@ -7,7 +7,7 @@
           <span class="mr-2">💰</span>
           MyMoney888
         </router-link>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">v3.4.1</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">v3.5.0</p>
       </div>
       <nav class="flex-1 p-4 space-y-1">
         <router-link to="/" :class="isActive('/')" class="flex items-center px-3 py-2 rounded-md text-sm font-medium">
@@ -26,12 +26,16 @@
           <span class="mr-3">📊</span>
           统计分析
         </router-link>
+        <router-link to="/investments" :class="isActive('/investments')" class="flex items-center px-3 py-2 rounded-md text-sm font-medium">
+          <span class="mr-3">📈</span>
+          投资管理
+        </router-link>
         <router-link to="/credit-cards" :class="isActive('/credit-cards')" class="flex items-center px-3 py-2 rounded-md text-sm font-medium">
           <span class="mr-3">💳</span>
           信用卡
         </router-link>
         <router-link to="/loans" :class="isActive('/loans')" class="flex items-center px-3 py-2 rounded-md text-sm font-medium">
-          <span class="mr-3">📈</span>
+          <span class="mr-3">📉</span>
           贷款
         </router-link>
         <router-link to="/import-export" :class="isActive('/import-export')" class="flex items-center px-3 py-2 rounded-md text-sm font-medium">
@@ -92,7 +96,7 @@
               快速记账
             </button>
             <!-- 当前版本 -->
-            <span class="text-sm text-gray-600 dark:text-gray-400">v3.4.1</span>
+            <span class="text-sm text-gray-600 dark:text-gray-400">v3.5.0</span>
           </div>
         </div>
       </header>
@@ -152,6 +156,7 @@ const currentPageTitle = computed(() => {
     '/assets': '资产概览',
     '/accounts': '账户管理',
     '/statistics': '统计分析',
+    '/investments': '投资管理',
     '/credit-cards': '信用卡管理',
     '/loans': '贷款管理',
     '/import-export': '数据管理',
