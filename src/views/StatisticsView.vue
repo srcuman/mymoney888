@@ -57,11 +57,15 @@
               </div>
               <div v-for="category in incomeCategoryList" :key="'income-' + category.name" class="mb-2">
                 <div class="flex items-center">
+                  <button v-if="category.children && category.children.length > 0" @click="toggleCategory(category.name)" class="mr-2 text-gray-500 dark:text-gray-400">
+                    {{ expandedCategories.includes(category.name) ? '▼' : '▶' }}
+                  </button>
+                  <span v-else class="w-4 mr-2"></span>
                   <input type="checkbox" :id="'income-category-' + category.name" :value="category.name" v-model="filters.category" @change="handleCategoryChange('income', category.name)" class="mr-2">
                   <label :for="'income-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
                 </div>
                 <!-- 子分类 -->
-        <div v-if="category.children && category.children.length > 0" class="ml-6 mt-1">
+        <div v-if="category.children && category.children.length > 0 && expandedCategories.includes(category.name)" class="ml-6 mt-1">
           <div v-for="subcategory in category.children" :key="'income-sub-' + subcategory.name" class="flex items-center mb-1">
             <input type="checkbox" :id="'income-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" @change="handleSubcategoryChange('income', category.name, subcategory.name)" class="mr-2">
             <label :for="'income-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
@@ -81,11 +85,15 @@
               </div>
               <div v-for="category in expenseCategoryList" :key="'expense-' + category.name" class="mb-2">
                 <div class="flex items-center">
+                  <button v-if="category.children && category.children.length > 0" @click="toggleCategory(category.name)" class="mr-2 text-gray-500 dark:text-gray-400">
+                    {{ expandedCategories.includes(category.name) ? '▼' : '▶' }}
+                  </button>
+                  <span v-else class="w-4 mr-2"></span>
                   <input type="checkbox" :id="'expense-category-' + category.name" :value="category.name" v-model="filters.category" @change="handleCategoryChange('expense', category.name)" class="mr-2">
                   <label :for="'expense-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
                 </div>
                 <!-- 子分类 -->
-        <div v-if="category.children && category.children.length > 0" class="ml-6 mt-1">
+        <div v-if="category.children && category.children.length > 0 && expandedCategories.includes(category.name)" class="ml-6 mt-1">
           <div v-for="subcategory in category.children" :key="'expense-sub-' + subcategory.name" class="flex items-center mb-1">
             <input type="checkbox" :id="'expense-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" @change="handleSubcategoryChange('expense', category.name, subcategory.name)" class="mr-2">
             <label :for="'expense-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
@@ -395,6 +403,9 @@ const incomeCategoryList = ref([])
 // 支出分类列表
 const expenseCategoryList = ref([])
 
+// 展开的分类
+const expandedCategories = ref([])
+
 // 所有分类列表
 const allCategories = computed(() => {
   const categories = new Set()
@@ -656,6 +667,16 @@ const handleSubcategoryChange = (type, categoryName, subcategoryName) => {
     if (index !== -1) {
       filters.value.category.splice(index, 1)
     }
+  }
+}
+
+// 切换分类展开/折叠
+const toggleCategory = (categoryName) => {
+  const index = expandedCategories.value.indexOf(categoryName)
+  if (index === -1) {
+    expandedCategories.value.push(categoryName)
+  } else {
+    expandedCategories.value.splice(index, 1)
   }
 }
 

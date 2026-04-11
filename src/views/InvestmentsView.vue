@@ -641,14 +641,19 @@ const fetchInvestmentInfo = async (code) => {
       const fundUrl = `https://fundgz.1234567.com.cn/js/${code}.js`
       
       try {
+        console.log('尝试调用基金API:', fundUrl)
         const fundResponse = await fetch(fundUrl)
+        console.log('基金API响应状态:', fundResponse.status)
         const fundData = await fundResponse.text()
+        console.log('基金API响应数据:', fundData)
         
         // 解析基金数据
         if (fundData && fundData.includes('jsonpgz(')) {
           const jsonStr = fundData.replace('jsonpgz(', '').replace(')', '')
           const fundInfo = JSON.parse(jsonStr)
+          console.log('解析后的基金信息:', fundInfo)
           if (fundInfo.name) {
+            console.log('成功获取基金数据:', fundInfo.name)
             return {
               name: fundInfo.name,
               type: '基金',
@@ -665,8 +670,11 @@ const fetchInvestmentInfo = async (code) => {
       const stockUrl = `https://hq.sinajs.cn/list=sh${code},sz${code}`
       
       try {
+        console.log('尝试调用股票API:', stockUrl)
         const stockResponse = await fetch(stockUrl)
+        console.log('股票API响应状态:', stockResponse.status)
         const stockData = await stockResponse.text()
+        console.log('股票API响应数据:', stockData)
         
         // 解析股票数据
         if (stockData && stockData.includes('=') && !stockData.includes('无效')) {
@@ -676,6 +684,7 @@ const fetchInvestmentInfo = async (code) => {
               const parts = line.split('=')
               const data = parts[1].replace(/"/g, '').split(',')
               if (data.length > 2 && data[0]) {
+                console.log('成功获取股票数据:', data[0])
                 return {
                   name: data[0],
                   type: '股票',
@@ -694,14 +703,18 @@ const fetchInvestmentInfo = async (code) => {
       const sinaFundUrl = `https://hq.sinajs.cn/list=ff_${code}`
       
       try {
+        console.log('尝试调用新浪财经基金API:', sinaFundUrl)
         const sinaFundResponse = await fetch(sinaFundUrl)
+        console.log('新浪财经基金API响应状态:', sinaFundResponse.status)
         const sinaFundData = await sinaFundResponse.text()
+        console.log('新浪财经基金API响应数据:', sinaFundData)
         
         // 解析新浪财经基金数据
         if (sinaFundData && sinaFundData.includes('=')) {
           const parts = sinaFundData.split('=')
           const data = parts[1].replace(/"/g, '').split(',')
           if (data.length > 2 && data[0]) {
+            console.log('成功获取新浪财经基金数据:', data[0])
             return {
               name: data[0],
               type: '基金',
@@ -716,6 +729,7 @@ const fetchInvestmentInfo = async (code) => {
     }
     
     // 如果API调用失败或没有找到数据，使用模拟数据
+    console.log('所有API调用失败，使用模拟数据')
     return new Promise((resolve) => {
       setTimeout(() => {
         // 模拟基金或股票数据（6位数字）
