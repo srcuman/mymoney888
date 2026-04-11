@@ -637,28 +637,34 @@ const fetchInvestmentInfo = async (code) => {
   try {
     // 处理6位数字的代码（股票或基金）
     if (code.length === 6 && /^\d+$/.test(code)) {
-      // 先尝试基金API（使用天天基金网API）
+      // 1. 尝试基金API（使用天天基金网API）
       const fundUrl = `https://fundgz.1234567.com.cn/js/${code}.js`
       
       try {
         console.log('尝试调用基金API:', fundUrl)
         const fundResponse = await fetch(fundUrl)
         console.log('基金API响应状态:', fundResponse.status)
-        const fundData = await fundResponse.text()
-        console.log('基金API响应数据:', fundData)
         
-        // 解析基金数据
-        if (fundData && fundData.includes('jsonpgz(')) {
-          const jsonStr = fundData.replace('jsonpgz(', '').replace(')', '')
-          const fundInfo = JSON.parse(jsonStr)
-          console.log('解析后的基金信息:', fundInfo)
-          if (fundInfo.name) {
-            console.log('成功获取基金数据:', fundInfo.name)
-            return {
-              name: fundInfo.name,
-              type: '基金',
-              currentPrice: parseFloat(parseFloat(fundInfo.dwjz).toFixed(4)) || 0,
-              updateDate: fundInfo.gztime ? fundInfo.gztime.split(' ')[0] : new Date().toISOString().split('T')[0]
+        // 检查响应状态
+        if (fundResponse.status === 200) {
+          const fundData = await fundResponse.text()
+          console.log('基金API响应数据:', fundData)
+          
+          // 解析基金数据
+          if (fundData && fundData.includes('jsonpgz(')) {
+            const jsonStr = fundData.replace('jsonpgz(', '').replace(')', '')
+            const fundInfo = JSON.parse(jsonStr)
+            console.log('解析后的基金信息:', fundInfo)
+            
+            // 确保获取到有效的基金数据
+            if (fundInfo.name && fundInfo.dwjz) {
+              console.log('成功获取基金数据:', fundInfo.name)
+              return {
+                name: fundInfo.name,
+                type: '基金',
+                currentPrice: parseFloat(parseFloat(fundInfo.dwjz).toFixed(4)) || 0,
+                updateDate: fundInfo.gztime ? fundInfo.gztime.split(' ')[0] : new Date().toISOString().split('T')[0]
+              }
             }
           }
         }
@@ -666,30 +672,34 @@ const fetchInvestmentInfo = async (code) => {
         console.log('基金API调用失败，尝试股票API:', fundError)
       }
       
-      // 再尝试股票API（使用新浪财经API）
+      // 2. 尝试股票API（使用新浪财经API）
       const stockUrl = `https://hq.sinajs.cn/list=sh${code},sz${code}`
       
       try {
         console.log('尝试调用股票API:', stockUrl)
         const stockResponse = await fetch(stockUrl)
         console.log('股票API响应状态:', stockResponse.status)
-        const stockData = await stockResponse.text()
-        console.log('股票API响应数据:', stockData)
         
-        // 解析股票数据
-        if (stockData && stockData.includes('=') && !stockData.includes('无效')) {
-          const stockLines = stockData.split(';')
-          for (const line of stockLines) {
-            if (line.includes('=') && line.split('=').length > 1) {
-              const parts = line.split('=')
-              const data = parts[1].replace(/"/g, '').split(',')
-              if (data.length > 2 && data[0]) {
-                console.log('成功获取股票数据:', data[0])
-                return {
-                  name: data[0],
-                  type: '股票',
-                  currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
-                  updateDate: new Date().toISOString().split('T')[0]
+        // 检查响应状态
+        if (stockResponse.status === 200) {
+          const stockData = await stockResponse.text()
+          console.log('股票API响应数据:', stockData)
+          
+          // 解析股票数据
+          if (stockData && stockData.includes('=') && !stockData.includes('无效')) {
+            const stockLines = stockData.split(';')
+            for (const line of stockLines) {
+              if (line.includes('=') && line.split('=').length > 1) {
+                const parts = line.split('=')
+                const data = parts[1].replace(/"/g, '').split(',')
+                if (data.length > 2 && data[0] && data[3]) {
+                  console.log('成功获取股票数据:', data[0])
+                  return {
+                    name: data[0],
+                    type: '股票',
+                    currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
+                    updateDate: new Date().toISOString().split('T')[0]
+                  }
                 }
               }
             }
@@ -699,43 +709,36 @@ const fetchInvestmentInfo = async (code) => {
         console.log('股票API调用失败:', stockError)
       }
       
-      // 尝试使用另一个基金API作为备选（新浪财经基金API）
+      // 3. 尝试使用另一个基金API作为备选（新浪财经基金API）
       const sinaFundUrl = `https://hq.sinajs.cn/list=ff_${code}`
       
       try {
         console.log('尝试调用新浪财经基金API:', sinaFundUrl)
         const sinaFundResponse = await fetch(sinaFundUrl)
         console.log('新浪财经基金API响应状态:', sinaFundResponse.status)
-        const sinaFundData = await sinaFundResponse.text()
-        console.log('新浪财经基金API响应数据:', sinaFundData)
         
-        // 解析新浪财经基金数据
-        if (sinaFundData && sinaFundData.includes('=')) {
-          const parts = sinaFundData.split('=')
-          const data = parts[1].replace(/"/g, '').split(',')
-          if (data.length > 2 && data[0]) {
-            console.log('成功获取新浪财经基金数据:', data[0])
-            return {
-              name: data[0],
-              type: '基金',
-              currentPrice: parseFloat(parseFloat(data[1]).toFixed(4)) || 0,
-              updateDate: new Date().toISOString().split('T')[0]
+        // 检查响应状态
+        if (sinaFundResponse.status === 200) {
+          const sinaFundData = await sinaFundResponse.text()
+          console.log('新浪财经基金API响应数据:', sinaFundData)
+          
+          // 解析新浪财经基金数据
+          if (sinaFundData && sinaFundData.includes('=') && !sinaFundData.includes('ff_') && !sinaFundData.includes('null')) {
+            const parts = sinaFundData.split('=')
+            const data = parts[1].replace(/"/g, '').split(',')
+            if (data.length > 2 && data[0] && data[1]) {
+              console.log('成功获取新浪财经基金数据:', data[0])
+              return {
+                name: data[0],
+                type: '基金',
+                currentPrice: parseFloat(parseFloat(data[1]).toFixed(4)) || 0,
+                updateDate: new Date().toISOString().split('T')[0]
+              }
             }
           }
         }
       } catch (sinaFundError) {
         console.log('新浪财经基金API调用失败:', sinaFundError)
-      }
-      
-      // 特殊处理基金代码014191
-      if (code === '014191') {
-        console.log('使用特殊处理的基金数据 for 014191')
-        return {
-          name: '广发先进制造股票发起式A',
-          type: '基金',
-          currentPrice: 2.0808,
-          updateDate: '2026-04-10'
-        }
       }
     }
     
