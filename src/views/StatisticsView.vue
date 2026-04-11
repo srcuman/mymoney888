@@ -57,7 +57,7 @@
               </button>
               <div v-if="dropdowns.incomeCategories" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
                 <div v-if="incomeCategoryList.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
-                  <button @click="filters.category = allCategories.filter(c => incomeCategoryList.some(ic => ic.name === c || ic.children?.some(sc => sc.name === c))" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
+                  <button @click="selectAllIncomeCategories()" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
                 </div>
                 <div v-for="category in incomeCategoryList" :key="'income-' + category.name" class="p-2">
                   <div class="flex items-center">
@@ -85,7 +85,7 @@
               </button>
               <div v-if="dropdowns.expenseCategories" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
                 <div v-if="expenseCategoryList.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
-                  <button @click="filters.category = allCategories.filter(c => expenseCategoryList.some(ec => ec.name === c || ec.children?.some(sc => sc.name === c))" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
+                  <button @click="selectAllExpenseCategories()" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
                 </div>
                 <div v-for="category in expenseCategoryList" :key="'expense-' + category.name" class="p-2">
                   <div class="flex items-center">
@@ -516,6 +516,24 @@ const selectPaymentChannel = (channel) => {
   } else {
     filters.value.paymentChannel.splice(index, 1)
   }
+}
+
+// 全选收入分类
+const selectAllIncomeCategories = () => {
+  filters.value.category = allCategories.value.filter(c => {
+    return incomeCategoryList.value.some(ic => {
+      return ic.name === c || (ic.children && ic.children.some(sc => sc.name === c))
+    })
+  })
+}
+
+// 全选支出分类
+const selectAllExpenseCategories = () => {
+  filters.value.category = allCategories.value.filter(c => {
+    return expenseCategoryList.value.some(ec => {
+      return ec.name === c || (ec.children && ec.children.some(sc => sc.name === c))
+    })
+  })
 }
 
 // 所有分类列表
