@@ -43,10 +43,65 @@
         </div>
       </div>
       
+      <!-- 分类筛选 -->
+      <div class="mb-6">
+        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">分类筛选</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- 收入分类 -->
+          <div>
+            <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">收入分类</label>
+            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-48 overflow-y-auto dark:bg-gray-700">
+              <div v-if="incomeCategoryList.length > 0" class="flex items-center mb-2">
+                <input type="checkbox" id="select-all-income-categories" @change="toggleSelectAllIncomeCategories" class="mr-2">
+                <label for="select-all-income-categories" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+              </div>
+              <div v-for="category in incomeCategoryList" :key="'income-' + category.name" class="mb-2">
+                <div class="flex items-center">
+                  <input type="checkbox" :id="'income-category-' + category.name" :value="category.name" v-model="filters.category" class="mr-2">
+                  <label :for="'income-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
+                </div>
+                <!-- 子分类 -->
+                <div v-if="category.subcategories && category.subcategories.length > 0" class="ml-6 mt-1">
+                  <div v-for="subcategory in category.subcategories" :key="'income-sub-' + subcategory.name" class="flex items-center mb-1">
+                    <input type="checkbox" :id="'income-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" class="mr-2">
+                    <label :for="'income-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
+                  </div>
+                </div>
+              </div>
+              <div v-if="incomeCategoryList.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无收入分类数据</div>
+            </div>
+          </div>
+          <!-- 支出分类 -->
+          <div>
+            <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">支出分类</label>
+            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-48 overflow-y-auto dark:bg-gray-700">
+              <div v-if="expenseCategoryList.length > 0" class="flex items-center mb-2">
+                <input type="checkbox" id="select-all-expense-categories" @change="toggleSelectAllExpenseCategories" class="mr-2">
+                <label for="select-all-expense-categories" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+              </div>
+              <div v-for="category in expenseCategoryList" :key="'expense-' + category.name" class="mb-2">
+                <div class="flex items-center">
+                  <input type="checkbox" :id="'expense-category-' + category.name" :value="category.name" v-model="filters.category" class="mr-2">
+                  <label :for="'expense-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
+                </div>
+                <!-- 子分类 -->
+                <div v-if="category.subcategories && category.subcategories.length > 0" class="ml-6 mt-1">
+                  <div v-for="subcategory in category.subcategories" :key="'expense-sub-' + subcategory.name" class="flex items-center mb-1">
+                    <input type="checkbox" :id="'expense-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" class="mr-2">
+                    <label :for="'expense-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
+                  </div>
+                </div>
+              </div>
+              <div v-if="expenseCategoryList.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无支出分类数据</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <!-- 维度筛选 -->
       <div class="mb-6">
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">维度筛选</h3>
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">成员</label>
             <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
@@ -121,50 +176,6 @@
                 <label :for="'channel-' + channel.id" class="text-sm text-gray-700 dark:text-gray-300">{{ channel.name }}</label>
               </div>
               <div v-if="paymentChannels.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无支付渠道数据</div>
-            </div>
-          </div>
-          <div>
-            <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">分类</label>
-            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
-              <div v-if="incomeCategoryList.length > 0 || expenseCategoryList.length > 0" class="flex items-center mb-2">
-                <input type="checkbox" id="select-all-categories" @change="toggleSelectAll('category')" class="mr-2">
-                <label for="select-all-categories" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
-              </div>
-              <!-- 收入分类 -->
-              <div v-if="incomeCategoryList.length > 0" class="mb-3">
-                <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">收入分类</div>
-                <div v-for="category in incomeCategoryList" :key="'income-' + category.name" class="mb-1">
-                  <div class="flex items-center">
-                    <input type="checkbox" :id="'income-category-' + category.name" :value="category.name" v-model="filters.category" class="mr-2">
-                    <label :for="'income-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
-                  </div>
-                  <!-- 子分类 -->
-                  <div v-if="category.subcategories && category.subcategories.length > 0" class="ml-6 mt-1">
-                    <div v-for="subcategory in category.subcategories" :key="'income-sub-' + subcategory.name" class="flex items-center mb-1">
-                      <input type="checkbox" :id="'income-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" class="mr-2">
-                      <label :for="'income-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <!-- 支出分类 -->
-              <div v-if="expenseCategoryList.length > 0">
-                <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">支出分类</div>
-                <div v-for="category in expenseCategoryList" :key="'expense-' + category.name" class="mb-1">
-                  <div class="flex items-center">
-                    <input type="checkbox" :id="'expense-category-' + category.name" :value="category.name" v-model="filters.category" class="mr-2">
-                    <label :for="'expense-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
-                  </div>
-                  <!-- 子分类 -->
-                  <div v-if="category.subcategories && category.subcategories.length > 0" class="ml-6 mt-1">
-                    <div v-for="subcategory in category.subcategories" :key="'expense-sub-' + subcategory.name" class="flex items-center mb-1">
-                      <input type="checkbox" :id="'expense-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" class="mr-2">
-                      <label :for="'expense-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div v-if="incomeCategoryList.length === 0 && expenseCategoryList.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无分类数据</div>
             </div>
           </div>
         </div>
@@ -556,6 +567,66 @@ const toggleSelectAll = (filterType) => {
     case 'category':
       filters.value.category = isChecked ? allCategories.value : []
       break
+  }
+}
+
+// 全选收入分类
+const toggleSelectAllIncomeCategories = () => {
+  const checkbox = document.getElementById('select-all-income-categories')
+  const isChecked = checkbox.checked
+  
+  const incomeCategoryNames = []
+  incomeCategoryList.value.forEach(category => {
+    incomeCategoryNames.push(category.name)
+    if (category.subcategories) {
+      category.subcategories.forEach(subcategory => {
+        incomeCategoryNames.push(subcategory.name)
+      })
+    }
+  })
+  
+  if (isChecked) {
+    // 添加所有收入分类和子分类
+    incomeCategoryNames.forEach(name => {
+      if (!filters.value.category.includes(name)) {
+        filters.value.category.push(name)
+      }
+    })
+  } else {
+    // 移除所有收入分类和子分类
+    filters.value.category = filters.value.category.filter(name => {
+      return !incomeCategoryNames.includes(name)
+    })
+  }
+}
+
+// 全选支出分类
+const toggleSelectAllExpenseCategories = () => {
+  const checkbox = document.getElementById('select-all-expense-categories')
+  const isChecked = checkbox.checked
+  
+  const expenseCategoryNames = []
+  expenseCategoryList.value.forEach(category => {
+    expenseCategoryNames.push(category.name)
+    if (category.subcategories) {
+      category.subcategories.forEach(subcategory => {
+        expenseCategoryNames.push(subcategory.name)
+      })
+    }
+  })
+  
+  if (isChecked) {
+    // 添加所有支出分类和子分类
+    expenseCategoryNames.forEach(name => {
+      if (!filters.value.category.includes(name)) {
+        filters.value.category.push(name)
+      }
+    })
+  } else {
+    // 移除所有支出分类和子分类
+    filters.value.category = filters.value.category.filter(name => {
+      return !expenseCategoryNames.includes(name)
+    })
   }
 }
 

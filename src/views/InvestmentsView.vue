@@ -472,39 +472,117 @@ const deleteInvestmentAccount = (id) => {
 
 // 根据代码获取投资品种信息
 const fetchInvestmentInfo = async (code) => {
-  // 这里使用模拟数据，实际项目中可以调用真实的API
-  // 例如：基金可以使用天天基金网API，股票可以使用新浪财经API
   console.log('Fetching investment info for code:', code)
   
-  // 模拟API响应
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // 模拟基金数据
-      if (code.startsWith('1') || code.startsWith('2') || code.startsWith('5')) {
-        resolve({
-          name: `模拟基金${code}`,
-          type: '基金',
-          currentPrice: 1.2345 + Math.random() * 0.5
-        })
+  // 尝试使用真实的API获取数据
+  try {
+    // 股票代码处理（6位数字）
+    if (code.length === 6 && /^\d+$/.test(code)) {
+      // 使用新浪财经API获取股票信息
+      const stockUrl = `https://hq.sinajs.cn/list=sh${code},sz${code}`
+      const stockResponse = await fetch(stockUrl)
+      const stockData = await stockResponse.text()
+      
+      // 解析股票数据
+      if (stockData && stockData.includes('=')) {
+        const stockLines = stockData.split(';')
+        for (const line of stockLines) {
+          if (line.includes('=')) {
+            const parts = line.split('=')
+            const data = parts[1].replace(/"/g, '').split(',')
+            if (data.length > 2) {
+              return {
+                name: data[0],
+                type: '股票',
+                currentPrice: parseFloat(data[3]) || 0
+              }
+            }
+          }
+        }
       }
-      // 模拟股票数据
-      else if (code.length === 6) {
-        resolve({
-          name: `模拟股票${code}`,
-          type: '股票',
-          currentPrice: 10 + Math.random() * 50
-        })
+    }
+    // 基金代码处理（以1、2、5开头）
+    else if (code.startsWith('1') || code.startsWith('2') || code.startsWith('5')) {
+      // 使用天天基金网API获取基金信息
+      const fundUrl = `https://fundgz.1234567.com.cn/js/${code}.js`
+      const fundResponse = await fetch(fundUrl)
+      const fundData = await fundResponse.text()
+      
+      // 解析基金数据
+      if (fundData && fundData.includes('jsonpgz(')) {
+        const jsonStr = fundData.replace('jsonpgz(', '').replace(')', '')
+        const fundInfo = JSON.parse(jsonStr)
+        if (fundInfo.name) {
+          return {
+            name: fundInfo.name,
+            type: '基金',
+            currentPrice: parseFloat(fundInfo.dwjz) || 0
+          }
+        }
       }
-      // 默认数据
-      else {
-        resolve({
-          name: `投资品种${code}`,
-          type: '其他',
-          currentPrice: 1
-        })
-      }
-    }, 500)
-  })
+    }
+    
+    // 如果API调用失败或没有找到数据，使用模拟数据
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // 模拟基金数据
+        if (code.startsWith('1') || code.startsWith('2') || code.startsWith('5')) {
+          resolve({
+            name: `模拟基金${code}`,
+            type: '基金',
+            currentPrice: 1.2345 + Math.random() * 0.5
+          })
+        }
+        // 模拟股票数据
+        else if (code.length === 6) {
+          resolve({
+            name: `模拟股票${code}`,
+            type: '股票',
+            currentPrice: 10 + Math.random() * 50
+          })
+        }
+        // 默认数据
+        else {
+          resolve({
+            name: `投资品种${code}`,
+            type: '其他',
+            currentPrice: 1
+          })
+        }
+      }, 500)
+    })
+  } catch (error) {
+    console.error('API call failed, using mock data:', error)
+    // 发生错误时使用模拟数据
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // 模拟基金数据
+        if (code.startsWith('1') || code.startsWith('2') || code.startsWith('5')) {
+          resolve({
+            name: `模拟基金${code}`,
+            type: '基金',
+            currentPrice: 1.2345 + Math.random() * 0.5
+          })
+        }
+        // 模拟股票数据
+        else if (code.length === 6) {
+          resolve({
+            name: `模拟股票${code}`,
+            type: '股票',
+            currentPrice: 10 + Math.random() * 50
+          })
+        }
+        // 默认数据
+        else {
+          resolve({
+            name: `投资品种${code}`,
+            type: '其他',
+            currentPrice: 1
+          })
+        }
+      }, 500)
+    })
+  }
 }
 
 // 监听代码变化，自动获取投资品种信息
