@@ -885,13 +885,17 @@ const fetchInvestmentInfo = async (code) => {
 
 // 监听代码变化，自动获取投资品种信息
 const handleCodeChange = async (code) => {
+  console.log('handleCodeChange called with code:', code)
   // 只在用户按Enter键且代码长度为6位时触发API调用
   if (code && code.length === 6) {
     try {
+      console.log('Fetching investment info for code:', code)
       const info = await fetchInvestmentInfo(code)
+      console.log('Received investment info:', info)
       newInvestmentDetail.value.name = info.name
       newInvestmentDetail.value.type = info.type
       newInvestmentDetail.value.currentPrice = info.currentPrice
+      console.log('Updated newInvestmentDetail:', newInvestmentDetail.value)
     } catch (error) {
       console.error('Failed to fetch investment info:', error)
       // 清空自动填充的字段，让用户手动输入
@@ -900,18 +904,24 @@ const handleCodeChange = async (code) => {
       newInvestmentDetail.value.currentPrice = 0
       alert(error.message || '无法获取该代码的信息，请检查代码是否正确，或手动输入名称')
     }
+  } else {
+    console.log('Code length is not 6:', code?.length)
   }
 }
 
 // 监听编辑模式下的代码变化
 const handleEditCodeChange = async (code) => {
+  console.log('handleEditCodeChange called with code:', code)
   // 只在用户按Enter键且代码长度为6位时触发API调用
   if (code && code.length === 6) {
     try {
+      console.log('Fetching investment info for code:', code)
       const info = await fetchInvestmentInfo(code)
+      console.log('Received investment info:', info)
       editInvestmentDetail.value.name = info.name
       editInvestmentDetail.value.type = info.type
       editInvestmentDetail.value.currentPrice = info.currentPrice
+      console.log('Updated editInvestmentDetail:', editInvestmentDetail.value)
     } catch (error) {
       console.error('Failed to fetch investment info:', error)
       // 清空自动填充的字段，让用户手动输入
@@ -920,6 +930,8 @@ const handleEditCodeChange = async (code) => {
       editInvestmentDetail.value.currentPrice = 0
       alert(error.message || '无法获取该代码的信息，请检查代码是否正确，或手动输入名称')
     }
+  } else {
+    console.log('Code length is not 6:', code?.length)
   }
 }
 
