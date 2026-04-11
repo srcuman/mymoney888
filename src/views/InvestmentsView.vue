@@ -251,7 +251,7 @@
           </div>
           <div class="mb-4">
             <label for="detailCode" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">代码</label>
-            <input type="text" id="detailCode" v-model="newInvestmentDetail.code" @keyup.enter="handleCodeChange(newInvestmentDetail.code)" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+            <input type="text" id="detailCode" v-model="newInvestmentDetail.code" @keyup.enter="handleCodeChange" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           </div>
           <div class="mb-4">
             <label for="detailName" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
@@ -305,7 +305,7 @@
           </div>
           <div class="mb-4">
             <label for="editDetailCode" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">代码</label>
-            <input type="text" id="editDetailCode" v-model="editInvestmentDetail.code" @keyup.enter="handleEditCodeChange(editInvestmentDetail.code)" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+            <input type="text" id="editDetailCode" v-model="editInvestmentDetail.code" @keyup.enter="handleEditCodeChange" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           </div>
           <div class="mb-4">
             <label for="editDetailName" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
@@ -642,15 +642,14 @@ const fetchInvestmentInfo = async (code) => {
   const apiResults = []
   
   // 1. 尝试天天基金实时估值（JSONP）
-  const tianTianFundUrl = `http://fundgz.1234567.com.cn/js/${code}.js`
+  const tianTianFundUrl = `/api/js/${code}.js`
   
   try {
     console.log('尝试调用天天基金实时估值API:', tianTianFundUrl)
     const tianTianResponse = await fetch(tianTianFundUrl, {
       method: 'GET',
       headers: {
-        'Content-Type': 'text/plain',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'Content-Type': 'text/plain'
       }
     })
     console.log('天天基金实时估值API响应状态:', tianTianResponse.status)
@@ -693,15 +692,14 @@ const fetchInvestmentInfo = async (code) => {
   }
   
   // 2. 尝试天天基金基本信息（JS）
-  const tianTianInfoUrl = `http://fund.eastmoney.com/pingzhongdata/${code}.js`
+  const tianTianInfoUrl = `/fund/pingzhongdata/${code}.js`
   
   try {
     console.log('尝试调用天天基金基本信息API:', tianTianInfoUrl)
     const tianTianInfoResponse = await fetch(tianTianInfoUrl, {
       method: 'GET',
       headers: {
-        'Content-Type': 'text/plain',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'Content-Type': 'text/plain'
       }
     })
     console.log('天天基金基本信息API响应状态:', tianTianInfoResponse.status)
@@ -733,15 +731,14 @@ const fetchInvestmentInfo = async (code) => {
   }
   
   // 3. 尝试腾讯财经（实时行情）- 上海股票
-  const tencentShUrl = `http://qt.gtimg.cn/q=sh${code}`
+  const tencentShUrl = `/stock/q=sh${code}`
   
   try {
     console.log('尝试调用腾讯财经API（上海）:', tencentShUrl)
     const tencentShResponse = await fetch(tencentShUrl, {
       method: 'GET',
       headers: {
-        'Content-Type': 'text/plain',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'Content-Type': 'text/plain'
       }
     })
     console.log('腾讯财经API（上海）响应状态:', tencentShResponse.status)
@@ -774,15 +771,14 @@ const fetchInvestmentInfo = async (code) => {
   }
   
   // 4. 尝试腾讯财经（实时行情）- 深圳股票
-  const tencentSzUrl = `http://qt.gtimg.cn/q=sz${code}`
+  const tencentSzUrl = `/stock/q=sz${code}`
   
   try {
     console.log('尝试调用腾讯财经API（深圳）:', tencentSzUrl)
     const tencentSzResponse = await fetch(tencentSzUrl, {
       method: 'GET',
       headers: {
-        'Content-Type': 'text/plain',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'Content-Type': 'text/plain'
       }
     })
     console.log('腾讯财经API（深圳）响应状态:', tencentSzResponse.status)
@@ -884,7 +880,8 @@ const fetchInvestmentInfo = async (code) => {
 }
 
 // 监听代码变化，自动获取投资品种信息
-const handleCodeChange = async (code) => {
+const handleCodeChange = async () => {
+  const code = newInvestmentDetail.value.code
   console.log('handleCodeChange called with code:', code)
   // 只在用户按Enter键且代码长度为6位时触发API调用
   if (code && code.length === 6) {
@@ -910,7 +907,8 @@ const handleCodeChange = async (code) => {
 }
 
 // 监听编辑模式下的代码变化
-const handleEditCodeChange = async (code) => {
+const handleEditCodeChange = async () => {
+  const code = editInvestmentDetail.value.code
   console.log('handleEditCodeChange called with code:', code)
   // 只在用户按Enter键且代码长度为6位时触发API调用
   if (code && code.length === 6) {
