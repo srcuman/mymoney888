@@ -642,7 +642,12 @@ const fetchInvestmentInfo = async (code) => {
       
       try {
         console.log('尝试调用基金API:', fundUrl)
-        const fundResponse = await fetch(fundUrl)
+        const fundResponse = await fetch(fundUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
         console.log('基金API响应状态:', fundResponse.status)
         
         // 检查响应状态
@@ -652,19 +657,23 @@ const fetchInvestmentInfo = async (code) => {
           
           // 解析基金数据
           if (fundData && fundData.includes('jsonpgz(')) {
-            const jsonStr = fundData.replace('jsonpgz(', '').replace(')', '')
-            const fundInfo = JSON.parse(jsonStr)
-            console.log('解析后的基金信息:', fundInfo)
-            
-            // 确保获取到有效的基金数据
-            if (fundInfo.name && fundInfo.dwjz) {
-              console.log('成功获取基金数据:', fundInfo.name)
-              return {
-                name: fundInfo.name,
-                type: '基金',
-                currentPrice: parseFloat(parseFloat(fundInfo.dwjz).toFixed(4)) || 0,
-                updateDate: fundInfo.gztime ? fundInfo.gztime.split(' ')[0] : new Date().toISOString().split('T')[0]
+            try {
+              const jsonStr = fundData.replace('jsonpgz(', '').replace(')', '')
+              const fundInfo = JSON.parse(jsonStr)
+              console.log('解析后的基金信息:', fundInfo)
+              
+              // 确保获取到有效的基金数据
+              if (fundInfo.name && fundInfo.dwjz) {
+                console.log('成功获取基金数据:', fundInfo.name)
+                return {
+                  name: fundInfo.name,
+                  type: '基金',
+                  currentPrice: parseFloat(parseFloat(fundInfo.dwjz).toFixed(4)) || 0,
+                  updateDate: fundInfo.gztime ? fundInfo.gztime.split(' ')[0] : new Date().toISOString().split('T')[0]
+                }
               }
+            } catch (parseError) {
+              console.log('基金数据解析失败:', parseError)
             }
           }
         }
@@ -677,7 +686,12 @@ const fetchInvestmentInfo = async (code) => {
       
       try {
         console.log('尝试调用股票API:', stockUrl)
-        const stockResponse = await fetch(stockUrl)
+        const stockResponse = await fetch(stockUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
         console.log('股票API响应状态:', stockResponse.status)
         
         // 检查响应状态
@@ -686,7 +700,7 @@ const fetchInvestmentInfo = async (code) => {
           console.log('股票API响应数据:', stockData)
           
           // 解析股票数据
-          if (stockData && stockData.includes('=') && !stockData.includes('无效')) {
+          if (stockData && stockData.includes('=')) {
             const stockLines = stockData.split(';')
             for (const line of stockLines) {
               if (line.includes('=') && line.split('=').length > 1) {
@@ -714,7 +728,12 @@ const fetchInvestmentInfo = async (code) => {
       
       try {
         console.log('尝试调用新浪财经基金API:', sinaFundUrl)
-        const sinaFundResponse = await fetch(sinaFundUrl)
+        const sinaFundResponse = await fetch(sinaFundUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
         console.log('新浪财经基金API响应状态:', sinaFundResponse.status)
         
         // 检查响应状态
@@ -723,7 +742,7 @@ const fetchInvestmentInfo = async (code) => {
           console.log('新浪财经基金API响应数据:', sinaFundData)
           
           // 解析新浪财经基金数据
-          if (sinaFundData && sinaFundData.includes('=') && !sinaFundData.includes('null')) {
+          if (sinaFundData && sinaFundData.includes('=')) {
             const parts = sinaFundData.split('=')
             if (parts.length > 1) {
               const data = parts[1].replace(/"/g, '').split(',')
@@ -748,7 +767,12 @@ const fetchInvestmentInfo = async (code) => {
       
       try {
         console.log('尝试调用东方财富网API:', eastmoneyUrl)
-        const eastmoneyResponse = await fetch(eastmoneyUrl)
+        const eastmoneyResponse = await fetch(eastmoneyUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
         console.log('东方财富网API响应状态:', eastmoneyResponse.status)
         
         // 检查响应状态
@@ -772,6 +796,45 @@ const fetchInvestmentInfo = async (code) => {
         }
       } catch (eastmoneyError) {
         console.log('东方财富网API调用失败:', eastmoneyError)
+      }
+      
+      // 5. 尝试使用腾讯财经API作为备选
+      const tencentUrl = `https://qt.gtimg.cn/q=${code}`
+      
+      try {
+        console.log('尝试调用腾讯财经API:', tencentUrl)
+        const tencentResponse = await fetch(tencentUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+        console.log('腾讯财经API响应状态:', tencentResponse.status)
+        
+        // 检查响应状态
+        if (tencentResponse.status === 200) {
+          const tencentData = await tencentResponse.text()
+          console.log('腾讯财经API响应数据:', tencentData)
+          
+          // 解析腾讯财经数据
+          if (tencentData && tencentData.includes('=')) {
+            const parts = tencentData.split('=')
+            if (parts.length > 1) {
+              const data = parts[1].replace(/"/g, '').split('~')
+              if (data.length > 4 && data[1] && data[3]) {
+                console.log('成功获取腾讯财经股票数据:', data[1])
+                return {
+                  name: data[1],
+                  type: '股票',
+                  currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
+                  updateDate: new Date().toISOString().split('T')[0]
+                }
+              }
+            }
+          }
+        }
+      } catch (tencentError) {
+        console.log('腾讯财经API调用失败:', tencentError)
       }
     }
     
