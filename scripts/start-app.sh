@@ -174,5 +174,5 @@ else
     echo "退出码: $BUILD_EXIT_CODE"
 fi
 
-echo "启动预览服务器..."
-exec npm run preview
+echo "启动应用服务器..."
+exec npm start
