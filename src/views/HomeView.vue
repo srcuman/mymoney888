@@ -1,102 +1,75 @@
 <template>
   <div class="space-y-8">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">快速记账</h2>
-      <form @submit.prevent="addTransaction" class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">交易流水查询</h2>
+      <div class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">类型</label>
-            <div class="flex space-x-4">
-              <button type="button" @click="transactionType = 'expense'" :class="transactionType === 'expense' ? 'bg-danger text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'" class="flex-1 py-2 px-4 rounded-md font-medium">
-                支出
-              </button>
-              <button type="button" @click="transactionType = 'income'" :class="transactionType === 'income' ? 'bg-secondary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'" class="flex-1 py-2 px-4 rounded-md font-medium">
-                收入
-              </button>
-              <button type="button" @click="transactionType = 'transfer'" :class="transactionType === 'transfer' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'" class="flex-1 py-2 px-4 rounded-md font-medium">
-                转账
-              </button>
-            </div>
+            <label for="start-date" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">开始日期</label>
+            <input type="date" id="start-date" v-model="filters.startDate" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           </div>
           <div>
-            <label for="amount" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">金额</label>
-            <input type="text" id="amount" v-model="transaction.amount" required @keypress.enter="calculateAmount" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+            <label for="end-date" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">结束日期</label>
+            <input type="date" id="end-date" v-model="filters.endDate" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+          </div>
+          <div>
+            <label for="transaction-type" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">交易类型</label>
+            <select id="transaction-type" v-model="filters.type" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+              <option value="">全部</option>
+              <option value="expense">支出</option>
+              <option value="income">收入</option>
+              <option value="transfer">转账</option>
+            </select>
           </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div v-if="transactionType !== 'transfer'">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
             <label for="category" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">分类</label>
-            <select id="category" v-model="transaction.category" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-              <option value="">请选择分类</option>
-              <optgroup v-for="category in (transactionType === 'income' ? incomeCategories : expenseCategories)" :key="category.name" :label="category.name">
-                <option :value="category.name">{{ category.name }}</option>
-                <option v-for="subcategory in (category.children || [])" :key="subcategory.name" :value="`${category.name}-${subcategory.name}`">{{ subcategory.name }}</option>
+            <select id="category" v-model="filters.category" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+              <option value="">全部</option>
+              <optgroup label="支出分类">
+                <option v-for="category in expenseCategories" :key="category.name" :value="category.name">{{ category.name }}</option>
+                <option v-for="category in expenseCategories" v-for="subcategory in (category.children || [])" :key="`${category.name}-${subcategory.name}`" :value="`${category.name}-${subcategory.name}`">{{ subcategory.name }}</option>
+              </optgroup>
+              <optgroup label="收入分类">
+                <option v-for="category in incomeCategories" :key="category.name" :value="category.name">{{ category.name }}</option>
+                <option v-for="category in incomeCategories" v-for="subcategory in (category.children || [])" :key="`${category.name}-${subcategory.name}`" :value="`${category.name}-${subcategory.name}`">{{ subcategory.name }}</option>
               </optgroup>
             </select>
           </div>
-          <div :class="transactionType === 'transfer' ? 'md:col-span-2' : ''">
-            <label :for="transactionType === 'transfer' ? 'from-account' : 'account'" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-              {{ transactionType === 'transfer' ? '转出账户' : '账户' }}
-            </label>
-            <select :id="transactionType === 'transfer' ? 'from-account' : 'account'" v-model="transaction.account" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-              <option value="">请选择账户</option>
+          <div>
+            <label for="account" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">账户</label>
+            <select id="account" v-model="filters.account" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+              <option value="">全部</option>
               <option v-for="account in accounts" :key="account.id" :value="account.id">{{ account.name }}</option>
             </select>
           </div>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label for="payment-channel" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">支付渠道</label>
-            <select id="payment-channel" v-model="transaction.paymentChannel" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-              <option value="">请选择支付渠道</option>
-              <option v-for="channel in paymentChannels" :key="channel.id" :value="channel.name">{{ channel.name }}</option>
-            </select>
-          </div>
-          <div>
-            <label for="member" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">成员</label>
-            <select id="member" v-model="transaction.member" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-              <option value="">请选择成员</option>
-              <option v-for="member in members" :key="member.id" :value="member.name">{{ member.name }}</option>
-            </select>
+            <label for="keyword" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">关键词</label>
+            <input type="text" id="keyword" v-model="filters.keyword" placeholder="搜索备注、商家等" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label for="merchant" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">商家</label>
-            <select id="merchant" v-model="transaction.merchant" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-              <option value="">请选择商家</option>
-              <option v-for="merchant in merchants" :key="merchant.id" :value="merchant.name">{{ merchant.name }}</option>
-            </select>
-          </div>
-          <div>
-            <label for="tag" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">标签</label>
-            <select id="tag" v-model="transaction.tag" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-              <option value="">请选择标签</option>
-              <option v-for="tag in tags" :key="tag.id" :value="tag.name">{{ tag.name }}</option>
-            </select>
-          </div>
+        <div class="flex space-x-4">
+          <button @click="applyFilters" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary dark:bg-blue-600 dark:hover:bg-blue-700">
+            应用筛选
+          </button>
+          <button @click="resetFilters" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
+            重置
+          </button>
+          <button @click="exportTransactions" class="px-4 py-2 bg-secondary text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary dark:bg-green-600 dark:hover:bg-green-700">
+            导出
+          </button>
         </div>
-        <div v-if="transactionType === 'transfer'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label for="to-account" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">转入账户</label>
-            <select id="to-account" v-model="transaction.toAccount" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-              <option value="">请选择账户</option>
-              <option v-for="account in accounts" :key="account.id" :value="account.id" :disabled="account.id === parseInt(transaction.account)">{{ account.name }}</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <label for="description" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">备注</label>
-          <input type="text" id="description" v-model="transaction.description" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-        </div>
-        <button type="submit" class="w-full py-2 px-4 bg-primary text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary dark:bg-blue-600 dark:hover:bg-blue-700">
-          保存
-        </button>
-      </form>
+      </div>
     </div>
 
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">最近交易</h2>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white">交易流水</h2>
+        <div class="text-sm text-gray-500 dark:text-gray-400">
+          共 {{ filteredTransactions.length }} 条记录
+        </div>
+      </div>
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead class="bg-gray-50 dark:bg-gray-700">
@@ -117,6 +90,9 @@
                 账户
               </th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                支付渠道
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                 备注
               </th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -125,7 +101,7 @@
             </tr>
           </thead>
           <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            <tr v-for="(transaction, index) in recentTransactions" :key="index">
+            <tr v-for="(transaction, index) in paginatedTransactions" :key="transaction.id">
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                 {{ transaction.date }}
               </td>
@@ -142,6 +118,9 @@
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                 {{ transaction.type === 'transfer' ? `${getAccountName(transaction.account)} → ${getAccountName(transaction.toAccount)}` : getAccountName(transaction.account) }}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                {{ transaction.paymentChannel || '-' }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {{ transaction.description || '-' }}
@@ -161,6 +140,28 @@
           </tbody>
         </table>
       </div>
+      <div v-if="paginatedTransactions.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+        没有找到符合条件的交易记录
+      </div>
+      <div v-else class="mt-4 flex justify-center">
+        <nav class="flex items-center space-x-1">
+          <button @click="currentPage = 1" :disabled="currentPage === 1" class="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
+            首页
+          </button>
+          <button @click="currentPage--" :disabled="currentPage === 1" class="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
+            上一页
+          </button>
+          <span class="px-3 py-1 text-gray-700 dark:text-gray-300">
+            {{ currentPage }} / {{ totalPages }}
+          </span>
+          <button @click="currentPage++" :disabled="currentPage === totalPages" class="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
+            下一页
+          </button>
+          <button @click="currentPage = totalPages" :disabled="currentPage === totalPages" class="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
+            末页
+          </button>
+        </nav>
+      </div>
     </div>
   </div>
 </template>
@@ -168,53 +169,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 
-// 交易类型
-const transactionType = ref('expense')
-
-// 交易表单数据
-const transaction = ref({
-  amount: '',
-  category: '',
-  account: '',
-  toAccount: '',
-  description: '',
-  paymentChannel: '',
-  member: '',
-  merchant: '',
-  tag: ''
-})
-
 // 支出分类列表（从维度管理获取）
 const expenseCategories = ref([])
 
 // 收入分类列表（从维度管理获取）
 const incomeCategories = ref([])
-
-// 根据交易类型获取分类列表（支持二级分类）
-const categories = computed(() => {
-  const list = transactionType.value === 'income' ? incomeCategories.value : expenseCategories.value
-  // 展开分类列表，包含父分类和子分类
-  const result = []
-  list.forEach(cat => {
-    result.push(cat.name)
-    if (cat.children && cat.children.length > 0) {
-      cat.children.forEach(child => {
-        result.push(`${cat.name}-${child.name}`)
-      })
-    }
-  })
-  return result
-})
-
-// 加载分类数据
-const loadCategories = () => {
-  const dimensions = localStorage.getItem('dimensions')
-  if (dimensions) {
-    const parsed = JSON.parse(dimensions)
-    expenseCategories.value = parsed.expenseCategories || []
-    incomeCategories.value = parsed.incomeCategories || []
-  }
-}
 
 // 账户列表
 const accounts = ref([
@@ -245,9 +204,70 @@ const transactions = ref([
   { id: 5, type: 'transfer', amount: 500, account: 2, toAccount: 3, description: '转账到支付宝', date: '2026-02-28' }
 ])
 
-// 最近交易
-const recentTransactions = computed(() => {
-  return transactions.value.slice(0, 5)
+// 筛选条件
+const filters = ref({
+  startDate: '',
+  endDate: '',
+  type: '',
+  category: '',
+  account: '',
+  keyword: ''
+})
+
+// 分页相关
+const currentPage = ref(1)
+const pageSize = ref(10)
+
+// 过滤后的交易
+const filteredTransactions = computed(() => {
+  return transactions.value.filter(transaction => {
+    // 日期过滤
+    if (filters.value.startDate && transaction.date < filters.value.startDate) {
+      return false
+    }
+    if (filters.value.endDate && transaction.date > filters.value.endDate) {
+      return false
+    }
+    
+    // 类型过滤
+    if (filters.value.type && transaction.type !== filters.value.type) {
+      return false
+    }
+    
+    // 分类过滤
+    if (filters.value.category && transaction.category !== filters.value.category) {
+      return false
+    }
+    
+    // 账户过滤
+    if (filters.value.account && transaction.account !== parseInt(filters.value.account)) {
+      return false
+    }
+    
+    // 关键词过滤
+    if (filters.value.keyword) {
+      const keyword = filters.value.keyword.toLowerCase()
+      return (
+        (transaction.description && transaction.description.toLowerCase().includes(keyword)) ||
+        (transaction.merchant && transaction.merchant.toLowerCase().includes(keyword)) ||
+        (transaction.category && transaction.category.toLowerCase().includes(keyword))
+      )
+    }
+    
+    return true
+  })
+})
+
+// 分页后的交易
+const paginatedTransactions = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredTransactions.value.slice(start, end)
+})
+
+// 总页数
+const totalPages = computed(() => {
+  return Math.ceil(filteredTransactions.value.length / pageSize.value)
 })
 
 // 根据账户ID获取账户名称
@@ -255,6 +275,76 @@ const getAccountName = (accountId) => {
   const account = accounts.value.find(a => a.id === accountId)
   return account ? account.name : ''
 }
+
+// 应用筛选
+const applyFilters = () => {
+  currentPage.value = 1
+}
+
+// 重置筛选
+const resetFilters = () => {
+  filters.value = {
+    startDate: '',
+    endDate: '',
+    type: '',
+    category: '',
+    account: '',
+    keyword: ''
+  }
+  currentPage.value = 1
+}
+
+// 导出交易
+const exportTransactions = () => {
+  const data = filteredTransactions.value
+  const csvContent = "日期,类型,分类,金额,账户,支付渠道,备注\n"
+  
+  const csvRows = data.map(transaction => {
+    const typeText = transaction.type === 'expense' ? '支出' : transaction.type === 'income' ? '收入' : '转账'
+    const accountText = transaction.type === 'transfer' ? 
+      `${getAccountName(transaction.account)} → ${getAccountName(transaction.toAccount)}` : 
+      getAccountName(transaction.account)
+    
+    return [
+      transaction.date,
+      typeText,
+      transaction.category || '',
+      transaction.amount.toFixed(2),
+      accountText,
+      transaction.paymentChannel || '',
+      transaction.description || ''
+    ].map(field => `"${field}"`).join(',')
+  })
+  
+  const csv = csvContent + csvRows.join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  
+  link.setAttribute('href', url)
+  link.setAttribute('download', `交易流水_${new Date().toISOString().split('T')[0]}.csv`)
+  link.style.visibility = 'hidden'
+  
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+// 交易类型
+const transactionType = ref('expense')
+
+// 交易表单数据
+const transaction = ref({
+  amount: '',
+  category: '',
+  account: '',
+  toAccount: '',
+  description: '',
+  paymentChannel: '',
+  member: '',
+  merchant: '',
+  tag: ''
+})
 
 // 添加交易
 const addTransaction = () => {
@@ -431,7 +521,6 @@ onMounted(() => {
   const savedAccounts = localStorage.getItem('accounts')
   const savedTransactions = localStorage.getItem('transactions')
   const savedDimensions = localStorage.getItem('dimensions')
-  const savedDefaults = localStorage.getItem('defaults')
   
   if (savedAccounts) {
     accounts.value = JSON.parse(savedAccounts)
@@ -447,18 +536,6 @@ onMounted(() => {
     tags.value = dimensions.tags || []
     expenseCategories.value = dimensions.expenseCategories || []
     incomeCategories.value = dimensions.incomeCategories || []
-  }
-  
-  // 应用默认值
-  if (savedDefaults) {
-    const defaults = JSON.parse(savedDefaults)
-    transaction.value = {
-      ...transaction.value,
-      category: defaults.expenseCategory || '',
-      member: defaults.member || '',
-      merchant: defaults.merchant || '',
-      paymentChannel: defaults.paymentChannel || ''
-    }
   }
 })
 </script>
