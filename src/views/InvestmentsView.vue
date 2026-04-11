@@ -838,66 +838,12 @@ const fetchInvestmentInfo = async (code) => {
       }
     }
     
-    // 如果API调用失败或没有找到数据，使用模拟数据
-    console.log('所有API调用失败，使用模拟数据')
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        // 模拟基金或股票数据（6位数字）
-        if (code.length === 6 && /^\d+$/.test(code)) {
-          // 随机决定是基金还是股票
-          const isFund = Math.random() > 0.5
-          resolve({
-            name: isFund ? `模拟基金${code}` : `模拟股票${code}`,
-            type: isFund ? '基金' : '股票',
-            currentPrice: parseFloat((isFund ? (1.2345 + Math.random() * 0.5) : (10 + Math.random() * 50)).toFixed(4)),
-            updateDate: new Date().toISOString().split('T')[0]
-          })
-        }
-        // 默认数据
-        else {
-          resolve({
-            name: `投资品种${code}`,
-            type: '其他',
-            currentPrice: 1,
-            updateDate: new Date().toISOString().split('T')[0]
-          })
-        }
-      }, 500)
-    })
+    // 如果API调用失败或没有找到数据，返回错误
+    console.log('所有API调用失败，无法获取数据')
+    throw new Error(`无法获取代码 ${code} 的信息，请检查代码是否正确，或手动输入名称`)
   } catch (error) {
-    console.error('API call failed, using mock data:', error)
-    // 发生错误时使用模拟数据
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        // 模拟基金数据
-        if (code.startsWith('1') || code.startsWith('2') || code.startsWith('5')) {
-          resolve({
-            name: `模拟基金${code}`,
-            type: '基金',
-            currentPrice: parseFloat((1.2345 + Math.random() * 0.5).toFixed(4)),
-            updateDate: new Date().toISOString().split('T')[0]
-          })
-        }
-        // 模拟股票数据
-        else if (code.length === 6) {
-          resolve({
-            name: `模拟股票${code}`,
-            type: '股票',
-            currentPrice: parseFloat((10 + Math.random() * 50).toFixed(4)),
-            updateDate: new Date().toISOString().split('T')[0]
-          })
-        }
-        // 默认数据
-        else {
-          resolve({
-            name: `投资品种${code}`,
-            type: '其他',
-            currentPrice: 1,
-            updateDate: new Date().toISOString().split('T')[0]
-          })
-        }
-      }, 500)
-    })
+    console.error('API call failed:', error)
+    throw error
   }
 }
 
@@ -911,6 +857,11 @@ const handleCodeChange = async (code) => {
       newInvestmentDetail.value.currentPrice = info.currentPrice
     } catch (error) {
       console.error('Failed to fetch investment info:', error)
+      // 清空自动填充的字段，让用户手动输入
+      newInvestmentDetail.value.name = ''
+      newInvestmentDetail.value.type = ''
+      newInvestmentDetail.value.currentPrice = 0
+      alert(error.message || '无法获取该代码的信息，请检查代码是否正确，或手动输入名称')
     }
   }
 }
@@ -925,6 +876,11 @@ const handleEditCodeChange = async (code) => {
       editInvestmentDetail.value.currentPrice = info.currentPrice
     } catch (error) {
       console.error('Failed to fetch investment info:', error)
+      // 清空自动填充的字段，让用户手动输入
+      editInvestmentDetail.value.name = ''
+      editInvestmentDetail.value.type = ''
+      editInvestmentDetail.value.currentPrice = 0
+      alert(error.message || '无法获取该代码的信息，请检查代码是否正确，或手动输入名称')
     }
   }
 }

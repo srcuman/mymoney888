@@ -25,7 +25,10 @@
         <label for="category" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">分类</label>
         <select id="category" v-model="transaction.category" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           <option value="">请选择分类</option>
-          <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
+          <optgroup v-for="category in (transactionType === 'income' ? incomeCategories : expenseCategories)" :key="category.name" :label="category.name">
+            <option :value="category.name">{{ category.name }}</option>
+            <option v-for="subcategory in (category.children || [])" :key="subcategory.name" :value="`${category.name}-${subcategory.name}`">{{ subcategory.name }}</option>
+          </optgroup>
         </select>
       </div>
       <div :class="transactionType === 'transfer' ? 'md:col-span-2' : ''">
@@ -115,15 +118,26 @@ const transaction = ref({
   description: ''
 })
 
-// 支出分类列表
-const expenseCategories = ['餐饮', '交通', '购物', '娱乐', '医疗', '教育', '其他']
+// 支出分类列表（从维度管理获取）
+const expenseCategories = ref([])
 
-// 收入分类列表
-const incomeCategories = ['工资', '投资', '其他']
+// 收入分类列表（从维度管理获取）
+const incomeCategories = ref([])
 
-// 根据交易类型获取分类列表
+// 根据交易类型获取分类列表（支持二级分类）
 const categories = computed(() => {
-  return transactionType.value === 'income' ? incomeCategories : expenseCategories
+  const list = transactionType.value === 'income' ? incomeCategories.value : expenseCategories.value
+  // 展开分类列表，包含父分类和子分类
+  const result = []
+  list.forEach(cat => {
+    result.push(cat.name)
+    if (cat.children && cat.children.length > 0) {
+      cat.children.forEach(child => {
+        result.push(`${cat.name}-${child.name}`)
+      })
+    }
+  })
+  return result
 })
 
 // 账户列表
@@ -228,6 +242,8 @@ onMounted(() => {
     merchants.value = dimensions.merchants || []
     tags.value = dimensions.tags || []
     paymentChannels.value = dimensions.paymentChannels || []
+    expenseCategories.value = dimensions.expenseCategories || []
+    incomeCategories.value = dimensions.incomeCategories || []
   }
 })
 </script>

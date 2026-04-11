@@ -52,7 +52,7 @@
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">收入分类</label>
             <div class="relative">
               <button @click="toggleDropdown('incomeCategories')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm flex justify-between items-center">
-                <span>{{ filters.category.length > 0 ? `已选择 ${filters.category.length} 个分类` : '选择收入分类' }}</span>
+                <span>{{ selectedIncomeCategoriesCount > 0 ? `已选择 ${selectedIncomeCategoriesCount} 个收入分类` : '选择收入分类' }}</span>
                 <span>{{ dropdowns.incomeCategories ? '▼' : '▶' }}</span>
               </button>
               <div v-if="dropdowns.incomeCategories" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto bg-white dark:bg-gray-700 mt-1">
@@ -61,12 +61,12 @@
                 </div>
                 <div v-for="category in incomeCategoryList" :key="'income-' + category.name" class="p-2">
                   <div class="flex items-center">
-                    <input type="checkbox" :checked="filters.category.includes(category.name)" @change="selectCategory(category.name)" class="mr-2">
+                    <input type="checkbox" :checked="filters.category.includes(category.name)" @change="selectCategory(category.name, 'income')" class="mr-2">
                     <label class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
                   </div>
                   <div v-if="category.children && category.children.length > 0" class="ml-6 mt-1">
                     <div v-for="subcategory in category.children" :key="'income-sub-' + subcategory.name" class="flex items-center mb-1">
-                      <input type="checkbox" :checked="filters.category.includes(subcategory.name)" @change="selectCategory(subcategory.name)" class="mr-2">
+                      <input type="checkbox" :checked="filters.category.includes(subcategory.name)" @change="selectCategory(subcategory.name, 'income')" class="mr-2">
                       <label class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
                     </div>
                   </div>
@@ -80,7 +80,7 @@
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">支出分类</label>
             <div class="relative">
               <button @click="toggleDropdown('expenseCategories')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm flex justify-between items-center">
-                <span>{{ filters.category.length > 0 ? `已选择 ${filters.category.length} 个分类` : '选择支出分类' }}</span>
+                <span>{{ selectedExpenseCategoriesCount > 0 ? `已选择 ${selectedExpenseCategoriesCount} 个支出分类` : '选择支出分类' }}</span>
                 <span>{{ dropdowns.expenseCategories ? '▼' : '▶' }}</span>
               </button>
               <div v-if="dropdowns.expenseCategories" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto bg-white dark:bg-gray-700 mt-1">
@@ -89,12 +89,12 @@
                 </div>
                 <div v-for="category in expenseCategoryList" :key="'expense-' + category.name" class="p-2">
                   <div class="flex items-center">
-                    <input type="checkbox" :checked="filters.category.includes(category.name)" @change="selectCategory(category.name)" class="mr-2">
+                    <input type="checkbox" :checked="filters.category.includes(category.name)" @change="selectCategory(category.name, 'expense')" class="mr-2">
                     <label class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
                   </div>
                   <div v-if="category.children && category.children.length > 0" class="ml-6 mt-1">
                     <div v-for="subcategory in category.children" :key="'expense-sub-' + subcategory.name" class="flex items-center mb-1">
-                      <input type="checkbox" :checked="filters.category.includes(subcategory.name)" @change="selectCategory(subcategory.name)" class="mr-2">
+                      <input type="checkbox" :checked="filters.category.includes(subcategory.name)" @change="selectCategory(subcategory.name, 'expense')" class="mr-2">
                       <label class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
                     </div>
                   </div>
@@ -443,6 +443,24 @@ const incomeCategoryList = ref([])
 // 支出分类列表
 const expenseCategoryList = ref([])
 
+// 计算选中的收入分类数量
+const selectedIncomeCategoriesCount = computed(() => {
+  return filters.value.category.filter(cat => {
+    // 检查是否是收入分类
+    return incomeCategoryList.value.some(ic => ic.name === cat || 
+      (ic.children && ic.children.some(child => child.name === cat)))
+  }).length
+})
+
+// 计算选中的支出分类数量
+const selectedExpenseCategoriesCount = computed(() => {
+  return filters.value.category.filter(cat => {
+    // 检查是否是支出分类
+    return expenseCategoryList.value.some(ec => ec.name === cat || 
+      (ec.children && ec.children.some(child => child.name === cat)))
+  }).length
+})
+
 // 展开的分类
 const expandedCategories = ref([])
 
@@ -468,13 +486,77 @@ const closeAllDropdowns = () => {
   })
 }
 
-// 选择分类
-const selectCategory = (category) => {
+// 选择分类（带父子联动）
+const selectCategory = (category, type = null) => {
   const index = filters.value.category.indexOf(category)
-  if (index === -1) {
+  const isSelected = index === -1
+  
+  if (isSelected) {
+    // 选择分类
     filters.value.category.push(category)
+    
+    // 查找该分类是收入还是支出
+    let categoryType = type
+    if (!categoryType) {
+      const incomeCat = incomeCategoryList.value.find(c => c.name === category)
+      const expenseCat = expenseCategoryList.value.find(c => c.name === category)
+      categoryType = incomeCat ? 'income' : (expenseCat ? 'expense' : null)
+    }
+    
+    // 如果是父分类，自动选择所有子分类
+    if (categoryType === 'income') {
+      const parentCat = incomeCategoryList.value.find(c => c.name === category)
+      if (parentCat && parentCat.children) {
+        parentCat.children.forEach(child => {
+          if (!filters.value.category.includes(child.name)) {
+            filters.value.category.push(child.name)
+          }
+        })
+      }
+    } else if (categoryType === 'expense') {
+      const parentCat = expenseCategoryList.value.find(c => c.name === category)
+      if (parentCat && parentCat.children) {
+        parentCat.children.forEach(child => {
+          if (!filters.value.category.includes(child.name)) {
+            filters.value.category.push(child.name)
+          }
+        })
+      }
+    }
   } else {
+    // 取消选择分类
     filters.value.category.splice(index, 1)
+    
+    // 查找该分类是收入还是支出
+    let categoryType = type
+    if (!categoryType) {
+      const incomeCat = incomeCategoryList.value.find(c => c.name === category)
+      const expenseCat = expenseCategoryList.value.find(c => c.name === category)
+      categoryType = incomeCat ? 'income' : (expenseCat ? 'expense' : null)
+    }
+    
+    // 如果是父分类，自动取消选择所有子分类
+    if (categoryType === 'income') {
+      const parentCat = incomeCategoryList.value.find(c => c.name === category)
+      if (parentCat && parentCat.children) {
+        parentCat.children.forEach(child => {
+          const childIndex = filters.value.category.indexOf(child.name)
+          if (childIndex !== -1) {
+            filters.value.category.splice(childIndex, 1)
+          }
+        })
+      }
+    } else if (categoryType === 'expense') {
+      const parentCat = expenseCategoryList.value.find(c => c.name === category)
+      if (parentCat && parentCat.children) {
+        parentCat.children.forEach(child => {
+          const childIndex = filters.value.category.indexOf(child.name)
+          if (childIndex !== -1) {
+            filters.value.category.splice(childIndex, 1)
+          }
+        })
+      }
+    }
   }
 }
 
