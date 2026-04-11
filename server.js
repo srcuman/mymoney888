@@ -1,9 +1,14 @@
 // 后端服务器
 // 用于处理升级请求和其他API请求
 
-const express = require('express')
-const { exec } = require('child_process')
-const path = require('path')
+import express from 'express'
+import { exec } from 'child_process'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 const app = express()
 const port = 8888
 
@@ -46,9 +51,10 @@ app.get('/api/upgrade/status', (req, res) => {
 
 // 版本API
 app.get('/api/version', (req, res) => {
-  const packageJson = require('./package.json')
-  res.json({
-    version: packageJson.version
+  import('./package.json').then((packageJson) => {
+    res.json({
+      version: packageJson.default.version
+    })
   })
 })
 
