@@ -50,57 +50,57 @@
           <!-- 收入分类 -->
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">收入分类</label>
-            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-48 overflow-y-auto dark:bg-gray-700">
-              <div v-if="incomeCategoryList.length > 0" class="flex items-center mb-2">
-                <input type="checkbox" id="select-all-income-categories" @change="toggleSelectAllIncomeCategories" class="mr-2">
-                <label for="select-all-income-categories" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
-              </div>
-              <div v-for="category in incomeCategoryList" :key="'income-' + category.name" class="mb-2">
-                <div class="flex items-center">
-                  <button v-if="category.children && category.children.length > 0" @click="toggleCategory(category.name)" class="mr-2 text-gray-500 dark:text-gray-400">
-                    {{ expandedCategories.includes(category.name) ? '▼' : '▶' }}
-                  </button>
-                  <span v-else class="w-4 mr-2"></span>
-                  <input type="checkbox" :id="'income-category-' + category.name" :value="category.name" v-model="filters.category" @change="handleCategoryChange('income', category.name)" class="mr-2">
-                  <label :for="'income-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
+            <div class="relative">
+              <button @click="toggleDropdown('incomeCategories')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm flex justify-between items-center">
+                <span>{{ filters.category.length > 0 ? `已选择 ${filters.category.length} 个分类` : '选择收入分类' }}</span>
+                <span>{{ dropdowns.incomeCategories ? '▼' : '▶' }}</span>
+              </button>
+              <div v-if="dropdowns.incomeCategories" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+                <div v-if="incomeCategoryList.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
+                  <button @click="filters.category = allCategories.filter(c => incomeCategoryList.some(ic => ic.name === c || ic.children?.some(sc => sc.name === c))" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
                 </div>
-                <!-- 子分类 -->
-        <div v-if="category.children && category.children.length > 0 && expandedCategories.includes(category.name)" class="ml-6 mt-1">
-          <div v-for="subcategory in category.children" :key="'income-sub-' + subcategory.name" class="flex items-center mb-1">
-            <input type="checkbox" :id="'income-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" @change="handleSubcategoryChange('income', category.name, subcategory.name)" class="mr-2">
-            <label :for="'income-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
-          </div>
-        </div>
+                <div v-for="category in incomeCategoryList" :key="'income-' + category.name" class="p-2">
+                  <div class="flex items-center">
+                    <input type="checkbox" :checked="filters.category.includes(category.name)" @change="selectCategory(category.name)" class="mr-2">
+                    <label class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
+                  </div>
+                  <div v-if="category.children && category.children.length > 0" class="ml-6 mt-1">
+                    <div v-for="subcategory in category.children" :key="'income-sub-' + subcategory.name" class="flex items-center mb-1">
+                      <input type="checkbox" :checked="filters.category.includes(subcategory.name)" @change="selectCategory(subcategory.name)" class="mr-2">
+                      <label class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="incomeCategoryList.length === 0" class="p-2 text-sm text-gray-500 dark:text-gray-400">无收入分类数据</div>
               </div>
-              <div v-if="incomeCategoryList.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无收入分类数据</div>
             </div>
           </div>
           <!-- 支出分类 -->
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">支出分类</label>
-            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-48 overflow-y-auto dark:bg-gray-700">
-              <div v-if="expenseCategoryList.length > 0" class="flex items-center mb-2">
-                <input type="checkbox" id="select-all-expense-categories" @change="toggleSelectAllExpenseCategories" class="mr-2">
-                <label for="select-all-expense-categories" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
-              </div>
-              <div v-for="category in expenseCategoryList" :key="'expense-' + category.name" class="mb-2">
-                <div class="flex items-center">
-                  <button v-if="category.children && category.children.length > 0" @click="toggleCategory(category.name)" class="mr-2 text-gray-500 dark:text-gray-400">
-                    {{ expandedCategories.includes(category.name) ? '▼' : '▶' }}
-                  </button>
-                  <span v-else class="w-4 mr-2"></span>
-                  <input type="checkbox" :id="'expense-category-' + category.name" :value="category.name" v-model="filters.category" @change="handleCategoryChange('expense', category.name)" class="mr-2">
-                  <label :for="'expense-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
+            <div class="relative">
+              <button @click="toggleDropdown('expenseCategories')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm flex justify-between items-center">
+                <span>{{ filters.category.length > 0 ? `已选择 ${filters.category.length} 个分类` : '选择支出分类' }}</span>
+                <span>{{ dropdowns.expenseCategories ? '▼' : '▶' }}</span>
+              </button>
+              <div v-if="dropdowns.expenseCategories" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+                <div v-if="expenseCategoryList.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
+                  <button @click="filters.category = allCategories.filter(c => expenseCategoryList.some(ec => ec.name === c || ec.children?.some(sc => sc.name === c))" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
                 </div>
-                <!-- 子分类 -->
-        <div v-if="category.children && category.children.length > 0 && expandedCategories.includes(category.name)" class="ml-6 mt-1">
-          <div v-for="subcategory in category.children" :key="'expense-sub-' + subcategory.name" class="flex items-center mb-1">
-            <input type="checkbox" :id="'expense-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" @change="handleSubcategoryChange('expense', category.name, subcategory.name)" class="mr-2">
-            <label :for="'expense-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
-          </div>
-        </div>
+                <div v-for="category in expenseCategoryList" :key="'expense-' + category.name" class="p-2">
+                  <div class="flex items-center">
+                    <input type="checkbox" :checked="filters.category.includes(category.name)" @change="selectCategory(category.name)" class="mr-2">
+                    <label class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
+                  </div>
+                  <div v-if="category.children && category.children.length > 0" class="ml-6 mt-1">
+                    <div v-for="subcategory in category.children" :key="'expense-sub-' + subcategory.name" class="flex items-center mb-1">
+                      <input type="checkbox" :checked="filters.category.includes(subcategory.name)" @change="selectCategory(subcategory.name)" class="mr-2">
+                      <label class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="expenseCategoryList.length === 0" class="p-2 text-sm text-gray-500 dark:text-gray-400">无支出分类数据</div>
               </div>
-              <div v-if="expenseCategoryList.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无支出分类数据</div>
             </div>
           </div>
         </div>
@@ -110,80 +110,120 @@
       <div class="mb-6">
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">维度筛选</h3>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <!-- 成员 -->
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">成员</label>
-            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
-              <div v-if="members.length > 0" class="flex items-center mb-2">
-                <input type="checkbox" id="select-all-members" @change="toggleSelectAll('member')" class="mr-2">
-                <label for="select-all-members" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+            <div class="relative">
+              <button @click="toggleDropdown('members')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm flex justify-between items-center">
+                <span>{{ filters.member.length > 0 ? `已选择 ${filters.member.length} 个成员` : '选择成员' }}</span>
+                <span>{{ dropdowns.members ? '▼' : '▶' }}</span>
+              </button>
+              <div v-if="dropdowns.members" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+                <div v-if="members.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
+                  <button @click="filters.member = members.map(m => m.name)" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
+                </div>
+                <!-- 空值选项 -->
+                <div class="p-2">
+                  <div class="flex items-center">
+                    <input type="checkbox" :checked="filters.member.includes('__EMPTY__')" @change="selectMember('__EMPTY__')" class="mr-2">
+                    <label class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
+                  </div>
+                </div>
+                <div v-for="member in members" :key="member.id" class="p-2">
+                  <div class="flex items-center">
+                    <input type="checkbox" :checked="filters.member.includes(member.name)" @change="selectMember(member.name)" class="mr-2">
+                    <label class="text-sm text-gray-700 dark:text-gray-300">{{ member.name }}</label>
+                  </div>
+                </div>
+                <div v-if="members.length === 0" class="p-2 text-sm text-gray-500 dark:text-gray-400">无成员数据</div>
               </div>
-              <!-- 空值选项 -->
-              <div class="flex items-center mb-1">
-                <input type="checkbox" id="member-empty" value="__EMPTY__" v-model="filters.member" class="mr-2">
-                <label for="member-empty" class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
-              </div>
-              <div v-for="member in members" :key="member.id" class="flex items-center mb-1">
-                <input type="checkbox" :id="'member-' + member.id" :value="member.name" v-model="filters.member" class="mr-2">
-                <label :for="'member-' + member.id" class="text-sm text-gray-700 dark:text-gray-300">{{ member.name }}</label>
-              </div>
-              <div v-if="members.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无成员数据</div>
             </div>
           </div>
+          <!-- 商家 -->
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">商家</label>
-            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
-              <div v-if="merchants.length > 0" class="flex items-center mb-2">
-                <input type="checkbox" id="select-all-merchants" @change="toggleSelectAll('merchant')" class="mr-2">
-                <label for="select-all-merchants" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+            <div class="relative">
+              <button @click="toggleDropdown('merchants')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm flex justify-between items-center">
+                <span>{{ filters.merchant.length > 0 ? `已选择 ${filters.merchant.length} 个商家` : '选择商家' }}</span>
+                <span>{{ dropdowns.merchants ? '▼' : '▶' }}</span>
+              </button>
+              <div v-if="dropdowns.merchants" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+                <div v-if="merchants.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
+                  <button @click="filters.merchant = merchants.map(m => m.name)" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
+                </div>
+                <!-- 空值选项 -->
+                <div class="p-2">
+                  <div class="flex items-center">
+                    <input type="checkbox" :checked="filters.merchant.includes('__EMPTY__')" @change="selectMerchant('__EMPTY__')" class="mr-2">
+                    <label class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
+                  </div>
+                </div>
+                <div v-for="merchant in merchants" :key="merchant.id" class="p-2">
+                  <div class="flex items-center">
+                    <input type="checkbox" :checked="filters.merchant.includes(merchant.name)" @change="selectMerchant(merchant.name)" class="mr-2">
+                    <label class="text-sm text-gray-700 dark:text-gray-300">{{ merchant.name }}</label>
+                  </div>
+                </div>
+                <div v-if="merchants.length === 0" class="p-2 text-sm text-gray-500 dark:text-gray-400">无商家数据</div>
               </div>
-              <!-- 空值选项 -->
-              <div class="flex items-center mb-1">
-                <input type="checkbox" id="merchant-empty" value="__EMPTY__" v-model="filters.merchant" class="mr-2">
-                <label for="merchant-empty" class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
-              </div>
-              <div v-for="merchant in merchants" :key="merchant.id" class="flex items-center mb-1">
-                <input type="checkbox" :id="'merchant-' + merchant.id" :value="merchant.name" v-model="filters.merchant" class="mr-2">
-                <label :for="'merchant-' + merchant.id" class="text-sm text-gray-700 dark:text-gray-300">{{ merchant.name }}</label>
-              </div>
-              <div v-if="merchants.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无商家数据</div>
             </div>
           </div>
+          <!-- 标签 -->
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">标签</label>
-            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
-              <div v-if="tags.length > 0" class="flex items-center mb-2">
-                <input type="checkbox" id="select-all-tags" @change="toggleSelectAll('tag')" class="mr-2">
-                <label for="select-all-tags" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+            <div class="relative">
+              <button @click="toggleDropdown('tags')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm flex justify-between items-center">
+                <span>{{ filters.tag.length > 0 ? `已选择 ${filters.tag.length} 个标签` : '选择标签' }}</span>
+                <span>{{ dropdowns.tags ? '▼' : '▶' }}</span>
+              </button>
+              <div v-if="dropdowns.tags" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+                <div v-if="tags.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
+                  <button @click="filters.tag = tags.map(t => t.name)" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
+                </div>
+                <!-- 空值选项 -->
+                <div class="p-2">
+                  <div class="flex items-center">
+                    <input type="checkbox" :checked="filters.tag.includes('__EMPTY__')" @change="selectTag('__EMPTY__')" class="mr-2">
+                    <label class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
+                  </div>
+                </div>
+                <div v-for="tag in tags" :key="tag.id" class="p-2">
+                  <div class="flex items-center">
+                    <input type="checkbox" :checked="filters.tag.includes(tag.name)" @change="selectTag(tag.name)" class="mr-2">
+                    <label class="text-sm text-gray-700 dark:text-gray-300">{{ tag.name }}</label>
+                  </div>
+                </div>
+                <div v-if="tags.length === 0" class="p-2 text-sm text-gray-500 dark:text-gray-400">无标签数据</div>
               </div>
-              <!-- 空值选项 -->
-              <div class="flex items-center mb-1">
-                <input type="checkbox" id="tag-empty" value="__EMPTY__" v-model="filters.tag" class="mr-2">
-                <label for="tag-empty" class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
-              </div>
-              <div v-for="tag in tags" :key="tag.id" class="flex items-center mb-1">
-                <input type="checkbox" :id="'tag-' + tag.id" :value="tag.name" v-model="filters.tag" class="mr-2">
-                <label :for="'tag-' + tag.id" class="text-sm text-gray-700 dark:text-gray-300">{{ tag.name }}</label>
-              </div>
-              <div v-if="tags.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无标签数据</div>
             </div>
           </div>
+          <!-- 支付渠道 -->
           <div>
             <label class="block mb-1 text-xs font-medium text-gray-600 dark:text-gray-400">支付渠道</label>
-            <div class="border border-gray-300 dark:border-gray-600 rounded-md p-2 max-h-32 overflow-y-auto dark:bg-gray-700">
-              <div v-if="paymentChannels.length > 0" class="flex items-center mb-2">
-                <input type="checkbox" id="select-all-channels" @change="toggleSelectAll('paymentChannel')" class="mr-2">
-                <label for="select-all-channels" class="text-sm font-medium text-gray-700 dark:text-gray-300">全选</label>
+            <div class="relative">
+              <button @click="toggleDropdown('paymentChannels')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm flex justify-between items-center">
+                <span>{{ filters.paymentChannel.length > 0 ? `已选择 ${filters.paymentChannel.length} 个支付渠道` : '选择支付渠道' }}</span>
+                <span>{{ dropdowns.paymentChannels ? '▼' : '▶' }}</span>
+              </button>
+              <div v-if="dropdowns.paymentChannels" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+                <div v-if="paymentChannels.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
+                  <button @click="filters.paymentChannel = paymentChannels.map(c => c.name)" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
+                </div>
+                <!-- 空值选项 -->
+                <div class="p-2">
+                  <div class="flex items-center">
+                    <input type="checkbox" :checked="filters.paymentChannel.includes('__EMPTY__')" @change="selectPaymentChannel('__EMPTY__')" class="mr-2">
+                    <label class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
+                  </div>
+                </div>
+                <div v-for="channel in paymentChannels" :key="channel.id" class="p-2">
+                  <div class="flex items-center">
+                    <input type="checkbox" :checked="filters.paymentChannel.includes(channel.name)" @change="selectPaymentChannel(channel.name)" class="mr-2">
+                    <label class="text-sm text-gray-700 dark:text-gray-300">{{ channel.name }}</label>
+                  </div>
+                </div>
+                <div v-if="paymentChannels.length === 0" class="p-2 text-sm text-gray-500 dark:text-gray-400">无支付渠道数据</div>
               </div>
-              <!-- 空值选项 -->
-              <div class="flex items-center mb-1">
-                <input type="checkbox" id="channel-empty" value="__EMPTY__" v-model="filters.paymentChannel" class="mr-2">
-                <label for="channel-empty" class="text-sm text-gray-700 dark:text-gray-300">未设置</label>
-              </div>
-              <div v-for="channel in paymentChannels" :key="channel.id" class="flex items-center mb-1">
-                <input type="checkbox" :id="'channel-' + channel.id" :value="channel.name" v-model="filters.paymentChannel" class="mr-2">
-                <label :for="'channel-' + channel.id" class="text-sm text-gray-700 dark:text-gray-300">{{ channel.name }}</label>
-              </div>
-              <div v-if="paymentChannels.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无支付渠道数据</div>
             </div>
           </div>
         </div>
@@ -405,6 +445,78 @@ const expenseCategoryList = ref([])
 
 // 展开的分类
 const expandedCategories = ref([])
+
+// 下拉框显示状态
+const dropdowns = ref({
+  incomeCategories: false,
+  expenseCategories: false,
+  members: false,
+  merchants: false,
+  tags: false,
+  paymentChannels: false
+})
+
+// 切换下拉框显示
+const toggleDropdown = (key) => {
+  dropdowns.value[key] = !dropdowns.value[key]
+}
+
+// 关闭所有下拉框
+const closeAllDropdowns = () => {
+  Object.keys(dropdowns.value).forEach(key => {
+    dropdowns.value[key] = false
+  })
+}
+
+// 选择分类
+const selectCategory = (category) => {
+  const index = filters.value.category.indexOf(category)
+  if (index === -1) {
+    filters.value.category.push(category)
+  } else {
+    filters.value.category.splice(index, 1)
+  }
+}
+
+// 选择成员
+const selectMember = (member) => {
+  const index = filters.value.member.indexOf(member)
+  if (index === -1) {
+    filters.value.member.push(member)
+  } else {
+    filters.value.member.splice(index, 1)
+  }
+}
+
+// 选择商家
+const selectMerchant = (merchant) => {
+  const index = filters.value.merchant.indexOf(merchant)
+  if (index === -1) {
+    filters.value.merchant.push(merchant)
+  } else {
+    filters.value.merchant.splice(index, 1)
+  }
+}
+
+// 选择标签
+const selectTag = (tag) => {
+  const index = filters.value.tag.indexOf(tag)
+  if (index === -1) {
+    filters.value.tag.push(tag)
+  } else {
+    filters.value.tag.splice(index, 1)
+  }
+}
+
+// 选择支付渠道
+const selectPaymentChannel = (channel) => {
+  const index = filters.value.paymentChannel.indexOf(channel)
+  if (index === -1) {
+    filters.value.paymentChannel.push(channel)
+  } else {
+    filters.value.paymentChannel.splice(index, 1)
+  }
+}
 
 // 所有分类列表
 const allCategories = computed(() => {
