@@ -55,7 +55,7 @@
                 <span>{{ filters.category.length > 0 ? `已选择 ${filters.category.length} 个分类` : '选择收入分类' }}</span>
                 <span>{{ dropdowns.incomeCategories ? '▼' : '▶' }}</span>
               </button>
-              <div v-if="dropdowns.incomeCategories" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+              <div v-if="dropdowns.incomeCategories" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto bg-white dark:bg-gray-700 mt-1">
                 <div v-if="incomeCategoryList.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
                   <button @click="selectAllIncomeCategories()" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
                 </div>
@@ -83,7 +83,7 @@
                 <span>{{ filters.category.length > 0 ? `已选择 ${filters.category.length} 个分类` : '选择支出分类' }}</span>
                 <span>{{ dropdowns.expenseCategories ? '▼' : '▶' }}</span>
               </button>
-              <div v-if="dropdowns.expenseCategories" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+              <div v-if="dropdowns.expenseCategories" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto bg-white dark:bg-gray-700 mt-1">
                 <div v-if="expenseCategoryList.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
                   <button @click="selectAllExpenseCategories()" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
                 </div>
@@ -118,7 +118,7 @@
                 <span>{{ filters.member.length > 0 ? `已选择 ${filters.member.length} 个成员` : '选择成员' }}</span>
                 <span>{{ dropdowns.members ? '▼' : '▶' }}</span>
               </button>
-              <div v-if="dropdowns.members" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+              <div v-if="dropdowns.members" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto bg-white dark:bg-gray-700 mt-1">
                 <div v-if="members.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
                   <button @click="filters.member = members.map(m => m.name)" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
                 </div>
@@ -147,7 +147,7 @@
                 <span>{{ filters.merchant.length > 0 ? `已选择 ${filters.merchant.length} 个商家` : '选择商家' }}</span>
                 <span>{{ dropdowns.merchants ? '▼' : '▶' }}</span>
               </button>
-              <div v-if="dropdowns.merchants" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+              <div v-if="dropdowns.merchants" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto bg-white dark:bg-gray-700 mt-1">
                 <div v-if="merchants.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
                   <button @click="filters.merchant = merchants.map(m => m.name)" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
                 </div>
@@ -176,7 +176,7 @@
                 <span>{{ filters.tag.length > 0 ? `已选择 ${filters.tag.length} 个标签` : '选择标签' }}</span>
                 <span>{{ dropdowns.tags ? '▼' : '▶' }}</span>
               </button>
-              <div v-if="dropdowns.tags" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+              <div v-if="dropdowns.tags" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto bg-white dark:bg-gray-700 mt-1">
                 <div v-if="tags.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
                   <button @click="filters.tag = tags.map(t => t.name)" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
                 </div>
@@ -205,7 +205,7 @@
                 <span>{{ filters.paymentChannel.length > 0 ? `已选择 ${filters.paymentChannel.length} 个支付渠道` : '选择支付渠道' }}</span>
                 <span>{{ dropdowns.paymentChannels ? '▼' : '▶' }}</span>
               </button>
-              <div v-if="dropdowns.paymentChannels" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto dark:bg-gray-700 mt-1">
+              <div v-if="dropdowns.paymentChannels" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto bg-white dark:bg-gray-700 mt-1">
                 <div v-if="paymentChannels.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
                   <button @click="filters.paymentChannel = paymentChannels.map(c => c.name)" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
                 </div>

@@ -723,22 +723,55 @@ const fetchInvestmentInfo = async (code) => {
           console.log('新浪财经基金API响应数据:', sinaFundData)
           
           // 解析新浪财经基金数据
-          if (sinaFundData && sinaFundData.includes('=') && !sinaFundData.includes('ff_') && !sinaFundData.includes('null')) {
+          if (sinaFundData && sinaFundData.includes('=') && !sinaFundData.includes('null')) {
             const parts = sinaFundData.split('=')
-            const data = parts[1].replace(/"/g, '').split(',')
-            if (data.length > 2 && data[0] && data[1]) {
-              console.log('成功获取新浪财经基金数据:', data[0])
-              return {
-                name: data[0],
-                type: '基金',
-                currentPrice: parseFloat(parseFloat(data[1]).toFixed(4)) || 0,
-                updateDate: new Date().toISOString().split('T')[0]
+            if (parts.length > 1) {
+              const data = parts[1].replace(/"/g, '').split(',')
+              if (data.length > 2 && data[0] && data[1]) {
+                console.log('成功获取新浪财经基金数据:', data[0])
+                return {
+                  name: data[0],
+                  type: '基金',
+                  currentPrice: parseFloat(parseFloat(data[1]).toFixed(4)) || 0,
+                  updateDate: new Date().toISOString().split('T')[0]
+                }
               }
             }
           }
         }
       } catch (sinaFundError) {
         console.log('新浪财经基金API调用失败:', sinaFundError)
+      }
+      
+      // 4. 尝试使用东方财富网API作为备选
+      const eastmoneyUrl = `https://push2.eastmoney.com/api/qt/stock/get?secid=1.${code}&ut=fa5fd1943c7b386f172d6893dbfba10b&fields=f57,f58,f169,f170,f43,f55,f168,f152`
+      
+      try {
+        console.log('尝试调用东方财富网API:', eastmoneyUrl)
+        const eastmoneyResponse = await fetch(eastmoneyUrl)
+        console.log('东方财富网API响应状态:', eastmoneyResponse.status)
+        
+        // 检查响应状态
+        if (eastmoneyResponse.status === 200) {
+          const eastmoneyData = await eastmoneyResponse.json()
+          console.log('东方财富网API响应数据:', eastmoneyData)
+          
+          // 解析东方财富网数据
+          if (eastmoneyData && eastmoneyData.data) {
+            const data = eastmoneyData.data
+            if (data.f57 && data.f43) {
+              console.log('成功获取东方财富网股票数据:', data.f57)
+              return {
+                name: data.f57,
+                type: '股票',
+                currentPrice: parseFloat(parseFloat(data.f43).toFixed(4)) || 0,
+                updateDate: new Date().toISOString().split('T')[0]
+              }
+            }
+          }
+        }
+      } catch (eastmoneyError) {
+        console.log('东方财富网API调用失败:', eastmoneyError)
       }
     }
     
