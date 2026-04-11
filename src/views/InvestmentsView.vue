@@ -629,6 +629,124 @@ const deleteInvestmentAccount = (id) => {
   saveInvestmentDetails()
 }
 
+// 调用单个API的函数
+const fetchSingleAPI = async (url, source, code) => {
+  try {
+    console.log(`尝试调用${source}:`, url)
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'text/plain'
+      }
+    })
+    console.log(`${source}响应状态:`, response.status)
+    
+    if (response.status === 200) {
+      const data = await response.text()
+      console.log(`${source}响应数据:`, data)
+      return { source, data }
+    }
+  } catch (error) {
+    console.log(`${source}调用失败:`, error)
+  }
+  return { source, data: null }
+}
+
+// 解析API响应数据
+const parseAPIResponse = (response, code) => {
+  const { source, data } = response
+  
+  if (!data) return null
+  
+  // 解析天天基金实时估值数据
+  if (source === '天天基金实时估值') {
+    if (data && data.includes('jsonpgz(') && data.includes(')')) {
+      const jsonStr = data.replace('jsonpgz(', '').replace(');', '')
+      try {
+        const fundData = JSON.parse(jsonStr)
+        if (fundData.name && fundData.dwjz) {
+          // 处理乱码问题
+          let fundName = fundData.name
+          try {
+            fundName = decodeURIComponent(escape(fundData.name))
+          } catch (e) {
+            console.log('解码基金名称失败:', e)
+          }
+          console.log('成功获取天天基金数据:', fundName)
+          return {
+            source: '天天基金实时估值',
+            name: fundName,
+            type: '基金',
+            currentPrice: parseFloat(parseFloat(fundData.dwjz).toFixed(4)) || 0,
+            updateDate: fundData.jzrq || new Date().toISOString().split('T')[0]
+          }
+        }
+      } catch (parseError) {
+        console.log('解析JSONP数据失败:', parseError)
+      }
+    }
+  }
+  
+  // 解析天天基金基本信息数据
+  if (source === '天天基金基本信息') {
+    if (data) {
+      const nameMatch = data.match(/var fS_name = "([^"]+)"/)
+      if (nameMatch && nameMatch[1]) {
+        console.log('成功获取天天基金基本信息:', nameMatch[1])
+        return {
+          source: '天天基金基本信息',
+          name: nameMatch[1],
+          type: '基金',
+          currentPrice: 0,
+          updateDate: new Date().toISOString().split('T')[0]
+        }
+      }
+    }
+  }
+  
+  // 解析腾讯财经上海股票数据
+  if (source === '腾讯财经上海') {
+    if (data && data.includes('=') && !data.includes('v_pv_none_match')) {
+      const parts = data.split('=')
+      if (parts.length > 1) {
+        const stockData = parts[1].replace(/"/g, '').split('~')
+        if (stockData.length > 4 && stockData[1] && stockData[1] !== '' && stockData[3] && stockData[3] !== '') {
+          console.log('成功获取腾讯财经上海股票数据:', stockData[1])
+          return {
+            source: '腾讯财经上海',
+            name: stockData[1],
+            type: '股票',
+            currentPrice: parseFloat(parseFloat(stockData[3]).toFixed(4)) || 0,
+            updateDate: new Date().toISOString().split('T')[0]
+          }
+        }
+      }
+    }
+  }
+  
+  // 解析腾讯财经深圳股票数据
+  if (source === '腾讯财经深圳') {
+    if (data && data.includes('=') && !data.includes('v_pv_none_match')) {
+      const parts = data.split('=')
+      if (parts.length > 1) {
+        const stockData = parts[1].replace(/"/g, '').split('~')
+        if (stockData.length > 4 && stockData[1] && stockData[1] !== '' && stockData[3] && stockData[3] !== '') {
+          console.log('成功获取腾讯财经深圳股票数据:', stockData[1])
+          return {
+            source: '腾讯财经深圳',
+            name: stockData[1],
+            type: '股票',
+            currentPrice: parseFloat(parseFloat(stockData[3]).toFixed(4)) || 0,
+            updateDate: new Date().toISOString().split('T')[0]
+          }
+        }
+      }
+    }
+  }
+  
+  return null
+}
+
 // 根据代码获取投资品种信息
 const fetchInvestmentInfo = async (code) => {
   console.log('Fetching investment info for code:', code)
@@ -638,177 +756,21 @@ const fetchInvestmentInfo = async (code) => {
     throw new Error('代码格式不正确，请输入6位数字代码')
   }
   
-  // 存储不同API的结果
-  const apiResults = []
+  // 并行调用多个API
+  const apiPromises = [
+    fetchSingleAPI(`/api/js/${code}.js`, '天天基金实时估值', code),
+    fetchSingleAPI(`/fund/pingzhongdata/${code}.js`, '天天基金基本信息', code),
+    fetchSingleAPI(`/stock/q=sh${code}`, '腾讯财经上海', code),
+    fetchSingleAPI(`/stock/q=sz${code}`, '腾讯财经深圳', code)
+  ]
   
-  // 1. 尝试天天基金实时估值（JSONP）
-  const tianTianFundUrl = `/api/js/${code}.js`
+  // 等待所有API调用完成
+  const responses = await Promise.all(apiPromises)
   
-  try {
-    console.log('尝试调用天天基金实时估值API:', tianTianFundUrl)
-    const tianTianResponse = await fetch(tianTianFundUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'text/plain'
-      }
-    })
-    console.log('天天基金实时估值API响应状态:', tianTianResponse.status)
-    
-    // 检查响应状态
-    if (tianTianResponse.status === 200) {
-      const tianTianData = await tianTianResponse.text()
-      console.log('天天基金实时估值API响应数据:', tianTianData)
-      
-      // 解析JSONP格式数据
-      if (tianTianData && tianTianData.includes('jsonpgz(') && tianTianData.includes(')')) {
-        const jsonStr = tianTianData.replace('jsonpgz(', '').replace(');', '')
-        try {
-          const fundData = JSON.parse(jsonStr)
-          if (fundData.name && fundData.dwjz) {
-            // 处理乱码问题
-            let fundName = fundData.name
-            try {
-              // 尝试解码可能的编码问题
-              fundName = decodeURIComponent(escape(fundData.name))
-            } catch (e) {
-              console.log('解码基金名称失败:', e)
-            }
-            console.log('成功获取天天基金数据:', fundName)
-            apiResults.push({
-              source: '天天基金实时估值',
-              name: fundName,
-              type: '基金',
-              currentPrice: parseFloat(parseFloat(fundData.dwjz).toFixed(4)) || 0,
-              updateDate: fundData.jzrq || new Date().toISOString().split('T')[0]
-            })
-          }
-        } catch (parseError) {
-          console.log('解析JSONP数据失败:', parseError)
-        }
-      }
-    }
-  } catch (tianTianError) {
-    console.log('天天基金实时估值API调用失败:', tianTianError)
-  }
-  
-  // 2. 尝试天天基金基本信息（JS）
-  const tianTianInfoUrl = `/fund/pingzhongdata/${code}.js`
-  
-  try {
-    console.log('尝试调用天天基金基本信息API:', tianTianInfoUrl)
-    const tianTianInfoResponse = await fetch(tianTianInfoUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'text/plain'
-      }
-    })
-    console.log('天天基金基本信息API响应状态:', tianTianInfoResponse.status)
-    
-    // 检查响应状态
-    if (tianTianInfoResponse.status === 200) {
-      const tianTianInfoData = await tianTianInfoResponse.text()
-      console.log('天天基金基本信息API响应数据:', tianTianInfoData)
-      
-      // 解析JS变量定义
-      if (tianTianInfoData) {
-        // 提取基金名称
-        const nameMatch = tianTianInfoData.match(/var fS_name = "([^"]+)"/)
-        if (nameMatch && nameMatch[1]) {
-          console.log('成功获取天天基金基本信息:', nameMatch[1])
-          // 这里只获取名称，价格需要从其他API获取
-          apiResults.push({
-            source: '天天基金基本信息',
-            name: nameMatch[1],
-            type: '基金',
-            currentPrice: 0, // 价格需要从其他API获取
-            updateDate: new Date().toISOString().split('T')[0]
-          })
-        }
-      }
-    }
-  } catch (tianTianInfoError) {
-    console.log('天天基金基本信息API调用失败:', tianTianInfoError)
-  }
-  
-  // 3. 尝试腾讯财经（实时行情）- 上海股票
-  const tencentShUrl = `/stock/q=sh${code}`
-  
-  try {
-    console.log('尝试调用腾讯财经API（上海）:', tencentShUrl)
-    const tencentShResponse = await fetch(tencentShUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'text/plain'
-      }
-    })
-    console.log('腾讯财经API（上海）响应状态:', tencentShResponse.status)
-    
-    // 检查响应状态
-    if (tencentShResponse.status === 200) {
-      const tencentShData = await tencentShResponse.text()
-      console.log('腾讯财经API（上海）响应数据:', tencentShData)
-      
-      // 解析腾讯财经数据
-      if (tencentShData && tencentShData.includes('=') && !tencentShData.includes('v_pv_none_match')) {
-        const parts = tencentShData.split('=')
-        if (parts.length > 1) {
-          const data = parts[1].replace(/"/g, '').split('~')
-          if (data.length > 4 && data[1] && data[1] !== '' && data[3] && data[3] !== '') {
-            console.log('成功获取腾讯财经上海股票数据:', data[1])
-            apiResults.push({
-              source: '腾讯财经上海',
-              name: data[1],
-              type: '股票',
-              currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
-              updateDate: new Date().toISOString().split('T')[0]
-            })
-          }
-        }
-      }
-    }
-  } catch (tencentShError) {
-    console.log('腾讯财经API（上海）调用失败:', tencentShError)
-  }
-  
-  // 4. 尝试腾讯财经（实时行情）- 深圳股票
-  const tencentSzUrl = `/stock/q=sz${code}`
-  
-  try {
-    console.log('尝试调用腾讯财经API（深圳）:', tencentSzUrl)
-    const tencentSzResponse = await fetch(tencentSzUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'text/plain'
-      }
-    })
-    console.log('腾讯财经API（深圳）响应状态:', tencentSzResponse.status)
-    
-    // 检查响应状态
-    if (tencentSzResponse.status === 200) {
-      const tencentSzData = await tencentSzResponse.text()
-      console.log('腾讯财经API（深圳）响应数据:', tencentSzData)
-      
-      // 解析腾讯财经数据
-      if (tencentSzData && tencentSzData.includes('=') && !tencentSzData.includes('v_pv_none_match')) {
-        const parts = tencentSzData.split('=')
-        if (parts.length > 1) {
-          const data = parts[1].replace(/"/g, '').split('~')
-          if (data.length > 4 && data[1] && data[1] !== '' && data[3] && data[3] !== '') {
-            console.log('成功获取腾讯财经深圳股票数据:', data[1])
-            apiResults.push({
-              source: '腾讯财经深圳',
-              name: data[1],
-              type: '股票',
-              currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
-              updateDate: new Date().toISOString().split('T')[0]
-            })
-          }
-        }
-      }
-    }
-  } catch (tencentSzError) {
-    console.log('腾讯财经API（深圳）调用失败:', tencentSzError)
-  }
+  // 解析所有API响应
+  const apiResults = responses
+    .map(response => parseAPIResponse(response, code))
+    .filter(result => result !== null)
   
   // 分析API结果
   console.log('所有API结果:', apiResults)
