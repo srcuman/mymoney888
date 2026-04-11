@@ -660,3 +660,7 @@ onMounted(() => {
   setTimeRange('thisMonth')
 })
 </script>
+
+<style scoped>
+/* 可以添加自定义样式 */
+</style>
