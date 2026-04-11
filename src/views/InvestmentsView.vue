@@ -641,176 +641,177 @@ const fetchInvestmentInfo = async (code) => {
   // 存储不同API的结果
   const apiResults = []
   
-  // 1. 尝试新浪财经基金API（基金）- 更可靠的数据源
-  const sinaFundUrl = `https://hq.sinajs.cn/list=ff_${code}`
+  // 1. 尝试天天基金实时估值（JSONP）
+  const tianTianFundUrl = `http://fundgz.1234567.com.cn/js/${code}.js`
   
   try {
-    console.log('尝试调用新浪财经基金API:', sinaFundUrl)
-    const sinaFundResponse = await fetch(sinaFundUrl, {
+    console.log('尝试调用天天基金实时估值API:', tianTianFundUrl)
+    const tianTianResponse = await fetch(tianTianFundUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'text/plain',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
     })
-    console.log('新浪财经基金API响应状态:', sinaFundResponse.status)
+    console.log('天天基金实时估值API响应状态:', tianTianResponse.status)
     
     // 检查响应状态
-    if (sinaFundResponse.status === 200) {
-      const sinaFundData = await sinaFundResponse.text()
-      console.log('新浪财经基金API响应数据:', sinaFundData)
+    if (tianTianResponse.status === 200) {
+      const tianTianData = await tianTianResponse.text()
+      console.log('天天基金实时估值API响应数据:', tianTianData)
       
-      // 解析新浪财经基金数据
-      if (sinaFundData && sinaFundData.includes('=') && !sinaFundData.includes('null')) {
-        const parts = sinaFundData.split('=')
-        if (parts.length > 1) {
-          const data = parts[1].replace(/"/g, '').split(',')
-          if (data.length > 2 && data[0] && data[0] !== '' && data[1] && data[1] !== '') {
-            console.log('成功获取新浪财经基金数据:', data[0])
+      // 解析JSONP格式数据
+      if (tianTianData && tianTianData.includes('jsonpgz(') && tianTianData.includes(')')) {
+        const jsonStr = tianTianData.replace('jsonpgz(', '').replace(');', '')
+        try {
+          const fundData = JSON.parse(jsonStr)
+          if (fundData.name && fundData.dwjz) {
+            // 处理乱码问题
+            let fundName = fundData.name
+            try {
+              // 尝试解码可能的编码问题
+              fundName = decodeURIComponent(escape(fundData.name))
+            } catch (e) {
+              console.log('解码基金名称失败:', e)
+            }
+            console.log('成功获取天天基金数据:', fundName)
             apiResults.push({
-              source: '新浪财经基金',
-              name: data[0],
+              source: '天天基金实时估值',
+              name: fundName,
               type: '基金',
-              currentPrice: parseFloat(parseFloat(data[1]).toFixed(4)) || 0,
+              currentPrice: parseFloat(parseFloat(fundData.dwjz).toFixed(4)) || 0,
+              updateDate: fundData.jzrq || new Date().toISOString().split('T')[0]
+            })
+          }
+        } catch (parseError) {
+          console.log('解析JSONP数据失败:', parseError)
+        }
+      }
+    }
+  } catch (tianTianError) {
+    console.log('天天基金实时估值API调用失败:', tianTianError)
+  }
+  
+  // 2. 尝试天天基金基本信息（JS）
+  const tianTianInfoUrl = `http://fund.eastmoney.com/pingzhongdata/${code}.js`
+  
+  try {
+    console.log('尝试调用天天基金基本信息API:', tianTianInfoUrl)
+    const tianTianInfoResponse = await fetch(tianTianInfoUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'text/plain',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    })
+    console.log('天天基金基本信息API响应状态:', tianTianInfoResponse.status)
+    
+    // 检查响应状态
+    if (tianTianInfoResponse.status === 200) {
+      const tianTianInfoData = await tianTianInfoResponse.text()
+      console.log('天天基金基本信息API响应数据:', tianTianInfoData)
+      
+      // 解析JS变量定义
+      if (tianTianInfoData) {
+        // 提取基金名称
+        const nameMatch = tianTianInfoData.match(/var fS_name = "([^"]+)"/)
+        if (nameMatch && nameMatch[1]) {
+          console.log('成功获取天天基金基本信息:', nameMatch[1])
+          // 这里只获取名称，价格需要从其他API获取
+          apiResults.push({
+            source: '天天基金基本信息',
+            name: nameMatch[1],
+            type: '基金',
+            currentPrice: 0, // 价格需要从其他API获取
+            updateDate: new Date().toISOString().split('T')[0]
+          })
+        }
+      }
+    }
+  } catch (tianTianInfoError) {
+    console.log('天天基金基本信息API调用失败:', tianTianInfoError)
+  }
+  
+  // 3. 尝试腾讯财经（实时行情）- 上海股票
+  const tencentShUrl = `http://qt.gtimg.cn/q=sh${code}`
+  
+  try {
+    console.log('尝试调用腾讯财经API（上海）:', tencentShUrl)
+    const tencentShResponse = await fetch(tencentShUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'text/plain',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    })
+    console.log('腾讯财经API（上海）响应状态:', tencentShResponse.status)
+    
+    // 检查响应状态
+    if (tencentShResponse.status === 200) {
+      const tencentShData = await tencentShResponse.text()
+      console.log('腾讯财经API（上海）响应数据:', tencentShData)
+      
+      // 解析腾讯财经数据
+      if (tencentShData && tencentShData.includes('=') && !tencentShData.includes('v_pv_none_match')) {
+        const parts = tencentShData.split('=')
+        if (parts.length > 1) {
+          const data = parts[1].replace(/"/g, '').split('~')
+          if (data.length > 4 && data[1] && data[1] !== '' && data[3] && data[3] !== '') {
+            console.log('成功获取腾讯财经上海股票数据:', data[1])
+            apiResults.push({
+              source: '腾讯财经上海',
+              name: data[1],
+              type: '股票',
+              currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
               updateDate: new Date().toISOString().split('T')[0]
             })
           }
         }
       }
     }
-  } catch (sinaFundError) {
-    console.log('新浪财经基金API调用失败:', sinaFundError)
+  } catch (tencentShError) {
+    console.log('腾讯财经API（上海）调用失败:', tencentShError)
   }
   
-  // 2. 尝试腾讯财经API（股票）
-  const tencentStockUrl = `https://qt.gtimg.cn/q=s_sh${code},s_sz${code}`
+  // 4. 尝试腾讯财经（实时行情）- 深圳股票
+  const tencentSzUrl = `http://qt.gtimg.cn/q=sz${code}`
   
   try {
-    console.log('尝试调用腾讯财经API:', tencentStockUrl)
-    const tencentResponse = await fetch(tencentStockUrl, {
+    console.log('尝试调用腾讯财经API（深圳）:', tencentSzUrl)
+    const tencentSzResponse = await fetch(tencentSzUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'text/plain',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
       }
     })
-    console.log('腾讯财经API响应状态:', tencentResponse.status)
+    console.log('腾讯财经API（深圳）响应状态:', tencentSzResponse.status)
     
     // 检查响应状态
-    if (tencentResponse.status === 200) {
-      const tencentData = await tencentResponse.text()
-      console.log('腾讯财经API响应数据:', tencentData)
+    if (tencentSzResponse.status === 200) {
+      const tencentSzData = await tencentSzResponse.text()
+      console.log('腾讯财经API（深圳）响应数据:', tencentSzData)
       
       // 解析腾讯财经数据
-      if (tencentData && tencentData.includes('=') && !tencentData.includes('null')) {
-        const lines = tencentData.split(';')
-        for (const line of lines) {
-          if (line.includes('=') && line.split('=').length > 1) {
-            const parts = line.split('=')
-            const data = parts[1].replace(/"/g, '').split('~')
-            if (data.length > 4 && data[1] && data[1] !== '' && data[3] && data[3] !== '') {
-              console.log('成功获取腾讯财经数据:', data[1])
-              apiResults.push({
-                source: '腾讯财经',
-                name: data[1],
-                type: '股票',
-                currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
-                updateDate: new Date().toISOString().split('T')[0]
-              })
-              break
-            }
+      if (tencentSzData && tencentSzData.includes('=') && !tencentSzData.includes('v_pv_none_match')) {
+        const parts = tencentSzData.split('=')
+        if (parts.length > 1) {
+          const data = parts[1].replace(/"/g, '').split('~')
+          if (data.length > 4 && data[1] && data[1] !== '' && data[3] && data[3] !== '') {
+            console.log('成功获取腾讯财经深圳股票数据:', data[1])
+            apiResults.push({
+              source: '腾讯财经深圳',
+              name: data[1],
+              type: '股票',
+              currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
+              updateDate: new Date().toISOString().split('T')[0]
+            })
           }
         }
       }
     }
-  } catch (tencentError) {
-    console.log('腾讯财经API调用失败:', tencentError)
-  }
-  
-  // 3. 尝试新浪财经股票API
-  const stockUrl = `https://hq.sinajs.cn/list=sh${code},sz${code}`
-  
-  try {
-    console.log('尝试调用新浪财经股票API:', stockUrl)
-    const stockResponse = await fetch(stockUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'text/plain',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
-    })
-    console.log('新浪财经股票API响应状态:', stockResponse.status)
-    
-    // 检查响应状态
-    if (stockResponse.status === 200) {
-      const stockData = await stockResponse.text()
-      console.log('新浪财经股票API响应数据:', stockData)
-      
-      // 解析股票数据
-      if (stockData && stockData.includes('=') && !stockData.includes('null')) {
-        const stockLines = stockData.split(';')
-        for (const line of stockLines) {
-          if (line.includes('=') && line.split('=').length > 1) {
-            const parts = line.split('=')
-            const data = parts[1].replace(/"/g, '').split(',')
-            if (data.length > 4 && data[0] && data[0] !== '' && data[3] && data[3] !== '') {
-              console.log('成功获取股票数据:', data[0])
-              apiResults.push({
-                source: '新浪财经股票',
-                name: data[0],
-                type: '股票',
-                currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
-                updateDate: new Date().toISOString().split('T')[0]
-              })
-              break // 只需要一个有效的结果
-            }
-          }
-        }
-      }
-    }
-  } catch (stockError) {
-    console.log('新浪财经股票API调用失败:', stockError)
-  }
-  
-  // 4. 尝试东方财富网基金API
-  const eastmoneyFundUrl = `https://fund.eastmoney.com/${code}.html`
-  
-  try {
-    console.log('尝试调用东方财富网基金API:', eastmoneyFundUrl)
-    const eastmoneyResponse = await fetch(eastmoneyFundUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'text/html',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Referer': 'https://fund.eastmoney.com'
-      }
-    })
-    console.log('东方财富网基金API响应状态:', eastmoneyResponse.status)
-    
-    // 检查响应状态
-    if (eastmoneyResponse.status === 200) {
-      const eastmoneyData = await eastmoneyResponse.text()
-      // 尝试从HTML中提取基金名称和净值
-      const nameMatch = eastmoneyData.match(/基金名称：([^<]+)/)
-      const priceMatch = eastmoneyData.match(/最新净值：([^<]+)/)
-      
-      if (nameMatch && priceMatch) {
-        const name = nameMatch[1].trim()
-        const price = priceMatch[1].trim()
-        if (name && name !== '' && price && price !== '') {
-          console.log('成功获取东方财富网基金数据:', name, price)
-          apiResults.push({
-            source: '东方财富网基金',
-            name: name,
-            type: '基金',
-            currentPrice: parseFloat(parseFloat(price).toFixed(4)) || 0,
-            updateDate: new Date().toISOString().split('T')[0]
-          })
-        }
-      }
-    }
-  } catch (eastmoneyError) {
-    console.log('东方财富网基金API调用失败:', eastmoneyError)
+  } catch (tencentSzError) {
+    console.log('腾讯财经API（深圳）调用失败:', tencentSzError)
   }
   
   // 分析API结果
@@ -818,51 +819,51 @@ const fetchInvestmentInfo = async (code) => {
   
   if (apiResults.length > 0) {
     // 优先使用权威数据源的结果
-    // 1. 新浪财经基金
-    const sinaFundResult = apiResults.find(r => r.source === '新浪财经基金')
-    if (sinaFundResult) {
-      console.log('使用新浪财经基金结果:', sinaFundResult)
+    // 1. 天天基金实时估值（基金）
+    const tianTianFundResult = apiResults.find(r => r.source === '天天基金实时估值')
+    if (tianTianFundResult) {
+      console.log('使用天天基金实时估值结果:', tianTianFundResult)
       return {
-        name: sinaFundResult.name,
-        type: sinaFundResult.type,
-        currentPrice: sinaFundResult.currentPrice,
-        updateDate: sinaFundResult.updateDate
+        name: tianTianFundResult.name,
+        type: tianTianFundResult.type,
+        currentPrice: tianTianFundResult.currentPrice,
+        updateDate: tianTianFundResult.updateDate
       }
     }
     
-    // 2. 腾讯财经
-    const tencentResult = apiResults.find(r => r.source === '腾讯财经')
-    if (tencentResult) {
-      console.log('使用腾讯财经结果:', tencentResult)
+    // 2. 腾讯财经上海（股票）
+    const tencentShResult = apiResults.find(r => r.source === '腾讯财经上海')
+    if (tencentShResult) {
+      console.log('使用腾讯财经上海结果:', tencentShResult)
       return {
-        name: tencentResult.name,
-        type: tencentResult.type,
-        currentPrice: tencentResult.currentPrice,
-        updateDate: tencentResult.updateDate
+        name: tencentShResult.name,
+        type: tencentShResult.type,
+        currentPrice: tencentShResult.currentPrice,
+        updateDate: tencentShResult.updateDate
       }
     }
     
-    // 3. 新浪财经股票
-    const sinaStockResult = apiResults.find(r => r.source === '新浪财经股票')
-    if (sinaStockResult) {
-      console.log('使用新浪财经股票结果:', sinaStockResult)
+    // 3. 腾讯财经深圳（股票）
+    const tencentSzResult = apiResults.find(r => r.source === '腾讯财经深圳')
+    if (tencentSzResult) {
+      console.log('使用腾讯财经深圳结果:', tencentSzResult)
       return {
-        name: sinaStockResult.name,
-        type: sinaStockResult.type,
-        currentPrice: sinaStockResult.currentPrice,
-        updateDate: sinaStockResult.updateDate
+        name: tencentSzResult.name,
+        type: tencentSzResult.type,
+        currentPrice: tencentSzResult.currentPrice,
+        updateDate: tencentSzResult.updateDate
       }
     }
     
-    // 4. 东方财富网基金
-    const eastmoneyFundResult = apiResults.find(r => r.source === '东方财富网基金')
-    if (eastmoneyFundResult) {
-      console.log('使用东方财富网基金结果:', eastmoneyFundResult)
+    // 4. 天天基金基本信息（基金）
+    const tianTianInfoResult = apiResults.find(r => r.source === '天天基金基本信息')
+    if (tianTianInfoResult) {
+      console.log('使用天天基金基本信息结果:', tianTianInfoResult)
       return {
-        name: eastmoneyFundResult.name,
-        type: eastmoneyFundResult.type,
-        currentPrice: eastmoneyFundResult.currentPrice,
-        updateDate: eastmoneyFundResult.updateDate
+        name: tianTianInfoResult.name,
+        type: tianTianInfoResult.type,
+        currentPrice: tianTianInfoResult.currentPrice,
+        updateDate: tianTianInfoResult.updateDate
       }
     }
     
