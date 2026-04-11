@@ -57,13 +57,13 @@
               </div>
               <div v-for="category in incomeCategoryList" :key="'income-' + category.name" class="mb-2">
                 <div class="flex items-center">
-                  <input type="checkbox" :id="'income-category-' + category.name" :value="category.name" v-model="filters.category" class="mr-2">
+                  <input type="checkbox" :id="'income-category-' + category.name" :value="category.name" v-model="filters.category" @change="handleCategoryChange('income', category.name)" class="mr-2">
                   <label :for="'income-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
                 </div>
                 <!-- 子分类 -->
                 <div v-if="category.subcategories && category.subcategories.length > 0" class="ml-6 mt-1">
                   <div v-for="subcategory in category.subcategories" :key="'income-sub-' + subcategory.name" class="flex items-center mb-1">
-                    <input type="checkbox" :id="'income-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" class="mr-2">
+                    <input type="checkbox" :id="'income-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" @change="handleSubcategoryChange('income', category.name, subcategory.name)" class="mr-2">
                     <label :for="'income-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
                   </div>
                 </div>
@@ -81,13 +81,13 @@
               </div>
               <div v-for="category in expenseCategoryList" :key="'expense-' + category.name" class="mb-2">
                 <div class="flex items-center">
-                  <input type="checkbox" :id="'expense-category-' + category.name" :value="category.name" v-model="filters.category" class="mr-2">
+                  <input type="checkbox" :id="'expense-category-' + category.name" :value="category.name" v-model="filters.category" @change="handleCategoryChange('expense', category.name)" class="mr-2">
                   <label :for="'expense-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
                 </div>
                 <!-- 子分类 -->
                 <div v-if="category.subcategories && category.subcategories.length > 0" class="ml-6 mt-1">
                   <div v-for="subcategory in category.subcategories" :key="'expense-sub-' + subcategory.name" class="flex items-center mb-1">
-                    <input type="checkbox" :id="'expense-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" class="mr-2">
+                    <input type="checkbox" :id="'expense-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" @change="handleSubcategoryChange('expense', category.name, subcategory.name)" class="mr-2">
                     <label :for="'expense-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
                   </div>
                 </div>
@@ -627,6 +627,35 @@ const toggleSelectAllExpenseCategories = () => {
     filters.value.category = filters.value.category.filter(name => {
       return !expenseCategoryNames.includes(name)
     })
+  }
+}
+
+// 处理分类变化
+const handleCategoryChange = (type, categoryName) => {
+  const categoryList = type === 'income' ? incomeCategoryList.value : expenseCategoryList.value
+  const category = categoryList.find(c => c.name === categoryName)
+  
+  if (!category || !category.subcategories || category.subcategories.length === 0) return
+  
+  // 当选择分类时，移除其所有子分类
+  if (filters.value.category.includes(categoryName)) {
+    category.subcategories.forEach(subcategory => {
+      const index = filters.value.category.indexOf(subcategory.name)
+      if (index !== -1) {
+        filters.value.category.splice(index, 1)
+      }
+    })
+  }
+}
+
+// 处理子分类变化
+const handleSubcategoryChange = (type, categoryName, subcategoryName) => {
+  // 当选择子分类时，移除其父分类
+  if (filters.value.category.includes(subcategoryName)) {
+    const index = filters.value.category.indexOf(categoryName)
+    if (index !== -1) {
+      filters.value.category.splice(index, 1)
+    }
   }
 }
 

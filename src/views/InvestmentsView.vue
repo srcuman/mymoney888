@@ -653,7 +653,8 @@ const fetchInvestmentInfo = async (code) => {
               return {
                 name: data[0],
                 type: '股票',
-                currentPrice: parseFloat(data[3]) || 0
+                currentPrice: parseFloat(data[3]) || 0,
+                updateDate: new Date().toISOString().split('T')[0]
               }
             }
           }
@@ -675,7 +676,8 @@ const fetchInvestmentInfo = async (code) => {
           return {
             name: fundInfo.name,
             type: '基金',
-            currentPrice: parseFloat(fundInfo.dwjz) || 0
+            currentPrice: parseFloat(fundInfo.dwjz) || 0,
+            updateDate: fundInfo.gztime ? fundInfo.gztime.split(' ')[0] : new Date().toISOString().split('T')[0]
           }
         }
       }
@@ -689,7 +691,8 @@ const fetchInvestmentInfo = async (code) => {
           resolve({
             name: `模拟基金${code}`,
             type: '基金',
-            currentPrice: 1.2345 + Math.random() * 0.5
+            currentPrice: 1.2345 + Math.random() * 0.5,
+            updateDate: new Date().toISOString().split('T')[0]
           })
         }
         // 模拟股票数据
@@ -697,7 +700,8 @@ const fetchInvestmentInfo = async (code) => {
           resolve({
             name: `模拟股票${code}`,
             type: '股票',
-            currentPrice: 10 + Math.random() * 50
+            currentPrice: 10 + Math.random() * 50,
+            updateDate: new Date().toISOString().split('T')[0]
           })
         }
         // 默认数据
@@ -705,7 +709,8 @@ const fetchInvestmentInfo = async (code) => {
           resolve({
             name: `投资品种${code}`,
             type: '其他',
-            currentPrice: 1
+            currentPrice: 1,
+            updateDate: new Date().toISOString().split('T')[0]
           })
         }
       }, 500)
@@ -720,7 +725,8 @@ const fetchInvestmentInfo = async (code) => {
           resolve({
             name: `模拟基金${code}`,
             type: '基金',
-            currentPrice: 1.2345 + Math.random() * 0.5
+            currentPrice: 1.2345 + Math.random() * 0.5,
+            updateDate: new Date().toISOString().split('T')[0]
           })
         }
         // 模拟股票数据
@@ -728,7 +734,8 @@ const fetchInvestmentInfo = async (code) => {
           resolve({
             name: `模拟股票${code}`,
             type: '股票',
-            currentPrice: 10 + Math.random() * 50
+            currentPrice: 10 + Math.random() * 50,
+            updateDate: new Date().toISOString().split('T')[0]
           })
         }
         // 默认数据
@@ -736,7 +743,8 @@ const fetchInvestmentInfo = async (code) => {
           resolve({
             name: `投资品种${code}`,
             type: '其他',
-            currentPrice: 1
+            currentPrice: 1,
+            updateDate: new Date().toISOString().split('T')[0]
           })
         }
       }, 500)
@@ -784,7 +792,8 @@ const addInvestmentDetail = () => {
     name: newInvestmentDetail.value.name,
     shares: newInvestmentDetail.value.shares,
     costPrice: newInvestmentDetail.value.costPrice,
-    currentPrice: newInvestmentDetail.value.currentPrice
+    currentPrice: newInvestmentDetail.value.currentPrice,
+    updateDate: new Date().toISOString().split('T')[0]
   }
   investmentDetails.value.push(newDetail)
   updateAccountAsset(newInvestmentDetail.value.accountId)
@@ -806,7 +815,8 @@ const updateInvestmentDetail = () => {
       name: editInvestmentDetail.value.name,
       shares: editInvestmentDetail.value.shares,
       costPrice: editInvestmentDetail.value.costPrice,
-      currentPrice: editInvestmentDetail.value.currentPrice
+      currentPrice: editInvestmentDetail.value.currentPrice,
+      updateDate: new Date().toISOString().split('T')[0]
     }
     updateAccountAsset(oldAccountId)
     updateAccountAsset(editInvestmentDetail.value.accountId)
@@ -1085,13 +1095,93 @@ const loadData = () => {
   }
 }
 
-onMounted(() => {
-  loadData()
-  initCharts()
-})
+// 定时更新持仓产品净值
+const scheduleNetValueUpdate = () => {
+  // 每天的更新时间：9:30, 11:30, 15:30
+  const updateTimes = [
+    { hour: 9, minute: 30 },
+    { hour: 11, minute: 30 },
+    { hour: 15, minute: 30 }
+  ]
+  
+  // 计算下一次更新的时间
+  const getNextUpdateTime = () => {
+    const now = new Date()
+    const currentTime = now.getHours() * 60 + now.getMinutes()
+    
+    for (const time of updateTimes) {
+      const updateTime = time.hour * 60 + time.minute
+      if (updateTime > currentTime) {
+        const nextUpdate = new Date(now)
+        nextUpdate.setHours(time.hour, time.minute, 0, 0)
+        return nextUpdate
+      }
+    }
+    
+    // 如果当天的更新时间都过了，就设置为第二天的第一个更新时间
+    const nextDay = new Date(now)
+    nextDay.setDate(nextDay.getDate() + 1)
+    nextDay.setHours(updateTimes[0].hour, updateTimes[0].minute, 0, 0)
+    return nextDay
+  }
+  
+  // 更新所有投资明细的净值
+  const updateAllNetValues = async () => {
+    console.log('Updating all investment net values...')
+    
+    for (const detail of investmentDetails.value) {
+      try {
+        const info = await fetchInvestmentInfo(detail.code)
+        if (info.currentPrice) {
+          detail.currentPrice = info.currentPrice
+          detail.updateDate = info.updateDate || new Date().toISOString().split('T')[0]
+        }
+      } catch (error) {
+        console.error(`Failed to update net value for ${detail.code}:`, error)
+      }
+    }
+    
+    // 更新账户资产
+    for (const account of investmentAccounts.value) {
+      updateAccountAsset(account.id)
+    }
+    
+    // 保存数据
+    saveInvestmentDetails()
+    saveInvestmentAccounts()
+    
+    console.log('Net value update completed')
+  }
+  
+  // 初始执行一次更新
+  updateAllNetValues()
+  
+  // 设置定时任务
+  const setNextUpdate = () => {
+    const nextUpdateTime = getNextUpdateTime()
+    const timeUntilUpdate = nextUpdateTime - new Date()
+    
+    console.log(`Next net value update scheduled at: ${nextUpdateTime}`)
+    
+    setTimeout(() => {
+      updateAllNetValues()
+      setNextUpdate() // 递归设置下一次更新
+    }, timeUntilUpdate)
+  }
+  
+  // 启动定时任务
+  setNextUpdate()
+}
 
 // 监听数据变化，更新图表
 watch([investmentAccounts, investmentDetails], () => {
   updateCharts()
 }, { deep: true })
+
+// 组件挂载时启动定时更新
+onMounted(() => {
+  loadData()
+  initCharts()
+  scheduleNetValueUpdate()
+})
 </script>
