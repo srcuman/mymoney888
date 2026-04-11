@@ -647,17 +647,35 @@ const deleteInvestmentAccount = (id) => {
   saveInvestmentDetails()
 }
 
+// 带超时的fetch函数
+const fetchWithTimeout = async (url, options, timeout = 2000) => {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    })
+    clearTimeout(timeoutId)
+    return response
+  } catch (error) {
+    clearTimeout(timeoutId)
+    throw error
+  }
+}
+
 // 调用单个API的函数
 const fetchSingleAPI = async (url, source, code) => {
   try {
     addApiLog(`尝试调用${source}: ${url}`)
     console.log(`尝试调用${source}:`, url)
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'text/plain'
       }
-    })
+    }, 2000) // 2秒超时
     addApiLog(`${source}响应状态: ${response.status}`)
     console.log(`${source}响应状态:`, response.status)
     
@@ -670,7 +688,11 @@ const fetchSingleAPI = async (url, source, code) => {
       addApiLog(`${source}响应失败: 状态码 ${response.status}`)
     }
   } catch (error) {
-    addApiLog(`${source}调用失败: ${error.message}`)
+    if (error.name === 'AbortError') {
+      addApiLog(`${source}调用超时: 超过2秒未响应`)
+    } else {
+      addApiLog(`${source}调用失败: ${error.message}`)
+    }
     console.log(`${source}调用失败:`, error)
   }
   return { source, data: null }
