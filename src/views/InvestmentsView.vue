@@ -647,6 +647,17 @@ const deleteInvestmentAccount = (id) => {
   saveInvestmentDetails()
 }
 
+// 记录API日志
+const addApiLog = (message) => {
+  const now = new Date()
+  const time = now.toLocaleTimeString()
+  apiLogs.value.push({ time, message })
+  // 限制日志数量
+  if (apiLogs.value.length > 10) {
+    apiLogs.value.shift()
+  }
+}
+
 // 带超时的fetch函数
 const fetchWithTimeout = async (url, options, timeout = 2000) => {
   const controller = new AbortController()
@@ -917,17 +928,6 @@ const fetchInvestmentInfo = async (code) => {
   addApiLog('所有API调用失败，无法获取数据')
   console.log('所有API调用失败，无法获取数据')
   throw new Error(`无法获取代码 ${code} 的信息，请检查代码是否正确，或手动输入名称`)
-}
-
-// 记录API日志
-const addApiLog = (message) => {
-  const now = new Date()
-  const time = now.toLocaleTimeString()
-  apiLogs.value.push({ time, message })
-  // 限制日志数量
-  if (apiLogs.value.length > 10) {
-    apiLogs.value.shift()
-  }
 }
 
 // 监听代码变化，自动获取投资品种信息
