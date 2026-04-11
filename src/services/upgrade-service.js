@@ -7,8 +7,10 @@ const upgradeService = {
   // 检查是否有新版本
   checkForUpdates: async () => {
     try {
-      // 从package.json获取当前版本
-      const currentVersion = process.env.VUE_APP_VERSION || '0.0.0'
+      // 从本地文件获取当前版本
+      const currentVersionResponse = await fetch('/package.json')
+      const currentVersionData = await currentVersionResponse.json()
+      const currentVersion = currentVersionData.version || '0.0.0'
       
       // 尝试从Gitee仓库获取最新版本信息
       const repoUrl = 'https://gitee.com/srcuman/mymoney888/raw/test/package.json'
@@ -31,8 +33,8 @@ const upgradeService = {
     } catch (error) {
       console.error('检查更新失败:', error)
       return {
-        currentVersion: process.env.VUE_APP_VERSION || '0.0.0',
-        latestVersion: process.env.VUE_APP_VERSION || '0.0.0',
+        currentVersion: '0.0.0',
+        latestVersion: '0.0.0',
         hasUpdate: false,
         error: error.message
       }
