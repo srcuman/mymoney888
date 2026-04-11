@@ -251,7 +251,7 @@
           </div>
           <div class="mb-4">
             <label for="detailCode" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">代码</label>
-            <input type="text" id="detailCode" v-model="newInvestmentDetail.code" @input="handleCodeChange(newInvestmentDetail.code)" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+            <input type="text" id="detailCode" v-model="newInvestmentDetail.code" @keyup.enter="handleCodeChange(newInvestmentDetail.code)" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           </div>
           <div class="mb-4">
             <label for="detailName" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
@@ -305,7 +305,7 @@
           </div>
           <div class="mb-4">
             <label for="editDetailCode" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">代码</label>
-            <input type="text" id="editDetailCode" v-model="editInvestmentDetail.code" @input="handleEditCodeChange(editInvestmentDetail.code)" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+            <input type="text" id="editDetailCode" v-model="editInvestmentDetail.code" @keyup.enter="handleEditCodeChange(editInvestmentDetail.code)" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           </div>
           <div class="mb-4">
             <label for="editDetailName" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
@@ -637,23 +637,26 @@ const fetchInvestmentInfo = async (code) => {
   try {
     // 处理6位数字的代码（股票或基金）
     if (code.length === 6 && /^\d+$/.test(code)) {
-      // 1. 尝试基金API（使用天天基金网API）
+      // 存储不同API的结果
+      const apiResults = []
+      
+      // 1. 尝试天天基金网API（基金）
       const fundUrl = `https://fundgz.1234567.com.cn/js/${code}.js`
       
       try {
-        console.log('尝试调用基金API:', fundUrl)
+        console.log('尝试调用天天基金网API:', fundUrl)
         const fundResponse = await fetch(fundUrl, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json'
           }
         })
-        console.log('基金API响应状态:', fundResponse.status)
+        console.log('天天基金网API响应状态:', fundResponse.status)
         
         // 检查响应状态
         if (fundResponse.status === 200) {
           const fundData = await fundResponse.text()
-          console.log('基金API响应数据:', fundData)
+          console.log('天天基金网API响应数据:', fundData)
           
           // 解析基金数据
           if (fundData && fundData.includes('jsonpgz(')) {
@@ -665,12 +668,13 @@ const fetchInvestmentInfo = async (code) => {
               // 确保获取到有效的基金数据
               if (fundInfo.name && fundInfo.dwjz) {
                 console.log('成功获取基金数据:', fundInfo.name)
-                return {
+                apiResults.push({
+                  source: '天天基金网',
                   name: fundInfo.name,
                   type: '基金',
                   currentPrice: parseFloat(parseFloat(fundInfo.dwjz).toFixed(4)) || 0,
                   updateDate: fundInfo.gztime ? fundInfo.gztime.split(' ')[0] : new Date().toISOString().split('T')[0]
-                }
+                })
               }
             } catch (parseError) {
               console.log('基金数据解析失败:', parseError)
@@ -678,26 +682,66 @@ const fetchInvestmentInfo = async (code) => {
           }
         }
       } catch (fundError) {
-        console.log('基金API调用失败，尝试股票API:', fundError)
+        console.log('天天基金网API调用失败:', fundError)
       }
       
-      // 2. 尝试股票API（使用新浪财经API）
+      // 2. 尝试腾讯财经API（股票和基金）
+      const tencentStockUrl = `https://qt.gtimg.cn/q=${code}`
+      
+      try {
+        console.log('尝试调用腾讯财经API:', tencentStockUrl)
+        const tencentResponse = await fetch(tencentStockUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+        console.log('腾讯财经API响应状态:', tencentResponse.status)
+        
+        // 检查响应状态
+        if (tencentResponse.status === 200) {
+          const tencentData = await tencentResponse.text()
+          console.log('腾讯财经API响应数据:', tencentData)
+          
+          // 解析腾讯财经数据
+          if (tencentData && tencentData.includes('=')) {
+            const parts = tencentData.split('=')
+            if (parts.length > 1) {
+              const data = parts[1].replace(/"/g, '').split('~')
+              if (data.length > 3 && data[1] && data[3]) {
+                console.log('成功获取腾讯财经数据:', data[1])
+                apiResults.push({
+                  source: '腾讯财经',
+                  name: data[1],
+                  type: '股票', // 腾讯API可能同时支持股票和基金
+                  currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
+                  updateDate: new Date().toISOString().split('T')[0]
+                })
+              }
+            }
+          }
+        }
+      } catch (tencentError) {
+        console.log('腾讯财经API调用失败:', tencentError)
+      }
+      
+      // 3. 尝试新浪财经API（股票）
       const stockUrl = `https://hq.sinajs.cn/list=sh${code},sz${code}`
       
       try {
-        console.log('尝试调用股票API:', stockUrl)
+        console.log('尝试调用新浪财经API:', stockUrl)
         const stockResponse = await fetch(stockUrl, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json'
           }
         })
-        console.log('股票API响应状态:', stockResponse.status)
+        console.log('新浪财经API响应状态:', stockResponse.status)
         
         // 检查响应状态
         if (stockResponse.status === 200) {
           const stockData = await stockResponse.text()
-          console.log('股票API响应数据:', stockData)
+          console.log('新浪财经API响应数据:', stockData)
           
           // 解析股票数据
           if (stockData && stockData.includes('=')) {
@@ -708,22 +752,24 @@ const fetchInvestmentInfo = async (code) => {
                 const data = parts[1].replace(/"/g, '').split(',')
                 if (data.length > 2 && data[0] && data[3]) {
                   console.log('成功获取股票数据:', data[0])
-                  return {
+                  apiResults.push({
+                    source: '新浪财经',
                     name: data[0],
                     type: '股票',
                     currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
                     updateDate: new Date().toISOString().split('T')[0]
-                  }
+                  })
+                  break // 只需要一个有效的结果
                 }
               }
             }
           }
         }
       } catch (stockError) {
-        console.log('股票API调用失败:', stockError)
+        console.log('新浪财经API调用失败:', stockError)
       }
       
-      // 3. 尝试使用另一个基金API作为备选（新浪财经基金API）
+      // 4. 尝试新浪财经基金API作为备选
       const sinaFundUrl = `https://hq.sinajs.cn/list=ff_${code}`
       
       try {
@@ -748,12 +794,13 @@ const fetchInvestmentInfo = async (code) => {
               const data = parts[1].replace(/"/g, '').split(',')
               if (data.length > 2 && data[0] && data[1]) {
                 console.log('成功获取新浪财经基金数据:', data[0])
-                return {
+                apiResults.push({
+                  source: '新浪财经基金',
                   name: data[0],
                   type: '基金',
                   currentPrice: parseFloat(parseFloat(data[1]).toFixed(4)) || 0,
                   updateDate: new Date().toISOString().split('T')[0]
-                }
+                })
               }
             }
           }
@@ -762,7 +809,7 @@ const fetchInvestmentInfo = async (code) => {
         console.log('新浪财经基金API调用失败:', sinaFundError)
       }
       
-      // 4. 尝试使用东方财富网API作为备选
+      // 5. 尝试使用东方财富网API作为备选
       const eastmoneyUrl = `https://push2.eastmoney.com/api/qt/stock/get?secid=1.${code}&ut=fa5fd1943c7b386f172d6893dbfba10b&fields=f57,f58,f169,f170,f43,f55,f168,f152`
       
       try {
@@ -784,13 +831,14 @@ const fetchInvestmentInfo = async (code) => {
           if (eastmoneyData && eastmoneyData.data) {
             const data = eastmoneyData.data
             if (data.f57 && data.f43) {
-              console.log('成功获取东方财富网股票数据:', data.f57)
-              return {
+              console.log('成功获取东方财富网数据:', data.f57)
+              apiResults.push({
+                source: '东方财富网',
                 name: data.f57,
                 type: '股票',
                 currentPrice: parseFloat(parseFloat(data.f43).toFixed(4)) || 0,
                 updateDate: new Date().toISOString().split('T')[0]
-              }
+              })
             }
           }
         }
@@ -798,44 +846,92 @@ const fetchInvestmentInfo = async (code) => {
         console.log('东方财富网API调用失败:', eastmoneyError)
       }
       
-      // 5. 尝试使用腾讯财经API作为备选
-      const tencentUrl = `https://qt.gtimg.cn/q=${code}`
+      // 6. 分析API结果，进行数据一致性检查
+      console.log('所有API结果:', apiResults)
       
-      try {
-        console.log('尝试调用腾讯财经API:', tencentUrl)
-        const tencentResponse = await fetch(tencentUrl, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
+      if (apiResults.length > 0) {
+        // 按类型分组
+        const groupedResults = {}
+        apiResults.forEach(result => {
+          if (!groupedResults[result.type]) {
+            groupedResults[result.type] = []
           }
+          groupedResults[result.type].push(result)
         })
-        console.log('腾讯财经API响应状态:', tencentResponse.status)
         
-        // 检查响应状态
-        if (tencentResponse.status === 200) {
-          const tencentData = await tencentResponse.text()
-          console.log('腾讯财经API响应数据:', tencentData)
-          
-          // 解析腾讯财经数据
-          if (tencentData && tencentData.includes('=')) {
-            const parts = tencentData.split('=')
-            if (parts.length > 1) {
-              const data = parts[1].replace(/"/g, '').split('~')
-              if (data.length > 4 && data[1] && data[3]) {
-                console.log('成功获取腾讯财经股票数据:', data[1])
-                return {
-                  name: data[1],
-                  type: '股票',
-                  currentPrice: parseFloat(parseFloat(data[3]).toFixed(4)) || 0,
-                  updateDate: new Date().toISOString().split('T')[0]
+        // 找到有多个API支持的类型
+        let bestResult = null
+        let maxSources = 0
+        
+        for (const [type, results] of Object.entries(groupedResults)) {
+          if (results.length > maxSources) {
+            maxSources = results.length
+            // 检查名称是否一致
+            const names = results.map(r => r.name).filter(Boolean)
+            const uniqueNames = [...new Set(names)]
+            
+            if (uniqueNames.length === 1) {
+              // 名称一致，检查价格是否接近（允许0.01的误差）
+              const prices = results.map(r => r.currentPrice).filter(p => p > 0)
+              if (prices.length > 0) {
+                const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length
+                const priceDiff = Math.max(...prices) - Math.min(...prices)
+                
+                if (priceDiff <= 0.01) {
+                  // 价格接近，使用平均价格
+                  bestResult = {
+                    name: uniqueNames[0],
+                    type: type,
+                    currentPrice: parseFloat(avgPrice.toFixed(4)),
+                    updateDate: new Date().toISOString().split('T')[0]
+                  }
                 }
               }
             }
           }
         }
-      } catch (tencentError) {
-        console.log('腾讯财经API调用失败:', tencentError)
+        
+        if (bestResult) {
+          console.log('找到一致的API结果:', bestResult)
+          return bestResult
+        } else {
+          // 没有一致的结果，尝试使用最权威的数据源
+          // 优先使用腾讯财经或天天基金网
+          const tencentResult = apiResults.find(r => r.source === '腾讯财经')
+          const tianTianResult = apiResults.find(r => r.source === '天天基金网')
+          
+          if (tencentResult) {
+            console.log('使用腾讯财经结果:', tencentResult)
+            return {
+              name: tencentResult.name,
+              type: tencentResult.type,
+              currentPrice: tencentResult.currentPrice,
+              updateDate: tencentResult.updateDate
+            }
+          } else if (tianTianResult) {
+            console.log('使用天天基金网结果:', tianTianResult)
+            return {
+              name: tianTianResult.name,
+              type: tianTianResult.type,
+              currentPrice: tianTianResult.currentPrice,
+              updateDate: tianTianResult.updateDate
+            }
+          } else if (apiResults.length > 0) {
+            // 使用第一个有效结果
+            const firstResult = apiResults[0]
+            console.log('使用第一个有效结果:', firstResult)
+            return {
+              name: firstResult.name,
+              type: firstResult.type,
+              currentPrice: firstResult.currentPrice,
+              updateDate: firstResult.updateDate
+            }
+          }
+        }
       }
+      
+      // 所有API都失败或没有一致的结果
+      throw new Error('无法从多个API获取一致的投资信息，请检查代码是否正确，或手动输入名称和价格')
     }
     
     // 如果API调用失败或没有找到数据，返回错误
