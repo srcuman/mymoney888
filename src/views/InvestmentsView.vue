@@ -941,6 +941,14 @@ const handleCodeChange = async () => {
   
   // 只在用户按Enter键且代码长度为6位时触发API调用
   if (code && code.length === 6) {
+    // 检查代码是否只包含数字
+    if (!/^\d+$/.test(code)) {
+      addApiLog('代码格式不正确，请输入6位数字代码')
+      console.log('Code format is not valid:', code)
+      alert('代码格式不正确，请输入6位数字代码')
+      return
+    }
+    
     try {
       addApiLog(`开始获取代码 ${code} 的投资信息`)
       console.log('Fetching investment info for code:', code)
@@ -980,6 +988,13 @@ const handleEditCodeChange = async () => {
   console.log('handleEditCodeChange called with code:', code)
   // 只在用户按Enter键且代码长度为6位时触发API调用
   if (code && code.length === 6) {
+    // 检查代码是否只包含数字
+    if (!/^\d+$/.test(code)) {
+      console.log('Code format is not valid:', code)
+      alert('代码格式不正确，请输入6位数字代码')
+      return
+    }
+    
     try {
       console.log('Fetching investment info for code:', code)
       const info = await fetchInvestmentInfo(code)
