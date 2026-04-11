@@ -61,12 +61,12 @@
                   <label :for="'income-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
                 </div>
                 <!-- 子分类 -->
-                <div v-if="category.subcategories && category.subcategories.length > 0" class="ml-6 mt-1">
-                  <div v-for="subcategory in category.subcategories" :key="'income-sub-' + subcategory.name" class="flex items-center mb-1">
-                    <input type="checkbox" :id="'income-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" @change="handleSubcategoryChange('income', category.name, subcategory.name)" class="mr-2">
-                    <label :for="'income-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
-                  </div>
-                </div>
+        <div v-if="category.children && category.children.length > 0" class="ml-6 mt-1">
+          <div v-for="subcategory in category.children" :key="'income-sub-' + subcategory.name" class="flex items-center mb-1">
+            <input type="checkbox" :id="'income-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" @change="handleSubcategoryChange('income', category.name, subcategory.name)" class="mr-2">
+            <label :for="'income-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
+          </div>
+        </div>
               </div>
               <div v-if="incomeCategoryList.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无收入分类数据</div>
             </div>
@@ -85,12 +85,12 @@
                   <label :for="'expense-category-' + category.name" class="text-sm text-gray-700 dark:text-gray-300">{{ category.name }}</label>
                 </div>
                 <!-- 子分类 -->
-                <div v-if="category.subcategories && category.subcategories.length > 0" class="ml-6 mt-1">
-                  <div v-for="subcategory in category.subcategories" :key="'expense-sub-' + subcategory.name" class="flex items-center mb-1">
-                    <input type="checkbox" :id="'expense-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" @change="handleSubcategoryChange('expense', category.name, subcategory.name)" class="mr-2">
-                    <label :for="'expense-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
-                  </div>
-                </div>
+        <div v-if="category.children && category.children.length > 0" class="ml-6 mt-1">
+          <div v-for="subcategory in category.children" :key="'expense-sub-' + subcategory.name" class="flex items-center mb-1">
+            <input type="checkbox" :id="'expense-subcategory-' + subcategory.name" :value="subcategory.name" v-model="filters.category" @change="handleSubcategoryChange('expense', category.name, subcategory.name)" class="mr-2">
+            <label :for="'expense-subcategory-' + subcategory.name" class="text-xs text-gray-600 dark:text-gray-400">{{ subcategory.name }}</label>
+          </div>
+        </div>
               </div>
               <div v-if="expenseCategoryList.length === 0" class="text-sm text-gray-500 dark:text-gray-400">无支出分类数据</div>
             </div>
@@ -403,8 +403,8 @@ const allCategories = computed(() => {
   incomeCategoryList.value.forEach(category => {
     categories.add(category.name)
     // 添加子分类
-    if (category.subcategories) {
-      category.subcategories.forEach(subcategory => {
+    if (category.children) {
+      category.children.forEach(subcategory => {
         categories.add(subcategory.name)
       })
     }
@@ -414,8 +414,8 @@ const allCategories = computed(() => {
   expenseCategoryList.value.forEach(category => {
     categories.add(category.name)
     // 添加子分类
-    if (category.subcategories) {
-      category.subcategories.forEach(subcategory => {
+    if (category.children) {
+      category.children.forEach(subcategory => {
         categories.add(subcategory.name)
       })
     }
@@ -608,8 +608,8 @@ const toggleSelectAllExpenseCategories = () => {
   const expenseCategoryNames = []
   expenseCategoryList.value.forEach(category => {
     expenseCategoryNames.push(category.name)
-    if (category.subcategories) {
-      category.subcategories.forEach(subcategory => {
+    if (category.children) {
+      category.children.forEach(subcategory => {
         expenseCategoryNames.push(subcategory.name)
       })
     }
@@ -635,11 +635,11 @@ const handleCategoryChange = (type, categoryName) => {
   const categoryList = type === 'income' ? incomeCategoryList.value : expenseCategoryList.value
   const category = categoryList.find(c => c.name === categoryName)
   
-  if (!category || !category.subcategories || category.subcategories.length === 0) return
+  if (!category || !category.children || category.children.length === 0) return
   
   // 当选择分类时，移除其所有子分类
   if (filters.value.category.includes(categoryName)) {
-    category.subcategories.forEach(subcategory => {
+    category.children.forEach(subcategory => {
       const index = filters.value.category.indexOf(subcategory.name)
       if (index !== -1) {
         filters.value.category.splice(index, 1)
