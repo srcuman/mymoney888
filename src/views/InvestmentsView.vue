@@ -887,83 +887,87 @@ const fetchInvestmentInfo = async (code) => {
       console.log('所有API结果:', apiResults)
       
       if (apiResults.length > 0) {
-        // 按类型分组
-        const groupedResults = {}
-        apiResults.forEach(result => {
-          if (!groupedResults[result.type]) {
-            groupedResults[result.type] = []
-          }
-          groupedResults[result.type].push(result)
-        })
-        
-        // 找到有多个API支持的类型
-        let bestResult = null
-        let maxSources = 0
-        
-        for (const [type, results] of Object.entries(groupedResults)) {
-          if (results.length > maxSources) {
-            maxSources = results.length
-            // 检查名称是否一致
-            const names = results.map(r => r.name).filter(Boolean)
-            const uniqueNames = [...new Set(names)]
-            
-            if (uniqueNames.length === 1) {
-              // 名称一致，检查价格是否接近（允许0.01的误差）
-              const prices = results.map(r => r.currentPrice).filter(p => p > 0)
-              if (prices.length > 0) {
-                const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length
-                const priceDiff = Math.max(...prices) - Math.min(...prices)
-                
-                if (priceDiff <= 0.01) {
-                  // 价格接近，使用平均价格
-                  bestResult = {
-                    name: uniqueNames[0],
-                    type: type,
-                    currentPrice: parseFloat(avgPrice.toFixed(4)),
-                    updateDate: new Date().toISOString().split('T')[0]
-                  }
-                }
-              }
-            }
+        // 优先使用权威数据源的结果
+        // 1. 腾讯财经
+        const tencentResult = apiResults.find(r => r.source === '腾讯财经')
+        if (tencentResult) {
+          console.log('使用腾讯财经结果:', tencentResult)
+          return {
+            name: tencentResult.name,
+            type: tencentResult.type,
+            currentPrice: tencentResult.currentPrice,
+            updateDate: tencentResult.updateDate
           }
         }
         
-        if (bestResult) {
-          console.log('找到一致的API结果:', bestResult)
-          return bestResult
-        } else {
-          // 没有一致的结果，尝试使用最权威的数据源
-          // 优先使用腾讯财经或天天基金网
-          const tencentResult = apiResults.find(r => r.source === '腾讯财经')
-          const tianTianResult = apiResults.find(r => r.source === '天天基金网')
-          
-          if (tencentResult) {
-            console.log('使用腾讯财经结果:', tencentResult)
-            return {
-              name: tencentResult.name,
-              type: tencentResult.type,
-              currentPrice: tencentResult.currentPrice,
-              updateDate: tencentResult.updateDate
-            }
-          } else if (tianTianResult) {
-            console.log('使用天天基金网结果:', tianTianResult)
-            return {
-              name: tianTianResult.name,
-              type: tianTianResult.type,
-              currentPrice: tianTianResult.currentPrice,
-              updateDate: tianTianResult.updateDate
-            }
-          } else if (apiResults.length > 0) {
-            // 使用第一个有效结果
-            const firstResult = apiResults[0]
-            console.log('使用第一个有效结果:', firstResult)
-            return {
-              name: firstResult.name,
-              type: firstResult.type,
-              currentPrice: firstResult.currentPrice,
-              updateDate: firstResult.updateDate
-            }
+        // 2. 天天基金网
+        const tianTianResult = apiResults.find(r => r.source === '天天基金网')
+        if (tianTianResult) {
+          console.log('使用天天基金网结果:', tianTianResult)
+          return {
+            name: tianTianResult.name,
+            type: tianTianResult.type,
+            currentPrice: tianTianResult.currentPrice,
+            updateDate: tianTianResult.updateDate
           }
+        }
+        
+        // 3. 支付宝基金
+        const alipayResult = apiResults.find(r => r.source === '支付宝基金')
+        if (alipayResult) {
+          console.log('使用支付宝基金结果:', alipayResult)
+          return {
+            name: alipayResult.name,
+            type: alipayResult.type,
+            currentPrice: alipayResult.currentPrice,
+            updateDate: alipayResult.updateDate
+          }
+        }
+        
+        // 4. 东方财富网
+        const eastmoneyResult = apiResults.find(r => r.source === '东方财富网')
+        if (eastmoneyResult) {
+          console.log('使用东方财富网结果:', eastmoneyResult)
+          return {
+            name: eastmoneyResult.name,
+            type: eastmoneyResult.type,
+            currentPrice: eastmoneyResult.currentPrice,
+            updateDate: eastmoneyResult.updateDate
+          }
+        }
+        
+        // 5. 新浪财经
+        const sinaResult = apiResults.find(r => r.source === '新浪财经')
+        if (sinaResult) {
+          console.log('使用新浪财经结果:', sinaResult)
+          return {
+            name: sinaResult.name,
+            type: sinaResult.type,
+            currentPrice: sinaResult.currentPrice,
+            updateDate: sinaResult.updateDate
+          }
+        }
+        
+        // 6. 新浪财经基金
+        const sinaFundResult = apiResults.find(r => r.source === '新浪财经基金')
+        if (sinaFundResult) {
+          console.log('使用新浪财经基金结果:', sinaFundResult)
+          return {
+            name: sinaFundResult.name,
+            type: sinaFundResult.type,
+            currentPrice: sinaFundResult.currentPrice,
+            updateDate: sinaFundResult.updateDate
+          }
+        }
+        
+        // 7. 使用第一个有效结果
+        const firstResult = apiResults[0]
+        console.log('使用第一个有效结果:', firstResult)
+        return {
+          name: firstResult.name,
+          type: firstResult.type,
+          currentPrice: firstResult.currentPrice,
+          updateDate: firstResult.updateDate
         }
       }
       
@@ -982,7 +986,8 @@ const fetchInvestmentInfo = async (code) => {
 
 // 监听代码变化，自动获取投资品种信息
 const handleCodeChange = async (code) => {
-  if (code && code.length >= 3) {
+  // 只在用户按Enter键且代码长度为6位时触发API调用
+  if (code && code.length === 6) {
     try {
       const info = await fetchInvestmentInfo(code)
       newInvestmentDetail.value.name = info.name
@@ -1001,7 +1006,8 @@ const handleCodeChange = async (code) => {
 
 // 监听编辑模式下的代码变化
 const handleEditCodeChange = async (code) => {
-  if (code && code.length >= 3) {
+  // 只在用户按Enter键且代码长度为6位时触发API调用
+  if (code && code.length === 6) {
     try {
       const info = await fetchInvestmentInfo(code)
       editInvestmentDetail.value.name = info.name
