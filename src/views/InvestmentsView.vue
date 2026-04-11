@@ -334,17 +334,176 @@
         </form>
       </div>
     </div>
+    
+    <!-- 投资统计分析 -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6">投资统计分析</h2>
+      
+      <!-- 收益概览 -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
+          <h3 class="text-sm font-medium text-blue-600 dark:text-blue-400">总投资资产</h3>
+          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ totalInvestmentAsset.toFixed(2) }}</p>
+        </div>
+        <div class="bg-green-50 dark:bg-green-900/30 p-4 rounded-lg">
+          <h3 class="text-sm font-medium text-green-600 dark:text-green-400">总收益</h3>
+          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ totalProfitLoss >= 0 ? '+' : '' }}{{ totalProfitLoss.toFixed(2) }}</p>
+        </div>
+        <div class="bg-purple-50 dark:bg-purple-900/30 p-4 rounded-lg">
+          <h3 class="text-sm font-medium text-purple-600 dark:text-purple-400">总收益率</h3>
+          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ totalProfitRate >= 0 ? '+' : '' }}{{ totalProfitRate.toFixed(2) }}%</p>
+        </div>
+        <div class="bg-yellow-50 dark:bg-yellow-900/30 p-4 rounded-lg">
+          <h3 class="text-sm font-medium text-yellow-600 dark:text-yellow-400">持仓数量</h3>
+          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ investmentDetails.length }}</p>
+        </div>
+      </div>
+      
+      <!-- 数据可视化图表 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <!-- 持仓类型分布图表 -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">持仓类型分布</h3>
+          <div class="h-64">
+            <canvas ref="typeDistributionChart"></canvas>
+          </div>
+        </div>
+        
+        <!-- 账户资产分布图表 -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">账户资产分布</h3>
+          <div class="h-64">
+            <canvas ref="accountDistributionChart"></canvas>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 持仓分析 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <!-- 按品种类型分析 -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">持仓类型分析</h3>
+          <div class="space-y-3">
+            <div v-for="(item, index) in typeDistribution" :key="index" class="flex justify-between items-center">
+              <span class="text-gray-700 dark:text-gray-300">{{ item.type }}</span>
+              <div class="flex items-center">
+                <span class="text-gray-900 dark:text-white font-medium mr-2">{{ item.amount.toFixed(2) }}</span>
+                <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div :class="item.color" class="h-2 rounded-full" :style="{ width: item.percentage + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 按账户分析 -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">账户资产分析</h3>
+          <div class="space-y-3">
+            <div v-for="(account, index) in investmentAccounts" :key="index" class="flex justify-between items-center">
+              <span class="text-gray-700 dark:text-gray-300">{{ account.name }}</span>
+              <div class="flex items-center">
+                <span class="text-gray-900 dark:text-white font-medium mr-2">{{ account.totalAsset.toFixed(2) }}</span>
+                <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div class="bg-primary h-2 rounded-full" :style="{ width: (account.totalAsset / totalInvestmentAsset * 100) + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 收益分析 -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-8">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">收益分析</h3>
+        <div class="h-64">
+          <canvas ref="profitAnalysisChart"></canvas>
+        </div>
+      </div>
+      
+      <!-- 收益明细 -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">收益明细</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead class="bg-gray-50 dark:bg-gray-800">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  投资品种
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  持仓市值
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  持仓成本
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  盈亏
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  收益率
+                </th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                  持仓占比
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tr v-for="detail in investmentDetails" :key="detail.id">
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="text-sm font-medium text-gray-900 dark:text-white">{{ detail.name }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">{{ detail.code }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="text-sm text-gray-900 dark:text-white">{{ (detail.shares * detail.currentPrice).toFixed(2) }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="text-sm text-gray-900 dark:text-white">{{ (detail.shares * detail.costPrice).toFixed(2) }}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div :class="(detail.currentPrice - detail.costPrice) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'" class="text-sm font-medium">
+                    {{ ((detail.currentPrice - detail.costPrice) * detail.shares).toFixed(2) }}
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div :class="(detail.currentPrice - detail.costPrice) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'" class="text-sm font-medium">
+                    {{ ((detail.currentPrice - detail.costPrice) / detail.costPrice * 100).toFixed(2) }}%
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="text-sm text-gray-900 dark:text-white">{{ ((detail.shares * detail.currentPrice) / totalInvestmentAsset * 100).toFixed(2) }}%</div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-if="investmentDetails.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+          暂无投资明细数据
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import Chart from 'chart.js/auto'
 
 // 投资账户列表
 const investmentAccounts = ref([])
 
 // 投资明细列表
 const investmentDetails = ref([])
+
+// 图表引用
+const typeDistributionChart = ref(null)
+const accountDistributionChart = ref(null)
+const profitAnalysisChart = ref(null)
+
+// 图表实例
+let typeChartInstance = null
+let accountChartInstance = null
+let profitChartInstance = null
 
 // 添加投资账户模态框
 const showAddInvestmentAccountModal = ref(false)
@@ -691,6 +850,227 @@ const saveInvestmentDetails = () => {
   localStorage.setItem('investmentDetails', JSON.stringify(investmentDetails.value))
 }
 
+// 计算总投资资产
+const totalInvestmentAsset = computed(() => {
+  return investmentAccounts.value.reduce((total, account) => total + account.totalAsset, 0)
+})
+
+// 计算总收益
+const totalProfitLoss = computed(() => {
+  return investmentAccounts.value.reduce((total, account) => total + account.profitLoss, 0)
+})
+
+// 计算总收益率
+const totalProfitRate = computed(() => {
+  const totalCost = totalInvestmentAsset.value - totalProfitLoss.value
+  return totalCost > 0 ? (totalProfitLoss.value / totalCost) * 100 : 0
+})
+
+// 计算持仓类型分布
+const typeDistribution = computed(() => {
+  const typeMap = {}
+  const typeColors = {
+    '基金': 'bg-blue-500',
+    '股票': 'bg-green-500',
+    '债券': 'bg-yellow-500',
+    '其他': 'bg-purple-500'
+  }
+  
+  // 统计各类型的资产
+  investmentDetails.value.forEach(detail => {
+    const type = detail.type
+    const value = detail.shares * detail.currentPrice
+    if (typeMap[type]) {
+      typeMap[type] += value
+    } else {
+      typeMap[type] = value
+    }
+  })
+  
+  // 转换为数组并计算百分比
+  const distribution = Object.entries(typeMap).map(([type, amount]) => ({
+    type,
+    amount,
+    percentage: totalInvestmentAsset.value > 0 ? (amount / totalInvestmentAsset.value) * 100 : 0,
+    color: typeColors[type] || 'bg-gray-500'
+  }))
+  
+  // 按金额排序
+  return distribution.sort((a, b) => b.amount - a.amount)
+})
+
+// 初始化图表
+const initCharts = async () => {
+  await nextTick()
+  updateCharts()
+}
+
+// 更新图表
+const updateCharts = () => {
+  updateTypeDistributionChart()
+  updateAccountDistributionChart()
+  updateProfitAnalysisChart()
+}
+
+// 更新持仓类型分布图表
+const updateTypeDistributionChart = () => {
+  if (!typeDistributionChart.value) return
+  
+  const ctx = typeDistributionChart.value.getContext('2d')
+  
+  // 销毁旧图表
+  if (typeChartInstance) {
+    typeChartInstance.destroy()
+  }
+  
+  const typeData = typeDistribution.value
+  const labels = typeData.map(item => item.type)
+  const data = typeData.map(item => item.amount)
+  const backgroundColor = [
+    'rgba(54, 162, 235, 0.7)',
+    'rgba(75, 192, 192, 0.7)',
+    'rgba(255, 206, 86, 0.7)',
+    'rgba(153, 102, 255, 0.7)'
+  ]
+  
+  typeChartInstance = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: backgroundColor,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom'
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const value = context.raw
+              const total = context.dataset.data.reduce((a, b) => a + b, 0)
+              const percentage = total > 0 ? ((value / total) * 100).toFixed(2) : 0
+              return `${context.label}: ${value.toFixed(2)} (${percentage}%)`
+            }
+          }
+        }
+      }
+    }
+  })
+}
+
+// 更新账户资产分布图表
+const updateAccountDistributionChart = () => {
+  if (!accountDistributionChart.value) return
+  
+  const ctx = accountDistributionChart.value.getContext('2d')
+  
+  // 销毁旧图表
+  if (accountChartInstance) {
+    accountChartInstance.destroy()
+  }
+  
+  const labels = investmentAccounts.value.map(account => account.name)
+  const data = investmentAccounts.value.map(account => account.totalAsset)
+  const backgroundColor = [
+    'rgba(255, 99, 132, 0.7)',
+    'rgba(54, 162, 235, 0.7)',
+    'rgba(255, 206, 86, 0.7)',
+    'rgba(75, 192, 192, 0.7)',
+    'rgba(153, 102, 255, 0.7)',
+    'rgba(255, 159, 64, 0.7)'
+  ]
+  
+  accountChartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: data,
+        backgroundColor: backgroundColor,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom'
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const value = context.raw
+              const total = context.dataset.data.reduce((a, b) => a + b, 0)
+              const percentage = total > 0 ? ((value / total) * 100).toFixed(2) : 0
+              return `${context.label}: ${value.toFixed(2)} (${percentage}%)`
+            }
+          }
+        }
+      }
+    }
+  })
+}
+
+// 更新收益分析图表
+const updateProfitAnalysisChart = () => {
+  if (!profitAnalysisChart.value) return
+  
+  const ctx = profitAnalysisChart.value.getContext('2d')
+  
+  // 销毁旧图表
+  if (profitChartInstance) {
+    profitChartInstance.destroy()
+  }
+  
+  const labels = investmentDetails.value.map(detail => detail.name)
+  const profitData = investmentDetails.value.map(detail => {
+    return (detail.currentPrice - detail.costPrice) * detail.shares
+  })
+  const backgroundColor = profitData.map(profit => {
+    return profit >= 0 ? 'rgba(75, 192, 192, 0.7)' : 'rgba(255, 99, 132, 0.7)'
+  })
+  
+  profitChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: '盈亏',
+        data: profitData,
+        backgroundColor: backgroundColor,
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: function(value) {
+              return value.toFixed(2)
+            }
+          }
+        }
+      }
+    }
+  })
+}
+
 // 从本地存储加载数据
 const loadData = () => {
   const savedAccounts = localStorage.getItem('investmentAccounts')
@@ -707,5 +1087,11 @@ const loadData = () => {
 
 onMounted(() => {
   loadData()
+  initCharts()
 })
+
+// 监听数据变化，更新图表
+watch([investmentAccounts, investmentDetails], () => {
+  updateCharts()
+}, { deep: true })
 </script>
