@@ -26,7 +26,7 @@ RUN npm install
 COPY . .
 
 # 设置脚本执行权限
-RUN chmod +x /app/scripts/start-app.sh
+RUN chmod +x /app/scripts/start-app.sh /app/scripts/upgrade.sh /app/scripts/upgrade-command.sh
 
 # 暴露8888端口
 EXPOSE 8888
