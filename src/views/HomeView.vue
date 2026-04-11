@@ -28,12 +28,16 @@
             <select id="category" v-model="filters.category" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
               <option value="">全部</option>
               <optgroup label="支出分类">
-                <option v-for="category in expenseCategories" :key="category.name" :value="category.name">{{ category.name }}</option>
-                <option v-for="category in expenseCategories" v-for="subcategory in (category.children || [])" :key="`${category.name}-${subcategory.name}`" :value="`${category.name}-${subcategory.name}`">{{ subcategory.name }}</option>
+                <template v-for="category in expenseCategories" :key="category.name">
+                  <option :value="category.name">{{ category.name }}</option>
+                  <option v-for="subcategory in (category.children || [])" :key="`${category.name}-${subcategory.name}`" :value="`${category.name}-${subcategory.name}`">&nbsp;&nbsp;{{ subcategory.name }}</option>
+                </template>
               </optgroup>
               <optgroup label="收入分类">
-                <option v-for="category in incomeCategories" :key="category.name" :value="category.name">{{ category.name }}</option>
-                <option v-for="category in incomeCategories" v-for="subcategory in (category.children || [])" :key="`${category.name}-${subcategory.name}`" :value="`${category.name}-${subcategory.name}`">{{ subcategory.name }}</option>
+                <template v-for="category in incomeCategories" :key="category.name">
+                  <option :value="category.name">{{ category.name }}</option>
+                  <option v-for="subcategory in (category.children || [])" :key="`${category.name}-${subcategory.name}`" :value="`${category.name}-${subcategory.name}`">&nbsp;&nbsp;{{ subcategory.name }}</option>
+                </template>
               </optgroup>
             </select>
           </div>
