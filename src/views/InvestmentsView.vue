@@ -940,7 +940,7 @@ const fetchInvestmentInfo = async (code, userSelectedType = null) => {
   console.log('主API失败，尝试备用API...')
   
   // 备用基金API - 只在可能是基金的情况下尝试
-  if (isPossibleFund || userSelectedType === '基金') {
+  if (isPossibleFundCode || userSelectedType === '基金') {
     const backupResult = await fetchSingleAPI(`/fund/pingzhongdata/${code}.js`, '天天基金基本信息', code)
     const parsed = parseAPIResponse(backupResult, code)
     if (parsed) {
