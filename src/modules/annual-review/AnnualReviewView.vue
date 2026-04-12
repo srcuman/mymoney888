@@ -69,6 +69,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import coreDataStore from '../../services/core-data-store.js'
 
 // 选择的年份
 const selectedYear = ref(new Date().getFullYear())
@@ -177,7 +178,7 @@ const insights = computed(() => {
 
 onMounted(() => {
   // 从本地存储加载交易数据
-  const savedTransactions = localStorage.getItem('transactions')
+  const savedTransactions = JSON.stringify(coreDataStore.getRaw('transactions'))
   if (savedTransactions) {
     transactions.value = JSON.parse(savedTransactions)
   }

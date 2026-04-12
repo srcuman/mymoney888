@@ -10,13 +10,13 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                                                             │
-│   ★★★ 记账是核心，其他功能都是辅助记账而存在的 ★★★                          │
+│   ★★★ 记账是核心，其他功能都是辅助记账而存在的 ★★★                            │
 │                                                                             │
-│   核心：transactions, accounts, categories                                 │
-│   辅助：creditCards, loans → 服务于记账的交易                              │
-│   扩展：investmentAccounts → 整合到资产总览                                │
+│   核心：transactions, accounts, categories                                  │
+│   辅助：creditCards, loans → 服务于记账的交易                               │
+│   扩展：investmentAccounts → 整合到资产总览                                  │
 │                                                                             │
-│   原则：所有数据变更必须通过 CoreDataStore，确保联动一致                     │
+│   原则：所有数据变更必须通过 CoreDataStore，确保联动一致                      │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -38,27 +38,20 @@ mymoney888/
 │   │
 │   ├── modules/                   # 【功能模块】独立功能
 │   │   ├── statistics/            # 统计分析
-│   │   │   └── StatisticsView.vue
 │   │   ├── credit-cards/          # 信用卡管理
-│   │   │   └── CreditCardsView.vue
 │   │   ├── loans/                 # 贷款管理
-│   │   │   └── LoansView.vue
 │   │   ├── investments/           # 投资管理
-│   │   │   └── InvestmentsView.vue
 │   │   ├── annual-review/         # 年度回顾
-│   │   │   └── AnnualReviewView.vue
 │   │   └── data/                  # 数据管理
-│   │       ├── AssetsView.vue
-│   │       └── ImportExportView.vue
 │   │
 │   ├── system/                    # 【系统模块】
-│   │   ├── LoginView.vue
-│   │   ├── RegisterView.vue
-│   │   ├── UserManagementView.vue
-│   │   └── LedgerManagementView.vue
+│   │   └── Login, Register, UserManagement, LedgerManagement
 │   │
 │   ├── services/
-│   │   └── core-data-store.js     # 核心数据存储服务
+│   │   ├── core-data-store.js     # 核心数据存储
+│   │   ├── mysql-sync-service.js  # MySQL同步服务
+│   │   ├── sync-service.js        # 同步服务（旧）
+│   │   └── api-service.js         # API服务
 │   │
 │   ├── router/
 │   │   └── index.js
@@ -66,7 +59,13 @@ mymoney888/
 │   ├── App.vue
 │   └── main.js
 │
+├── docs/                          # 文档
+│   ├── BRANCH_STRATEGY.md         # 分支策略
+│   ├── DATA_STORAGE_ARCHITECTURE.md # 数据存储架构
+│   └── ...
+│
 ├── server.js                      # Node.js 后端服务
+├── database/                      # 数据库脚本
 └── README.md
 ```
 
@@ -81,9 +80,9 @@ mymoney888/
 - **共享数据层**：所有模块都通过 CoreDataStore 访问数据
 - **松耦合设计**：模块之间不直接依赖，通过事件和数据层通信
 
-### 2. 核心数据存储 (CoreDataStore)
+**目的**：独立模块只是为了更好的记账使用。有它更好，没它也能做最基础的记账。
 
-**唯一真实数据源**：localStorage（按账套隔离）
+### 2. 核心数据存储 (CoreDataStore)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -92,12 +91,7 @@ mymoney888/
                                           │
                                           ▼ 异步同步
 ┌─────────────────────────────────────────────────────────────┐
-│                    MySQL (服务器主数据源)                      │
-└─────────────────────────────────────────────────────────────┘
-                                          │
-                                          ▼ 定时备份
-┌─────────────────────────────────────────────────────────────┐
-│                 JSON文件 (Docker Volume)                      │
+│                    MySQL (服务器备份)                          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -113,6 +107,74 @@ mymoney888/
 
 ---
 
+## 📊 数据存储
+
+### 存储架构：DataStore + MySQL（双份存储）
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          数据存储双份架构                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────────┐         ┌───────────────────────┐              │
+│  │   DataStore (本地层)   │  同步    │   MySQL (云端层)       │              │
+│  │                       │◄───────►│                       │              │
+│  │  • localStorage       │         │  • 用户数据备份         │              │
+│  │  • 响应式数据          │         │  • 多设备同步           │              │
+│  │  • 账套隔离            │         │  • 数据恢复             │              │
+│  │                       │         │                       │              │
+│  │  目的：                │         │  目的：                │              │
+│  │  减少冗余，引用机制     │         │  云端备份，安全持久     │              │
+│  │  支持本地文件存储       │         │                       │              │
+│  └───────────────────────┘         └───────────────────────┘              │
+│                                                                             │
+│  数据同步策略：                                                              │
+│  • 变更时自动同步到 MySQL（防抖 2 秒）                                         │
+│  • 启动时从 MySQL 拉取（如有）                                                │
+│  • 离线操作暂存，联网后自动同步                                                │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 设计理念：减少冗余，引用机制
+
+类似代码中的版本号概念：
+- **一处写入，多处引用**
+- 例如：分类 ID 在多处使用，但分类定义只存储一份
+- 修改时只改一处，所有引用自动生效
+
+```
+transactions          categories           accounts
+┌─────────────┐      ┌─────────────┐     ┌─────────────┐
+│ category:   │ ────►│ id: "cat1"  │     │ id: "acc1"  │
+│   "餐饮-午餐" │      │ name: "餐饮" │     │ name: "银行卡" │
+│ account:    │      │ children:   │     │ balance:    │
+│   "acc1"    │ ─────────► [...]   │     │   5000      │
+└─────────────┘      └─────────────┘     └─────────────┘
+       │
+       ▼ 引用（不重复存储数据）
+┌─────────────┐
+│ merchant:   │
+│   "麦当劳"   │  ────►  merchants[] 只存储一次
+└─────────────┘
+```
+
+### DataStore 本地存储
+
+| 键名 | 数据类型 | 账套隔离 | 说明 |
+|------|----------|----------|------|
+| transactions_{账套ID} | 交易记录 | ✅ | 核心数据 |
+| accounts_{账套ID} | 账户余额 | ✅ | 账户数据 |
+| categories_{账套ID} | 收支分类 | ✅ | 分类数据 |
+| dimensions | 维度数据 | ❌ | 成员/商户/标签/支付渠道 |
+| ledgers | 账套列表 | ❌ | 账套管理 |
+
+### MySQL 服务器存储
+
+通过 `user_id` + `ledger_id` 隔离用户和账套数据。详见 [DATABASE_DESIGN.md](DATABASE_DESIGN.md)。
+
+---
+
 ## 🔄 数据联动规则
 
 ### 核心记账联动
@@ -121,6 +183,14 @@ mymoney888/
 交易添加 ──→ 自动更新账户余额
 交易编辑 ──→ 自动调整账户余额（还原旧 + 应用新）
 交易删除 ──→ 自动还原账户余额
+```
+
+### 账户联动
+
+```
+添加账户 ──→ 同步创建关联账户（投资/信用卡）
+更新账户 ──→ 同步更新关联账户余额
+删除账户 ──→ 清理关联账户和数据
 ```
 
 ### 辅助功能联动
@@ -146,27 +216,6 @@ mymoney888/
 维度被交易使用 ──→ 只允许修改名称，不允许删除
 维度未被使用 ──→ 可正常删除
 ```
-
----
-
-## 📊 数据存储
-
-### 本地存储 (localStorage)
-
-| 键名 | 数据类型 | 账套隔离 |
-|------|----------|----------|
-| transactions_{账套ID} | 交易记录 | ✅ |
-| accounts_{账套ID} | 账户余额 | ✅ |
-| categories_{账套ID} | 收支分类 | ✅ |
-| members | 成员 | ❌ |
-| merchants | 商户 | ❌ |
-| tags | 标签 | ❌ |
-| paymentChannels | 支付渠道 | ❌ |
-| ledgers | 账套列表 | ❌ |
-
-### 服务器存储 (MySQL)
-
-与 localStorage 结构一一对应，通过 `userId` 隔离用户数据。
 
 ---
 
@@ -210,7 +259,7 @@ mymoney888/
 - **图表库**: Chart.js
 - **后端**: Node.js + Express
 - **数据库**: MySQL
-- **数据持久化**: localStorage + MySQL + JSON文件
+- **数据持久化**: DataStore (localStorage) + MySQL
 
 ---
 
@@ -250,7 +299,47 @@ const item = coreDataStore.find('transactions', t => t.id === id)
 await coreDataStore.addTransaction(transactionData)
 await coreDataStore.updateTransaction(id, updates)
 await coreDataStore.deleteTransaction(id)
+
+// 账户方法（自动联动）
+await coreDataStore.addAccount(accountData)
+await coreDataStore.updateAccount(id, updates)
+await coreDataStore.deleteAccount(id)
+
+// 信用卡方法（自动联动）
+await coreDataStore.addCreditCard(cardData)
+await coreDataStore.repayCreditCard(fromAccountId, cardId, amount)
+
+// 投资方法（自动联动）
+await coreDataStore.addInvestmentAccount(accountData)
+await coreDataStore.updateNetValue(accountId, newValue)
 ```
+
+### 使用 MySQL 同步服务
+
+```javascript
+import mysqlSyncService from '../services/mysql-sync-service.js'
+
+// 手动同步
+await mysqlSyncService.sync()
+
+// 全量同步（推送+拉取）
+await mysqlSyncService.fullSync()
+
+// 获取同步状态
+const status = mysqlSyncService.getStatus()
+```
+
+---
+
+## 📚 文档
+
+| 文档 | 说明 |
+|------|------|
+| [README.md](README.md) | 项目概述 |
+| [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | 数据库设计 |
+| [DATA_STORAGE_ARCHITECTURE.md](docs/DATA_STORAGE_ARCHITECTURE.md) | 数据存储架构 |
+| [BRANCH_STRATEGY.md](docs/BRANCH_STRATEGY.md) | 分支策略 |
+| [DEPLOY.md](DEPLOY.md) | 部署指南 |
 
 ---
 
@@ -268,7 +357,7 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 ---
 
 **版本历史**:
-- **v3.8.0** - 模块化重构，核心数据存储独立，维度管理保护
+- **v3.8.0** - 模块化重构，DataStore + MySQL 双份存储，数据引用机制
 - **v3.7.0** - 统一数据存储架构
 - **v3.6.x** - 投资管理、贷款管理等功能完善
 - **v3.5.x** - 多账套支持

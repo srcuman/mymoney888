@@ -422,6 +422,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import coreDataStore from '../../services/core-data-store.js'
 
 // 交易记录
 const transactions = ref([
@@ -1018,8 +1019,8 @@ const totalTransactions = computed(() => {
 
 onMounted(() => {
   // 从本地存储加载数据
-  const savedTransactions = localStorage.getItem('transactions')
-  const savedDimensions = localStorage.getItem('dimensions')
+  const savedTransactions = JSON.stringify(coreDataStore.getRaw('transactions'))
+  const savedDimensions = JSON.stringify(coreDataStore.getDimensions())
   
   if (savedTransactions) {
     transactions.value = JSON.parse(savedTransactions)
@@ -1048,7 +1049,7 @@ const loadAllAccounts = () => {
   
   // 加载普通账户
   try {
-    const savedAccounts = localStorage.getItem('accounts')
+    const savedAccounts = JSON.stringify(coreDataStore.getRaw('accounts'))
     if (savedAccounts) {
       const accts = JSON.parse(savedAccounts)
       accts.forEach(acc => {
@@ -1064,7 +1065,7 @@ const loadAllAccounts = () => {
   
   // 加载投资账户
   try {
-    const savedInvestments = localStorage.getItem('investmentAccounts')
+    const savedInvestments = JSON.stringify(coreDataStore.getRaw('investmentAccounts'))
     if (savedInvestments) {
       const invAccts = JSON.parse(savedInvestments)
       invAccts.forEach(acc => {
@@ -1080,7 +1081,7 @@ const loadAllAccounts = () => {
   
   // 加载信用卡
   try {
-    const savedCards = localStorage.getItem('creditCards')
+    const savedCards = JSON.stringify(coreDataStore.getRaw('creditCards'))
     if (savedCards) {
       const cards = JSON.parse(savedCards)
       cards.forEach(card => {
@@ -1096,7 +1097,7 @@ const loadAllAccounts = () => {
   
   // 加载贷款
   try {
-    const savedLoans = localStorage.getItem('loans')
+    const savedLoans = JSON.stringify(coreDataStore.getRaw('loans'))
     if (savedLoans) {
       const loans = JSON.parse(savedLoans)
       loans.forEach(loan => {

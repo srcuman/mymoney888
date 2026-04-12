@@ -1,5 +1,5 @@
 <template>
-  <form @submit.prevent="addTransaction" class="space-y-4">
+  <form @submit.prevent="handleSubmit" class="space-y-4">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">类型</label>
@@ -52,49 +52,51 @@
         </label>
         <select :id="transactionType === 'transfer' ? 'from-account' : 'account'" v-model="transaction.account" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           <option value="">请选择账户</option>
-          <option v-for="account in accounts" :key="account.id" :value="account.id">{{ account.name }}</option>
+          <option v-for="account in allAccounts" :key="account.id" :value="account.id">
+            {{ account.name }} ({{ formatCurrency(account.balance) }})
+          </option>
+        </select>
+      </div>
+      <div v-if="transactionType === 'transfer'">
+        <label for="to-account" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">转入账户</label>
+        <select id="to-account" v-model="transaction.toAccount" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+          <option value="">请选择账户</option>
+          <option v-for="account in allAccounts" :key="account.id" :value="account.id">
+            {{ account.name }}
+          </option>
         </select>
       </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label for="payment-channel" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">支付渠道</label>
-        <select id="payment-channel" v-model="transaction.paymentChannel" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-          <option value="">请选择支付渠道</option>
-          <option v-for="channel in paymentChannels" :key="channel.id" :value="channel.name">{{ channel.name }}</option>
-        </select>
-      </div>
-    </div>
-    <div v-if="transactionType === 'transfer'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <label for="to-account" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">转入账户</label>
-        <select id="to-account" v-model="transaction.toAccount" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-          <option value="">请选择账户</option>
-          <option v-for="account in accounts" :key="account.id" :value="account.id" :disabled="transaction.account && account.id === transaction.account">{{ account.name }}</option>
-        </select>
-      </div>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div>
         <label for="member" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">成员</label>
-        <select id="member" v-model="transaction.member" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-          <option value="">请选择成员</option>
-          <option v-for="member in members" :key="member.id" :value="member.name">{{ member.name }}</option>
-        </select>
+        <input list="members-list" id="member" v-model="transaction.member" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" placeholder="选择或输入成员">
+        <datalist id="members-list">
+          <option v-for="m in members" :key="m" :value="m">
+        </datalist>
       </div>
       <div>
-        <label for="merchant" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">商家</label>
-        <select id="merchant" v-model="transaction.merchant" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-          <option value="">请选择商家</option>
-          <option v-for="merchant in merchants" :key="merchant.id" :value="merchant.name">{{ merchant.name }}</option>
-        </select>
+        <label for="merchant" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">商户</label>
+        <input list="merchants-list" id="merchant" v-model="transaction.merchant" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" placeholder="选择或输入商户">
+        <datalist id="merchants-list">
+          <option v-for="m in merchants" :key="m" :value="m">
+        </datalist>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label for="tags" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">标签</label>
+        <input list="tags-list" id="tags" v-model="transaction.tags" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" placeholder="选择或输入标签">
+        <datalist id="tags-list">
+          <option v-for="t in tags" :key="t" :value="t">
+        </datalist>
       </div>
       <div>
-        <label for="tag" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">标签</label>
-        <select id="tag" v-model="transaction.tag" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-          <option value="">请选择标签</option>
-          <option v-for="tag in tags" :key="tag.id" :value="tag.name">{{ tag.name }}</option>
-        </select>
+        <label for="paymentChannel" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">支付渠道</label>
+        <input list="channels-list" id="paymentChannel" v-model="transaction.paymentChannel" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" placeholder="选择或输入支付渠道">
+        <datalist id="channels-list">
+          <option v-for="c in paymentChannels" :key="c" :value="c">
+        </datalist>
       </div>
     </div>
     <div>
@@ -114,9 +116,9 @@
 
 <script setup>
 import { ref, onMounted, computed, watch, defineProps } from 'vue'
+import coreDataStore from '../../services/core-data-store.js'
 
 const props = defineProps({
-  // 初始数据，用于编辑或复制
   initialData: {
     type: Object,
     default: null
@@ -124,85 +126,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close'])
-
-// 加载投资账户
-const loadInvestmentAccounts = () => {
-  try {
-    const saved = localStorage.getItem('investmentAccounts')
-    if (saved) {
-      const investmentAccounts = JSON.parse(saved)
-      // 转换为统一格式添加到账户列表
-      investmentAccounts.forEach(acc => {
-        if (!accounts.value.find(a => a.id === `inv_${acc.id}`)) {
-          accounts.value.push({
-            id: `inv_${acc.id}`,
-            name: `[投资]${acc.name}`,
-            balance: acc.totalAsset || 0,
-            type: 'investment'
-          })
-        }
-      })
-    }
-  } catch (e) {
-    console.error('加载投资账户失败:', e)
-  }
-}
-
-// 加载信用卡
-const loadCreditCards = () => {
-  try {
-    const saved = localStorage.getItem('creditCards')
-    if (saved) {
-      const cards = JSON.parse(saved)
-      cards.forEach(card => {
-        if (!accounts.value.find(a => a.id === `cc_${card.id}`)) {
-          accounts.value.push({
-            id: `cc_${card.id}`,
-            name: `[信用卡]${card.name}`,
-            balance: -(card.creditLimit - card.currentBalance) || 0,
-            type: 'credit'
-          })
-        }
-      })
-    }
-  } catch (e) {
-    console.error('加载信用卡失败:', e)
-  }
-}
-
-// 加载贷款
-const loadLoans = () => {
-  try {
-    const saved = localStorage.getItem('loans')
-    if (saved) {
-      const loans = JSON.parse(saved)
-      loans.forEach(loan => {
-        if (!accounts.value.find(a => a.id === `loan_${loan.id}`)) {
-          accounts.value.push({
-            id: `loan_${loan.id}`,
-            name: `[贷款]${loan.name}`,
-            balance: -loan.remainingAmount || 0,
-            type: 'loan'
-          })
-        }
-      })
-    }
-  } catch (e) {
-    console.error('加载贷款失败:', e)
-  }
-}
-
-// 获取账套特定的存储键
-const getStorageKey = (key) => {
-  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
-  return `${key}_${currentLedgerId}`
-}
-
-// 保存账套特定数据
-const saveLedgerData = () => {
-  localStorage.setItem(getStorageKey('accounts'), JSON.stringify(accounts.value))
-  localStorage.setItem(getStorageKey('transactions'), JSON.stringify(transactions.value))
-}
 
 // 交易类型
 const transactionType = ref('expense')
@@ -215,12 +138,12 @@ const transaction = ref({
   toAccount: '',
   member: '',
   merchant: '',
-  tag: '',
+  tags: '',
   paymentChannel: '',
   description: ''
 })
 
-// 分类折叠状态 - 默认全部折叠
+// 分类折叠状态
 const expandedCategories = ref([])
 
 // 选中的分类
@@ -241,263 +164,146 @@ const selectCategory = (category) => {
   transaction.value.category = category
 }
 
-// 计算金额（支持简单四则运算）
+// 计算金额
 const calculateAmount = () => {
   const input = transaction.value.amount
   if (!input) return
   
-  // 如果是纯数字，直接返回
   if (!isNaN(input) && input.trim() !== '') {
     return
   }
   
-  // 尝试解析算术表达式
   try {
-    // 清理输入，只保留数字、运算符和小数点
     const cleanedInput = input.replace(/[^\d+\-*/().]/g, '')
     if (cleanedInput === '') return
     
-    // 使用Function构造函数安全地计算表达式
-    // 注意：这里只允许数字和基本运算符，不允许任何其他字符
     const result = new Function('return ' + cleanedInput)()
     
     if (typeof result === 'number' && isFinite(result)) {
-      // 保留2位小数
       transaction.value.amount = Math.round(result * 100) / 100
     }
   } catch (e) {
-    // 计算失败，不做任何处理
     console.log('金额计算失败:', e)
   }
 }
 
-// 支出分类列表（从维度管理获取）
-const expenseCategories = ref([])
+// 分类数据
+const expenseCategories = computed(() => coreDataStore.getRaw('categories')?.filter(c => c.type === 'expense') || [])
+const incomeCategories = computed(() => coreDataStore.getRaw('categories')?.filter(c => c.type === 'income') || [])
 
-// 收入分类列表（从维度管理获取）
-const incomeCategories = ref([])
+// 账户列表（包括关联账户）
+const accounts = computed(() => coreDataStore.getRaw('accounts') || [])
+const investmentAccounts = computed(() => coreDataStore.getRaw('investmentAccounts') || [])
+const creditCards = computed(() => coreDataStore.getRaw('creditCards') || [])
 
-// 根据交易类型获取分类列表（支持二级分类）
-const categories = computed(() => {
-  const list = transactionType.value === 'income' ? incomeCategories.value : expenseCategories.value
-  // 展开分类列表，包含父分类和子分类
-  const result = []
-  list.forEach(cat => {
-    result.push(cat.name)
-    if (cat.children && cat.children.length > 0) {
-      cat.children.forEach(child => {
-        result.push(`${cat.name}-${child.name}`)
+// 所有账户（统一格式）
+const allAccounts = computed(() => {
+  const result = [...accounts.value]
+  
+  // 添加投资账户
+  investmentAccounts.value.forEach(acc => {
+    if (!result.find(a => a.id === `inv_${acc.id}`)) {
+      result.push({
+        id: `inv_${acc.id}`,
+        name: `[投资]${acc.name}`,
+        balance: acc.totalValue || 0,
+        type: 'investment'
       })
     }
   })
+  
+  // 添加信用卡
+  creditCards.value.forEach(card => {
+    if (!result.find(a => a.id === `cc_${card.id}`)) {
+      result.push({
+        id: `cc_${card.id}`,
+        name: `[信用卡]${card.name}`,
+        balance: -(card.creditLimit - card.availableCredit) || 0,
+        type: 'credit'
+      })
+    }
+  })
+  
   return result
 })
 
-// 账户列表
-const accounts = ref([
-  { id: 1, name: '现金', balance: 1000 },
-  { id: 2, name: '银行卡', balance: 5000 },
-  { id: 3, name: '支付宝', balance: 2000 },
-  { id: 4, name: '微信', balance: 1500 }
-])
-
-// 成员列表
-const members = ref([])
-
-// 商家列表
-const merchants = ref([])
-
-// 标签列表
-const tags = ref([])
-
-// 支付渠道列表
-const paymentChannels = ref([])
-
-// 交易记录
-const transactions = ref([])
+// 维度数据
+const members = computed(() => coreDataStore.getDimensions().members || [])
+const merchants = computed(() => coreDataStore.getDimensions().merchants || [])
+const tags = computed(() => coreDataStore.getDimensions().tags || [])
+const paymentChannels = computed(() => coreDataStore.getDimensions().paymentChannels || [])
 
 // 是否为编辑模式
 const isEditMode = computed(() => props.initialData && props.initialData.id)
 
-// 更新账户余额（还原旧交易影响）
-const reverseAccountBalance = (trans) => {
-  if (trans.type === 'transfer') {
-    const fromAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
-    const toAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.toAccount))
-    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
-      accounts.value[fromAccountIndex].balance += trans.amount
-      accounts.value[toAccountIndex].balance -= trans.amount
-    }
-  } else {
-    const accountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
-    if (accountIndex !== -1) {
-      if (trans.type === 'income') {
-        accounts.value[accountIndex].balance -= trans.amount
-      } else {
-        accounts.value[accountIndex].balance += trans.amount
-      }
-    }
-  }
+// 格式化货币
+const formatCurrency = (value) => {
+  if (typeof value !== 'number') return '¥0.00'
+  return '¥' + value.toFixed(2)
 }
 
-// 更新账户余额（应用新交易影响）
-const applyAccountBalance = (trans) => {
-  if (trans.type === 'transfer') {
-    const fromAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
-    const toAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.toAccount))
-    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
-      accounts.value[fromAccountIndex].balance -= trans.amount
-      accounts.value[toAccountIndex].balance += trans.amount
-    }
-  } else {
-    const accountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
-    if (accountIndex !== -1) {
-      if (trans.type === 'income') {
-        accounts.value[accountIndex].balance += trans.amount
-      } else {
-        accounts.value[accountIndex].balance -= trans.amount
-      }
-    }
-  }
-}
-
-// 添加/更新交易
-const addTransaction = () => {
-  // 验证必填字段
+// 提交处理
+const handleSubmit = async () => {
+  // 验证
   if (!transaction.value.amount || parseFloat(transaction.value.amount) <= 0) {
     alert('请输入有效金额')
     return
   }
   
-  // 验证分类（支出和收入必须选择分类）
   if (transactionType.value !== 'transfer' && !transaction.value.category) {
     alert('请选择分类')
     return
   }
   
-  // 确保金额是数字类型
+  if (!transaction.value.account) {
+    alert('请选择账户')
+    return
+  }
+  
+  if (transactionType.value === 'transfer' && !transaction.value.toAccount) {
+    alert('请选择转入账户')
+    return
+  }
+  
+  // 处理金额
   let amount = transaction.value.amount
   if (typeof amount === 'string') {
-    // 如果是算式，先计算
     calculateAmount()
     amount = parseFloat(transaction.value.amount) || 0
   }
   
   const transactionData = {
-    id: props.initialData?.id || (Date.now().toString() + Math.random().toString(36).substr(2, 9)),
+    id: props.initialData?.id || undefined,
     type: transactionType.value,
     amount: amount,
-    category: transaction.value.category,
+    category: transaction.value.category || '',
     account: transaction.value.account,
     toAccount: transactionType.value === 'transfer' ? transaction.value.toAccount : null,
     member: transaction.value.member,
     merchant: transaction.value.merchant,
-    tag: transaction.value.tag,
+    tags: transaction.value.tags ? [transaction.value.tags] : [],
     paymentChannel: transaction.value.paymentChannel,
     description: transaction.value.description,
     date: new Date().toISOString().split('T')[0]
   }
   
-  // 如果是编辑模式，先还原旧交易的影响
-  if (isEditMode.value) {
-    const oldTransaction = transactions.value.find(t => t.id === props.initialData.id)
-    if (oldTransaction) {
-      reverseAccountBalance(oldTransaction)
-    }
-  }
-  
-  // 添加或更新交易
-  if (isEditMode.value) {
-    // 编辑模式：在原位置更新
-    const index = transactions.value.findIndex(t => t.id === props.initialData.id)
-    if (index !== -1) {
-      transactions.value[index] = transactionData
+  try {
+    if (isEditMode.value) {
+      await coreDataStore.updateTransaction(transactionData.id, transactionData)
     } else {
-      transactions.value.unshift(transactionData)
+      await coreDataStore.addTransaction(transactionData)
     }
-  } else {
-    // 添加模式
-    transactions.value.unshift(transactionData)
-  }
-  
-  // 应用新交易的影响
-  applyAccountBalance(transactionData)
-  
-  // 保存到本地存储
-  saveLedgerData()
-  
-  // 通知其他组件交易数据已更新
-  window.dispatchEvent(new CustomEvent('transactionsUpdated'))
-  window.dispatchEvent(new CustomEvent('accountsUpdated'))
-  
-  // 重置表单
-  transaction.value = {
-    amount: '',
-    category: '',
-    account: '',
-    toAccount: '',
-    member: '',
-    merchant: '',
-    tag: '',
-    paymentChannel: '',
-    description: ''
-  }
-  selectedCategory.value = ''
-  transactionType.value = 'expense'
-  
-  // 关闭弹窗
-  emit('close')
-}
-
-// 加载账套特定数据
-const loadLedgerData = () => {
-  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
-  
-  // 加载账套特定的维度数据
-  const savedDimensions = localStorage.getItem(`dimensions_${currentLedgerId}`)
-  if (savedDimensions) {
-    const dimensions = JSON.parse(savedDimensions)
-    members.value = dimensions.members || []
-    merchants.value = dimensions.merchants || []
-    tags.value = dimensions.tags || []
-    paymentChannels.value = dimensions.paymentChannels || []
-    expenseCategories.value = dimensions.expenseCategories || []
-    incomeCategories.value = dimensions.incomeCategories || []
-  }
-  
-  // 加载账套特定的账户和交易数据
-  const savedAccounts = localStorage.getItem(`accounts_${currentLedgerId}`)
-  if (savedAccounts) {
-    accounts.value = JSON.parse(savedAccounts)
-  }
-  
-  const savedTransactions = localStorage.getItem(`transactions_${currentLedgerId}`)
-  if (savedTransactions) {
-    transactions.value = JSON.parse(savedTransactions)
+    
+    emit('close')
+  } catch (error) {
+    console.error('保存交易失败:', error)
+    alert('保存失败: ' + error.message)
   }
 }
 
-// 监听账套切换
-const handleLedgerChange = () => {
-  loadLedgerData()
-}
-
+// 初始化
 onMounted(() => {
-  loadLedgerData()
-  // 加载其他账户类型
-  loadInvestmentAccounts()
-  loadCreditCards()
-  loadLoans()
-  // 监听账套切换事件
-  window.addEventListener('ledgerChanged', handleLedgerChange)
-  // 监听账户更新事件
-  window.addEventListener('accountsUpdated', () => {
-    loadInvestmentAccounts()
-    loadCreditCards()
-    loadLoans()
-  })
-  
-  // 如果有初始数据（编辑或复制），填充表单
+  // 如果有初始数据，填充表单
   if (props.initialData) {
     const data = props.initialData
     transactionType.value = data.type || 'expense'
@@ -508,12 +314,11 @@ onMounted(() => {
       toAccount: data.toAccount ? data.toAccount.toString() : '',
       member: data.member || '',
       merchant: data.merchant || '',
-      tag: data.tag || '',
+      tags: data.tags?.[0] || '',
       paymentChannel: data.paymentChannel || '',
       description: data.description || ''
     }
     selectedCategory.value = data.category || ''
   }
 })
-
 </script>
