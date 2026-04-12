@@ -405,13 +405,14 @@ class UnifiedDataStore {
   }
 
   // 手动刷新（从localStorage重新加载）
+  // 注意：此方法用于响应外部变更，不应再派发事件，否则会导致无限递归
   async refresh(key) {
     const storageKey = this._getStorageKey(key)
     const saved = localStorage.getItem(storageKey)
     if (saved) {
       this._data[key].value = JSON.parse(saved)
       this._versions[key]++
-      this._notifyChange(key)
+      // 不再派发 dataChanged 事件，避免与监听器形成循环
     }
   }
 
@@ -662,14 +663,21 @@ class UnifiedDataStore {
     if (!account.id) {
       account.id = Date.now().toString() + Math.random().toString(36).substr(2, 9)
     }
-    await this.add('investmentAccounts', account)
+    
+    // 统一字段名：支持 totalAsset 或 totalValue
+    const totalValue = account.totalValue ?? account.totalAsset ?? 0
+    
+    await this.add('investmentAccounts', {
+      ...account,
+      totalValue: totalValue
+    })
 
-    // 自动创建关联的账户记录
+    // 自动创建关联的账户记录（使用不同的唯一ID）
     await this.add('accounts', {
-      id: account.id,
+      id: 'inv_acc_' + account.id,
       name: account.name,
       category: 'investment',
-      balance: account.totalValue || 0,
+      balance: totalValue,
       // 关联投资账户ID
       linkedInvestmentAccountId: account.id
     })
@@ -683,12 +691,16 @@ class UnifiedDataStore {
    * @param {Object} updates - 更新内容
    */
   async updateInvestmentAccount(accountId, updates) {
+    // 统一字段名
+    if (updates.totalAsset !== undefined && updates.totalValue === undefined) {
+      updates.totalValue = updates.totalAsset
+    }
+    
     await this.update('investmentAccounts', accountId, updates)
 
     // 同步余额到账户管理
-    const investmentAccount = this.find('investmentAccounts', a => String(a.id) === String(accountId))
-    if (investmentAccount && updates.totalValue !== undefined) {
-      const linkedAccount = this.find('accounts', a => a.linkedInvestmentAccountId === accountId)
+    if (updates.totalValue !== undefined) {
+      const linkedAccount = this.find('accounts', a => String(a.linkedInvestmentAccountId) === String(accountId))
       if (linkedAccount) {
         await this.update('accounts', linkedAccount.id, {
           balance: updates.totalValue
@@ -703,7 +715,7 @@ class UnifiedDataStore {
    */
   async deleteInvestmentAccount(accountId) {
     // 查找关联的账户
-    const linkedAccount = this.find('accounts', a => a.linkedInvestmentAccountId === accountId)
+    const linkedAccount = this.find('accounts', a => String(a.linkedInvestmentAccountId) === String(accountId))
     if (linkedAccount) {
       await this.remove('accounts', linkedAccount.id)
     }

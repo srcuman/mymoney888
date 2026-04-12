@@ -423,27 +423,6 @@ const addTransaction = () => {
   // 应用新交易的影响
   applyAccountBalance(transactionData)
   
-  // 更新账户余额
-  if (transactionType.value === 'transfer') {
-    // 转账：减少转出账户余额，增加转入账户余额
-    const fromAccountIndex = accounts.value.findIndex(a => a.id === newTransaction.account)
-    const toAccountIndex = accounts.value.findIndex(a => a.id === newTransaction.toAccount)
-    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
-      accounts.value[fromAccountIndex].balance -= newTransaction.amount
-      accounts.value[toAccountIndex].balance += newTransaction.amount
-    }
-  } else {
-    // 收入/支出：更新单个账户余额
-    const accountIndex = accounts.value.findIndex(a => a.id === newTransaction.account)
-    if (accountIndex !== -1) {
-      if (newTransaction.type === 'income') {
-        accounts.value[accountIndex].balance += newTransaction.amount
-      } else {
-        accounts.value[accountIndex].balance -= newTransaction.amount
-      }
-    }
-  }
-  
   // 保存到本地存储
   saveLedgerData()
   
