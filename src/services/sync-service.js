@@ -46,7 +46,26 @@ class SyncService {
   }
 
   async sync(options = {}) {
-    const { force = false, tables = ['accounts', 'transactions', 'categories'] } = options
+    // 扩展同步表列表，包含所有前端存储的数据
+    const { force = false, tables = [
+      'accounts',
+      'transactions',
+      'categories',
+      'creditCards',
+      'creditCardBills',
+      'loans',
+      'repaymentPlans',
+      'investmentAccounts',
+      'investmentDetails',
+      'dimensions',
+      'defaults',
+      'ledgers',
+      'members',
+      'merchants',
+      'tags',
+      'paymentChannels',
+      'user'
+    ] } = options
     
     if (this.isSyncing.value) {
       console.log('同步已在进行中...')

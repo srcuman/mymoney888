@@ -134,6 +134,9 @@ const editAccount = (account) => {
   showAddAccountModal.value = false
 }
 
+// 生成唯一ID
+const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 9)
+
 // 保存账户
 const saveAccount = () => {
   if (showEditAccountModal.value) {
@@ -145,7 +148,7 @@ const saveAccount = () => {
   } else {
     // 添加新账户
     const newAccount = {
-      id: accounts.value.length + 1,
+      id: generateId(),
       name: formData.value.name,
       balance: formData.value.balance,
       category: formData.value.category
@@ -171,79 +174,82 @@ const deleteAccount = (accountId) => {
   }
 }
 
-onMounted(() => {
-  // 从本地存储加载数据
-  const savedAccounts = localStorage.getItem('accounts')
-  if (savedAccounts) {
-    accounts.value = JSON.parse(savedAccounts)
-  } else {
-    accounts.value = []
-  }
-  
-  // 加载信用卡数据
-  const savedCreditCards = localStorage.getItem('creditCards')
-  if (savedCreditCards) {
-    try {
-      const creditCards = JSON.parse(savedCreditCards)
-      creditCards.forEach(card => {
-        // 检查是否已存在相同名称的账户
-        if (!accounts.value.some(account => account.name === card.name && account.category === 'credit_card')) {
-          accounts.value.push({
-            id: accounts.value.length + 1,
-            name: card.name,
-            balance: card.creditLimit - card.availableCredit,
-            category: 'credit_card'
-          })
-        }
-      })
-    } catch (error) {
-      console.error('解析信用卡数据失败:', error)
+  // 生成唯一ID
+  const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 9)
+
+  onMounted(() => {
+    // 从本地存储加载数据
+    const savedAccounts = localStorage.getItem('accounts')
+    if (savedAccounts) {
+      accounts.value = JSON.parse(savedAccounts)
+    } else {
+      accounts.value = []
     }
-  }
-  
-  // 加载贷款数据
-  const savedLoans = localStorage.getItem('loans')
-  if (savedLoans) {
-    try {
-      const loans = JSON.parse(savedLoans)
-      loans.forEach(loan => {
-        // 检查是否已存在相同名称的账户
-        if (!accounts.value.some(account => account.name === loan.name && account.category === 'loan')) {
-          accounts.value.push({
-            id: accounts.value.length + 1,
-            name: loan.name,
-            balance: -loan.remainingAmount, // 贷款余额为负数
-            category: 'loan'
-          })
-        }
-      })
-    } catch (error) {
-      console.error('解析贷款数据失败:', error)
+    
+    // 加载信用卡数据
+    const savedCreditCards = localStorage.getItem('creditCards')
+    if (savedCreditCards) {
+      try {
+        const creditCards = JSON.parse(savedCreditCards)
+        creditCards.forEach(card => {
+          // 检查是否已存在相同名称的账户
+          if (!accounts.value.some(account => account.name === card.name && account.category === 'credit_card')) {
+            accounts.value.push({
+              id: generateId(),
+              name: card.name,
+              balance: card.creditLimit - card.availableCredit,
+              category: 'credit_card'
+            })
+          }
+        })
+      } catch (error) {
+        console.error('解析信用卡数据失败:', error)
+      }
     }
-  }
-  
-  // 加载投资账户数据
-  const savedInvestmentAccounts = localStorage.getItem('investmentAccounts')
-  if (savedInvestmentAccounts) {
-    try {
-      const investmentAccounts = JSON.parse(savedInvestmentAccounts)
-      investmentAccounts.forEach(account => {
-        // 检查是否已存在相同名称的账户
-        if (!accounts.value.some(a => a.name === account.name && a.category === 'investment')) {
-          accounts.value.push({
-            id: accounts.value.length + 1,
-            name: account.name,
-            balance: 0, // 投资账户余额需要从投资明细计算，这里暂时设为0
-            category: 'investment'
-          })
-        }
-      })
-    } catch (error) {
-      console.error('解析投资账户数据失败:', error)
+    
+    // 加载贷款数据
+    const savedLoans = localStorage.getItem('loans')
+    if (savedLoans) {
+      try {
+        const loans = JSON.parse(savedLoans)
+        loans.forEach(loan => {
+          // 检查是否已存在相同名称的账户
+          if (!accounts.value.some(account => account.name === loan.name && account.category === 'loan')) {
+            accounts.value.push({
+              id: generateId(),
+              name: loan.name,
+              balance: -loan.remainingAmount, // 贷款余额为负数
+              category: 'loan'
+            })
+          }
+        })
+      } catch (error) {
+        console.error('解析贷款数据失败:', error)
+      }
     }
-  }
-  
-  // 保存到本地存储
-  localStorage.setItem('accounts', JSON.stringify(accounts.value))
-})
+    
+    // 加载投资账户数据
+    const savedInvestmentAccounts = localStorage.getItem('investmentAccounts')
+    if (savedInvestmentAccounts) {
+      try {
+        const investmentAccounts = JSON.parse(savedInvestmentAccounts)
+        investmentAccounts.forEach(account => {
+          // 检查是否已存在相同名称的账户
+          if (!accounts.value.some(a => a.name === account.name && a.category === 'investment')) {
+            accounts.value.push({
+              id: generateId(),
+              name: account.name,
+              balance: account.totalAsset || 0,
+              category: 'investment'
+            })
+          }
+        })
+      } catch (error) {
+        console.error('解析投资账户数据失败:', error)
+      }
+    }
+    
+    // 保存到本地存储
+    localStorage.setItem('accounts', JSON.stringify(accounts.value))
+  })
 </script>

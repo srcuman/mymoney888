@@ -26,7 +26,6 @@
         <select id="category" v-model="transaction.category" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           <option value="">请选择分类</option>
           <optgroup v-for="category in (transactionType === 'income' ? incomeCategories : expenseCategories)" :key="category.name" :label="category.name">
-            <option :value="category.name">{{ category.name }}</option>
             <option v-for="subcategory in (category.children || [])" :key="subcategory.name" :value="`${category.name}-${subcategory.name}`">{{ subcategory.name }}</option>
           </optgroup>
         </select>
@@ -55,7 +54,7 @@
         <label for="to-account" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">转入账户</label>
         <select id="to-account" v-model="transaction.toAccount" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           <option value="">请选择账户</option>
-          <option v-for="account in accounts" :key="account.id" :value="account.id" :disabled="account.id === parseInt(transaction.account)">{{ account.name }}</option>
+          <option v-for="account in accounts" :key="account.id" :value="account.id" :disabled="transaction.account && account.id === transaction.account">{{ account.name }}</option>
         </select>
       </div>
     </div>
@@ -166,12 +165,12 @@ const transactions = ref([])
 // 添加交易
 const addTransaction = () => {
   const newTransaction = {
-    id: Date.now(),
+    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
     type: transactionType.value,
     amount: transaction.value.amount,
     category: transaction.value.category,
-    account: parseInt(transaction.value.account),
-    toAccount: transactionType.value === 'transfer' ? parseInt(transaction.value.toAccount) : null,
+    account: transaction.value.account,
+    toAccount: transactionType.value === 'transfer' ? transaction.value.toAccount : null,
     member: transaction.value.member,
     merchant: transaction.value.merchant,
     tag: transaction.value.tag,

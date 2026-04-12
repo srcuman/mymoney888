@@ -29,14 +29,12 @@
               <option value="">全部</option>
               <optgroup label="支出分类">
                 <template v-for="category in expenseCategories" :key="category.name">
-                  <option :value="category.name">{{ category.name }}</option>
-                  <option v-for="subcategory in (category.children || [])" :key="`${category.name}-${subcategory.name}`" :value="`${category.name}-${subcategory.name}`">&nbsp;&nbsp;{{ subcategory.name }}</option>
+                  <option v-for="subcategory in (category.children || [])" :key="`${category.name}-${subcategory.name}`" :value="`${category.name}-${subcategory.name}`">{{ subcategory.name }}</option>
                 </template>
               </optgroup>
               <optgroup label="收入分类">
                 <template v-for="category in incomeCategories" :key="category.name">
-                  <option :value="category.name">{{ category.name }}</option>
-                  <option v-for="subcategory in (category.children || [])" :key="`${category.name}-${subcategory.name}`" :value="`${category.name}-${subcategory.name}`">&nbsp;&nbsp;{{ subcategory.name }}</option>
+                  <option v-for="subcategory in (category.children || [])" :key="`${category.name}-${subcategory.name}`" :value="`${category.name}-${subcategory.name}`">{{ subcategory.name }}</option>
                 </template>
               </optgroup>
             </select>
@@ -244,7 +242,7 @@ const filteredTransactions = computed(() => {
     }
     
     // 账户过滤
-    if (filters.value.account && transaction.account !== parseInt(filters.value.account)) {
+    if (filters.value.account && transaction.account !== filters.value.account) {
       return false
     }
     
@@ -353,12 +351,12 @@ const transaction = ref({
 // 添加交易
 const addTransaction = () => {
   const newTransaction = {
-    id: transactions.value.length + 1,
+    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
     type: transactionType.value,
     amount: parseFloat(transaction.value.amount),
     category: transaction.value.category,
-    account: parseInt(transaction.value.account),
-    toAccount: transactionType.value === 'transfer' ? parseInt(transaction.value.toAccount) : null,
+    account: transaction.value.account,
+    toAccount: transactionType.value === 'transfer' ? transaction.value.toAccount : null,
     description: transaction.value.description,
     paymentChannel: transaction.value.paymentChannel,
     member: transaction.value.member,

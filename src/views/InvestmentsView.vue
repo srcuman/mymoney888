@@ -715,114 +715,93 @@ const parseAPIResponse = (response, code) => {
   
   if (!data) return null
   
-  // 解析天天基金实时估值数据
-  if (source === '天天基金实时估值') {
-    if (data && data.includes('jsonpgz(') && data.includes(')')) {
-      const jsonStr = data.replace('jsonpgz(', '').replace(');', '')
-      try {
-        const fundData = JSON.parse(jsonStr)
-        if (fundData.name && fundData.dwjz) {
-          // 处理乱码问题
-          let fundName = fundData.name
-          try {
-            fundName = decodeURIComponent(escape(fundData.name))
-          } catch (e) {
-            addApiLog('解码基金名称失败:', e)
-            console.log('解码基金名称失败:', e)
+  try {
+    // 解析天天基金实时估值数据
+    if (source === '天天基金实时估值') {
+      if (data && data.includes('jsonpgz(') && data.includes(')')) {
+        const jsonStr = data.replace('jsonpgz(', '').replace(');', '')
+        try {
+          const fundData = JSON.parse(jsonStr)
+          if (fundData.name && fundData.dwjz) {
+            // 处理乱码问题
+            let fundName = fundData.name
+            try {
+              fundName = decodeURIComponent(escape(fundData.name))
+            } catch (e) {
+              console.log('解码基金名称失败，使用原始名称')
+            }
+            addApiLog(`成功获取天天基金数据: ${fundName}`)
+            console.log('成功获取天天基金数据:', fundName)
+            return {
+              source: '天天基金实时估值',
+              name: fundName,
+              type: '基金',
+              currentPrice: parseFloat(parseFloat(fundData.dwjz).toFixed(4)) || 0,
+              updateDate: fundData.jzrq || new Date().toISOString().split('T')[0]
+            }
+          } else {
+            addApiLog('天天基金数据不完整，缺少名称或净值')
           }
-          addApiLog(`成功获取天天基金数据: ${fundName}`)
-          console.log('成功获取天天基金数据:', fundName)
+        } catch (parseError) {
+          addApiLog(`解析JSONP数据失败: ${parseError.message}`)
+          console.log('解析JSONP数据失败:', parseError)
+        }
+      } else {
+        addApiLog('天天基金响应数据格式不正确')
+      }
+    }
+    
+    // 解析天天基金基本信息数据
+    if (source === '天天基金基本信息') {
+      if (data) {
+        const nameMatch = data.match(/var fS_name = "([^"]+)"/)
+        if (nameMatch && nameMatch[1]) {
+          addApiLog(`成功获取天天基金基本信息: ${nameMatch[1]}`)
+          console.log('成功获取天天基金基本信息:', nameMatch[1])
           return {
-            source: '天天基金实时估值',
-            name: fundName,
+            source: '天天基金基本信息',
+            name: nameMatch[1],
             type: '基金',
-            currentPrice: parseFloat(parseFloat(fundData.dwjz).toFixed(4)) || 0,
-            updateDate: fundData.jzrq || new Date().toISOString().split('T')[0]
-          }
-        } else {
-          addApiLog('天天基金数据不完整，缺少名称或净值')
-        }
-      } catch (parseError) {
-        addApiLog(`解析JSONP数据失败: ${parseError.message}`)
-        console.log('解析JSONP数据失败:', parseError)
-      }
-    } else {
-      addApiLog('天天基金响应数据格式不正确')
-    }
-  }
-  
-  // 解析天天基金基本信息数据
-  if (source === '天天基金基本信息') {
-    if (data) {
-      const nameMatch = data.match(/var fS_name = "([^"]+)"/)
-      if (nameMatch && nameMatch[1]) {
-        addApiLog(`成功获取天天基金基本信息: ${nameMatch[1]}`)
-        console.log('成功获取天天基金基本信息:', nameMatch[1])
-        return {
-          source: '天天基金基本信息',
-          name: nameMatch[1],
-          type: '基金',
-          currentPrice: 0,
-          updateDate: new Date().toISOString().split('T')[0]
-        }
-      } else {
-        addApiLog('天天基金基本信息数据中未找到基金名称')
-      }
-    }
-  }
-  
-  // 解析腾讯财经上海股票数据
-  if (source === '腾讯财经上海') {
-    if (data && data.includes('=') && !data.includes('v_pv_none_match')) {
-      const parts = data.split('=')
-      if (parts.length > 1) {
-        const stockData = parts[1].replace(/"/g, '').split('~')
-        if (stockData.length > 4 && stockData[1] && stockData[1] !== '' && stockData[3] && stockData[3] !== '') {
-          addApiLog(`成功获取腾讯财经上海股票数据: ${stockData[1]}`)
-          console.log('成功获取腾讯财经上海股票数据:', stockData[1])
-          return {
-            source: '腾讯财经上海',
-            name: stockData[1],
-            type: '股票',
-            currentPrice: parseFloat(parseFloat(stockData[3]).toFixed(4)) || 0,
+            currentPrice: 0,
             updateDate: new Date().toISOString().split('T')[0]
           }
         } else {
-          addApiLog('腾讯财经上海股票数据不完整')
+          addApiLog('天天基金基本信息数据中未找到基金名称')
         }
-      } else {
-        addApiLog('腾讯财经上海响应数据格式不正确')
       }
-    } else {
-      addApiLog('腾讯财经上海响应数据格式不正确或无数据')
     }
-  }
-  
-  // 解析腾讯财经深圳股票数据
-  if (source === '腾讯财经深圳') {
-    if (data && data.includes('=') && !data.includes('v_pv_none_match')) {
-      const parts = data.split('=')
-      if (parts.length > 1) {
-        const stockData = parts[1].replace(/"/g, '').split('~')
-        if (stockData.length > 4 && stockData[1] && stockData[1] !== '' && stockData[3] && stockData[3] !== '') {
-          addApiLog(`成功获取腾讯财经深圳股票数据: ${stockData[1]}`)
-          console.log('成功获取腾讯财经深圳股票数据:', stockData[1])
-          return {
-            source: '腾讯财经深圳',
-            name: stockData[1],
-            type: '股票',
-            currentPrice: parseFloat(parseFloat(stockData[3]).toFixed(4)) || 0,
-            updateDate: new Date().toISOString().split('T')[0]
+    
+    // 解析腾讯财经股票数据
+    if (source === '腾讯财经上海' || source === '腾讯财经深圳') {
+      // 腾讯财经返回格式: v_sh600519="51~贵州茅台~600519~1780.00~1785.00~..."
+      if (data && data.includes('~')) {
+        const stockData = data.split('~')
+        if (stockData.length > 4 && stockData[1] && stockData[3]) {
+          const name = stockData[1]
+          const price = parseFloat(stockData[3])
+          if (name && !name.includes('无名') && price > 0) {
+            addApiLog(`成功获取${source}股票数据: ${name}`)
+            console.log(`成功获取${source}股票数据:`, name)
+            return {
+              source: source,
+              name: name,
+              type: '股票',
+              currentPrice: price || 0,
+              updateDate: new Date().toISOString().split('T')[0]
+            }
+          } else {
+            addApiLog(`${source}股票数据无效`)
           }
         } else {
-          addApiLog('腾讯财经深圳股票数据不完整')
+          addApiLog(`${source}股票数据格式错误`)
         }
       } else {
-        addApiLog('腾讯财经深圳响应数据格式不正确')
+        addApiLog(`${source}响应数据格式不正确`)
       }
-    } else {
-      addApiLog('腾讯财经深圳响应数据格式不正确或无数据')
     }
+  } catch (error) {
+    addApiLog(`${source}解析异常: ${error.message}`)
+    console.error(`${source}解析异常:`, error)
   }
   
   addApiLog(`${source}解析失败，无有效数据`)
@@ -838,13 +817,27 @@ const fetchInvestmentInfo = async (code) => {
     throw new Error('代码格式不正确，请输入6位数字代码')
   }
   
-  // 并行调用多个API
-  const apiPromises = [
-    fetchSingleAPI(`/api/js/${code}.js`, '天天基金实时估值', code),
-    fetchSingleAPI(`/fund/pingzhongdata/${code}.js`, '天天基金基本信息', code),
-    fetchSingleAPI(`/stock/q=sh${code}`, '腾讯财经上海', code),
-    fetchSingleAPI(`/stock/q=sz${code}`, '腾讯财经深圳', code)
-  ]
+  // 判断代码类型：基金以5开头，股票以0、3、6开头
+  const isFund = code.startsWith('5') || code.startsWith('1') || code.startsWith('15')
+  const isShanghaiStock = code.startsWith('6')
+  const isShenzhenStock = code.startsWith('0') || code.startsWith('3')
+  
+  // 并行调用多个API，根据代码类型选择合适的API
+  const apiPromises = []
+  
+  // 基金API
+  if (isFund) {
+    apiPromises.push(fetchSingleAPI(`/api/js/${code}.js`, '天天基金实时估值', code))
+    apiPromises.push(fetchSingleAPI(`/fund/pingzhongdata/${code}.js`, '天天基金基本信息', code))
+  }
+  
+  // 股票API
+  if (isShanghaiStock) {
+    apiPromises.push(fetchSingleAPI(`/stock/sh${code}`, '腾讯财经上海', code))
+  }
+  if (isShenzhenStock) {
+    apiPromises.push(fetchSingleAPI(`/stock/sz${code}`, '腾讯财经深圳', code))
+  }
   
   // 等待所有API调用完成
   const responses = await Promise.all(apiPromises)

@@ -96,11 +96,6 @@
               <span class="mr-2">➕</span>
               快速记账
             </button>
-            <!-- 升级按钮 -->
-            <button @click="showUpgradeModal = true" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-md text-sm font-medium">
-              <span class="mr-2">🔄</span>
-              检查更新
-            </button>
             <!-- 当前版本 -->
             <span class="text-sm text-gray-600 dark:text-gray-400">v3.5.8</span>
           </div>
@@ -129,9 +124,6 @@
         <QuickAddComponent @close="showQuickAddModal = false" />
       </div>
     </div>
-    
-    <!-- 升级弹窗 -->
-    <UpgradeComponent v-model:show="showUpgradeModal" />
 
   </div>
 </template>
@@ -140,13 +132,11 @@
 import { ref, onMounted, provide, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import QuickAddComponent from './components/QuickAddComponent.vue'
-import UpgradeComponent from './components/UpgradeComponent.vue'
 
 const router = useRouter()
 const route = useRoute()
 const isAuthenticated = ref(false)
 const showQuickAddModal = ref(false)
-const showUpgradeModal = ref(false)
 
 // 账套相关状态
 const ledgers = ref([])
