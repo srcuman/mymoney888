@@ -69,5 +69,6 @@ jspm_packages/
 .env.local
 
 # Data backup directory (JSON files)
-data/
+# 注意：只忽略根目录的 data/，不忽略 src/modules/data/
+/data/
 *.json.bak
