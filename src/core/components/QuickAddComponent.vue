@@ -25,17 +25,14 @@
         <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">分类</label>
         <div class="space-y-1 max-h-48 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md p-2 bg-white dark:bg-gray-700">
           <div v-for="category in (transactionType === 'income' ? incomeCategories : expenseCategories)" :key="category.id" class="text-sm">
-            <!-- 一级分类 -->
+            <!-- 一级分类（仅展开，不可选） -->
             <div class="flex items-center py-1">
               <button type="button" @click="toggleCategory(category.id)" class="mr-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
                 {{ expandedCategories.includes(category.id) ? '▼' : '▶' }}
               </button>
-              <label class="flex items-center cursor-pointer flex-1">
-                <input type="radio" :name="'category-' + category.id" :value="category.name" v-model="selectedCategory" @change="selectCategory(category.name)" class="mr-2">
-                <span class="text-gray-700 dark:text-gray-300">{{ category.name }}</span>
-              </label>
+              <span class="text-gray-700 dark:text-gray-300 font-medium">{{ category.name }}</span>
             </div>
-            <!-- 二级分类 -->
+            <!-- 二级分类（可选择） -->
             <div v-if="expandedCategories.includes(category.id) && category.children && category.children.length > 0" class="ml-6 space-y-1">
               <label v-for="subcategory in category.children" :key="subcategory.id" class="flex items-center cursor-pointer py-1 hover:bg-gray-100 dark:hover:bg-gray-600 rounded px-2">
                 <input type="radio" :name="'subcategory-' + category.id" :value="`${category.name}-${subcategory.name}`" v-model="selectedCategory" @change="selectCategory(`${category.name}-${subcategory.name}`)" class="mr-2">
@@ -227,11 +224,23 @@ const allAccounts = computed(() => {
   return result
 })
 
-// 维度数据
-const members = computed(() => coreDataStore.getDimensions().members || [])
-const merchants = computed(() => coreDataStore.getDimensions().merchants || [])
-const tags = computed(() => coreDataStore.getDimensions().tags || [])
-const paymentChannels = computed(() => coreDataStore.getDimensions().paymentChannels || [])
+// 维度数据（从 dimensions 对象中获取正确的数组）
+const members = computed(() => {
+  const dims = coreDataStore.getDimensions()
+  return Array.isArray(dims?.members) ? dims.members : []
+})
+const merchants = computed(() => {
+  const dims = coreDataStore.getDimensions()
+  return Array.isArray(dims?.merchants) ? dims.merchants : []
+})
+const tags = computed(() => {
+  const dims = coreDataStore.getDimensions()
+  return Array.isArray(dims?.tags) ? dims.tags : []
+})
+const paymentChannels = computed(() => {
+  const dims = coreDataStore.getDimensions()
+  return Array.isArray(dims?.paymentChannels) ? dims.paymentChannels : []
+})
 
 // 是否为编辑模式
 const isEditMode = computed(() => props.initialData && props.initialData.id)

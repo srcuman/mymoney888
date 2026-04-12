@@ -30,22 +30,22 @@
 
       <div class="mb-8">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">年度收支趋势</h3>
-        <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 h-64 flex items-center justify-center">
-          <p class="text-gray-500 dark:text-gray-400">月度收支趋势图表</p>
+        <div class="h-64">
+          <canvas ref="trendChart"></canvas>
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">支出分类占比</h3>
-          <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 h-64 flex items-center justify-center">
-            <p class="text-gray-500 dark:text-gray-400">支出分类饼图</p>
+          <div class="h-64">
+            <canvas ref="expensePieChart"></canvas>
           </div>
         </div>
         <div>
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">收入来源占比</h3>
-          <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 h-64 flex items-center justify-center">
-            <p class="text-gray-500 dark:text-gray-400">收入来源饼图</p>
+          <div class="h-64">
+            <canvas ref="incomePieChart"></canvas>
           </div>
         </div>
       </div>
@@ -68,14 +68,25 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import Chart from 'chart.js/auto'
 import coreDataStore from '../../services/core-data-store.js'
 
 // 选择的年份
 const selectedYear = ref(new Date().getFullYear())
 
 // 交易数据
-const transactions = ref([])
+const transactions = computed(() => coreDataStore.getRaw('transactions') || [])
+
+// 图表引用
+const trendChart = ref(null)
+const expensePieChart = ref(null)
+const incomePieChart = ref(null)
+
+// 图表实例
+let trendChartInstance = null
+let expensePieChartInstance = null
+let incomePieChartInstance = null
 
 // 可用年份
 const availableYears = computed(() => {
@@ -114,50 +125,84 @@ const annualSummary = computed(() => {
   }
 })
 
-// 智能洞察
-const insights = computed(() => {
+// 月度数据
+const monthlyData = computed(() => {
   const year = selectedYear.value
   const yearTransactions = transactions.value.filter(t => {
     if (!t.date) return false
     return new Date(t.date).getFullYear() === year
   })
   
+  const monthly = Array(12).fill(0).map(() => ({ income: 0, expense: 0 }))
+  
+  yearTransactions.forEach(t => {
+    const month = new Date(t.date).getMonth()
+    if (t.type === 'income') {
+      monthly[month].income += t.amount || 0
+    } else if (t.type === 'expense') {
+      monthly[month].expense += t.amount || 0
+    }
+  })
+  
+  return monthly
+})
+
+// 支出分类数据
+const expenseCategoryData = computed(() => {
+  const year = selectedYear.value
+  const yearTransactions = transactions.value.filter(t => {
+    if (!t.date) return false
+    return new Date(t.date).getFullYear() === year && t.type === 'expense'
+  })
+  
+  const categories = {}
+  yearTransactions.forEach(t => {
+    const cat = t.category || '未分类'
+    categories[cat] = (categories[cat] || 0) + (t.amount || 0)
+  })
+  
+  return Object.entries(categories)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+})
+
+// 收入分类数据
+const incomeCategoryData = computed(() => {
+  const year = selectedYear.value
+  const yearTransactions = transactions.value.filter(t => {
+    if (!t.date) return false
+    return new Date(t.date).getFullYear() === year && t.type === 'income'
+  })
+  
+  const categories = {}
+  yearTransactions.forEach(t => {
+    const cat = t.category || '未分类'
+    categories[cat] = (categories[cat] || 0) + (t.amount || 0)
+  })
+  
+  return Object.entries(categories)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+})
+
+// 智能洞察
+const insights = computed(() => {
+  const year = selectedYear.value
   const insights = []
   
   // 分析支出最多的分类
-  const expenseByCategory = {}
-  yearTransactions
-    .filter(t => t.type === 'expense' && t.category)
-    .forEach(t => {
-      if (!expenseByCategory[t.category]) {
-        expenseByCategory[t.category] = 0
-      }
-      expenseByCategory[t.category] += t.amount || 0
-    })
-  
-  const topExpenseCategory = Object.entries(expenseByCategory)
-    .sort((a, b) => b[1] - a[1])[0]
-  
-  if (topExpenseCategory) {
-    insights.push(`您在${year}年的最大支出类别是${topExpenseCategory[0]}，共花费¥${topExpenseCategory[1].toFixed(2)}。`)
+  if (expenseCategoryData.value.length > 0) {
+    const topExpense = expenseCategoryData.value[0]
+    insights.push(`您在${year}年的最大支出类别是"${topExpense.name}"，共花费¥${topExpense.value.toFixed(2)}。`)
   }
   
   // 分析月度支出趋势
-  const monthlyExpenses = {}
-  yearTransactions
-    .filter(t => t.type === 'expense')
-    .forEach(t => {
-      if (!t.date) return
-      const month = new Date(t.date).getMonth() + 1
-      if (!monthlyExpenses[month]) {
-        monthlyExpenses[month] = 0
-      }
-      monthlyExpenses[month] += t.amount || 0
-    })
+  const monthly = monthlyData.value
+  const totalMonthlyExpense = monthly.reduce((sum, m) => sum + m.expense, 0)
+  const monthsWithData = monthly.filter(m => m.expense > 0).length
   
-  const months = Object.keys(monthlyExpenses).map(Number).sort()
-  if (months.length > 1) {
-    const avgExpense = Object.values(monthlyExpenses).reduce((sum, val) => sum + val, 0) / months.length
+  if (monthsWithData > 0) {
+    const avgExpense = totalMonthlyExpense / monthsWithData
     insights.push(`您在${year}年的月均支出为¥${avgExpense.toFixed(2)}。`)
   }
   
@@ -176,12 +221,210 @@ const insights = computed(() => {
   return insights
 })
 
-onMounted(() => {
-  // 从本地存储加载交易数据
-  const savedTransactions = JSON.stringify(coreDataStore.getRaw('transactions'))
-  if (savedTransactions) {
-    transactions.value = JSON.parse(savedTransactions)
+// 初始化图表
+const initCharts = async () => {
+  await nextTick()
+  updateTrendChart()
+  updateExpensePieChart()
+  updateIncomePieChart()
+}
+
+// 更新收支趋势图表
+const updateTrendChart = () => {
+  if (!trendChart.value) return
+  
+  if (trendChartInstance) {
+    trendChartInstance.destroy()
   }
+  
+  const labels = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
+  const incomeData = monthlyData.value.map(m => m.income)
+  const expenseData = monthlyData.value.map(m => m.expense)
+  
+  trendChartInstance = new Chart(trendChart.value, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '收入',
+          data: incomeData,
+          borderColor: 'rgb(34, 197, 94)',
+          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          tension: 0.3,
+          fill: true
+        },
+        {
+          label: '支出',
+          data: expenseData,
+          borderColor: 'rgb(239, 68, 68)',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          tension: 0.3,
+          fill: true
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom'
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: value => '¥' + value.toFixed(0)
+          }
+        }
+      }
+    }
+  })
+}
+
+// 更新支出饼图
+const updateExpensePieChart = () => {
+  if (!expensePieChart.value) return
+  
+  if (expensePieChartInstance) {
+    expensePieChartInstance.destroy()
+  }
+  
+  const data = expenseCategoryData.value.slice(0, 8)
+  if (data.length === 0) return
+  
+  const colors = [
+    'rgba(239, 68, 68, 0.8)',
+    'rgba(249, 115, 22, 0.8)',
+    'rgba(234, 179, 8, 0.8)',
+    'rgba(34, 197, 94, 0.8)',
+    'rgba(20, 184, 166, 0.8)',
+    'rgba(59, 130, 246, 0.8)',
+    'rgba(139, 92, 246, 0.8)',
+    'rgba(236, 72, 153, 0.8)'
+  ]
+  
+  expensePieChartInstance = new Chart(expensePieChart.value, {
+    type: 'pie',
+    data: {
+      labels: data.map(d => d.name),
+      datasets: [{
+        data: data.map(d => d.value),
+        backgroundColor: colors.slice(0, data.length),
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: {
+            boxWidth: 12
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const value = context.raw
+              const total = context.dataset.data.reduce((a, b) => a + b, 0)
+              const percentage = ((value / total) * 100).toFixed(1)
+              return `${context.label}: ¥${value.toFixed(2)} (${percentage}%)`
+            }
+          }
+        }
+      }
+    }
+  })
+}
+
+// 更新收入饼图
+const updateIncomePieChart = () => {
+  if (!incomePieChart.value) return
+  
+  if (incomePieChartInstance) {
+    incomePieChartInstance.destroy()
+  }
+  
+  const data = incomeCategoryData.value.slice(0, 8)
+  if (data.length === 0) return
+  
+  const colors = [
+    'rgba(34, 197, 94, 0.8)',
+    'rgba(20, 184, 166, 0.8)',
+    'rgba(59, 130, 246, 0.8)',
+    'rgba(139, 92, 246, 0.8)',
+    'rgba(236, 72, 153, 0.8)',
+    'rgba(249, 115, 22, 0.8)',
+    'rgba(234, 179, 8, 0.8)',
+    'rgba(239, 68, 68, 0.8)'
+  ]
+  
+  incomePieChartInstance = new Chart(incomePieChart.value, {
+    type: 'pie',
+    data: {
+      labels: data.map(d => d.name),
+      datasets: [{
+        data: data.map(d => d.value),
+        backgroundColor: colors.slice(0, data.length),
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: {
+            boxWidth: 12
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const value = context.raw
+              const total = context.dataset.data.reduce((a, b) => a + b, 0)
+              const percentage = ((value / total) * 100).toFixed(1)
+              return `${context.label}: ¥${value.toFixed(2)} (${percentage}%)`
+            }
+          }
+        }
+      }
+    }
+  })
+}
+
+// 监听数据变化
+const handleDataChanged = () => {
+  initCharts()
+}
+
+// 监听年份变化
+watch(selectedYear, () => {
+  initCharts()
+})
+
+onMounted(() => {
+  // 监听数据变更事件
+  window.addEventListener('dataChanged', handleDataChanged)
+  window.addEventListener('ledgerChanged', handleDataChanged)
+  
+  // 初始化图表
+  initCharts()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('dataChanged', handleDataChanged)
+  window.removeEventListener('ledgerChanged', handleDataChanged)
+  
+  // 销毁图表实例
+  if (trendChartInstance) trendChartInstance.destroy()
+  if (expensePieChartInstance) expensePieChartInstance.destroy()
+  if (incomePieChartInstance) incomePieChartInstance.destroy()
 })
 </script>
 

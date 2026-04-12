@@ -458,7 +458,11 @@ class CoreDataStore {
     await this._updateAccountBalance(transaction, 'add')
 
     // 联动2：更新信用卡额度（如适用）
-    if (transaction.creditCardAccount) {
+    // 检查是否是信用卡账户（account ID 可能是 cc_xxx 格式）
+    const isCreditCardAccount = String(transaction.account).startsWith('cc_') ||
+      this._isCreditCardAccount(transaction.account)
+    
+    if (isCreditCardAccount) {
       await this._updateCreditCardBalance(transaction, 'add')
     }
 
@@ -470,8 +474,25 @@ class CoreDataStore {
       await this._syncInvestmentProfit(transaction)
     }
 
+    // 触发数据变更事件，通知所有监听器
+    window.dispatchEvent(new CustomEvent('dataChanged', { 
+      detail: { type: 'transactions', action: 'add', id: transaction.id } 
+    }))
+
     console.log('[CoreDataStore] 添加交易:', transaction.id)
     return transaction
+  }
+  
+  /**
+   * 检查是否是信用卡账户
+   */
+  _isCreditCardAccount(accountId) {
+    if (!accountId) return false
+    const creditCards = this._data.value.credit_cards || []
+    return creditCards.some(card => 
+      String(card.id) === String(accountId) || 
+      String(card.linkedAccountId) === String(accountId)
+    )
   }
 
   /**
@@ -750,15 +771,47 @@ class CoreDataStore {
    * 更新信用卡额度
    */
   async _updateCreditCardBalance(transaction, mode) {
-    const card = this.find('credit_cards', c => String(c.linkedAccountId) === String(transaction.creditCardAccount))
-    if (!card) return
+    // 尝试通过多种方式查找信用卡
+    const creditCards = this._data.value.credit_cards || []
+    let card = null
+    
+    // 方式1：通过 linkedAccountId 查找
+    card = creditCards.find(c => String(c.linkedAccountId) === String(transaction.account))
+    
+    // 方式2：通过 cc_ 前缀的 account ID 查找
+    if (!card && transaction.account) {
+      const ccId = String(transaction.account).replace('cc_', '')
+      card = creditCards.find(c => String(c.id) === String(ccId))
+    }
+    
+    // 方式3：通过信用卡账户本身的 ID 查找
+    if (!card) {
+      card = creditCards.find(c => String(c.id) === String(transaction.account))
+    }
+    
+    if (!card) {
+      console.log('[CoreDataStore] 未找到关联的信用卡，尝试查找所有信用卡:', {
+        account: transaction.account,
+        availableCards: creditCards.map(c => ({ id: c.id, linkedAccountId: c.linkedAccountId }))
+      })
+      return
+    }
 
     const multiplier = mode === 'add' ? 1 : -1
     const usedAmount = transaction.amount * multiplier
+    const currentUsedCredit = card.usedCredit || 0
+    const newUsedCredit = currentUsedCredit + usedAmount
 
     await this.update('credit_cards', card.id, {
-      usedCredit: card.usedCredit + usedAmount,
-      availableCredit: card.creditLimit - (card.usedCredit + usedAmount)
+      usedCredit: Math.max(0, newUsedCredit),
+      availableCredit: Math.max(0, (card.creditLimit || 0) - Math.max(0, newUsedCredit))
+    })
+    
+    console.log('[CoreDataStore] 更新信用卡额度:', card.name, {
+      mode,
+      amount: transaction.amount,
+      usedCredit: Math.max(0, newUsedCredit),
+      availableCredit: Math.max(0, (card.creditLimit || 0) - Math.max(0, newUsedCredit))
     })
   }
 
@@ -814,6 +867,36 @@ class CoreDataStore {
     }
 
     await this.add('investment_accounts', account)
+    
+    // 如果初始资金大于0，创建视同转入的投资明细记录（显示为"现金"）
+    if (account.totalValue > 0) {
+      await this.add('investment_details', {
+        accountId: account.id,
+        accountName: account.name,
+        type: '现金',
+        code: '-',
+        name: '初始资金（视同转入）',
+        shares: 1,
+        costPrice: account.totalValue,
+        currentPrice: account.totalValue,
+        netValueDate: new Date().toISOString().split('T')[0],
+        updateDate: new Date().toISOString().split('T')[0],
+        isInitialTransfer: true,
+        description: `${account.name} 的初始投入`
+      })
+      
+      // 同时记录到交易历史
+      await this.addTransaction({
+        type: 'income',
+        amount: account.totalValue,
+        account: account.linkedAccountId,
+        category: 'investment_transfer_in',
+        description: `视同转入 - ${account.name}`,
+        isInvestmentTransfer: true,
+        investmentAccountId: account.id,
+        date: new Date().toISOString().split('T')[0]
+      })
+    }
     
     console.log('[CoreDataStore] 添加投资账户:', account.id)
     return account

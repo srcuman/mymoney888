@@ -235,7 +235,7 @@ app.get('/api/health', (req, res) => {
 
 // 版本信息
 app.get('/api/version', (req, res) => {
-  res.json({ version: '3.6.2', name: 'MyMoney888' })
+  res.json({ version: '3.8.1', name: 'MyMoney888' })
 })
 
 // 数据目录信息
@@ -377,119 +377,219 @@ app.get('/api/sync/tables', (req, res) => {
 
 // 同步数据到数据库 (Local -> MySQL)
 app.post('/api/sync', async (req, res) => {
-  const { userId, table, data } = req.body
+  const { userId, table, data, ledgerId } = req.body
   
-  if (!userId || !table || !data) {
+  // 兼容两种格式：单个表同步 或 多表数据同步
+  if (!userId) {
     return res.status(400).json({ 
       success: false, 
-      error: '缺少必要参数: userId, table, data' 
+      error: '缺少必要参数: userId' 
     })
   }
   
-  if (!SYNC_TABLES.includes(table)) {
-    return res.status(400).json({ 
-      success: false, 
-      error: `不支持的表: ${table}` 
-    })
+  // 如果提供了 ledgerId，设置默认账套
+  const effectiveLedgerId = ledgerId || 'default'
+  
+  // 如果是单个表同步（旧格式兼容）
+  if (table && data) {
+    if (!SYNC_TABLES.includes(table)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `不支持的表: ${table}` 
+      })
+    }
+    
+    // 单表同步逻辑
+    try {
+      const connection = await pool.getConnection()
+      
+      try {
+        await connection.beginTransaction()
+        
+        let successCount = 0
+        let errorCount = 0
+        const errors = []
+        
+        const dataArray = Array.isArray(data) ? data : []
+        
+        for (const item of dataArray) {
+          try {
+            // 构建 UPSERT 语句
+            const id = item.id
+            const fields = Object.keys(item).filter(k => k !== 'id')
+            const values = fields.map(k => item[k])
+            
+            // 检查记录是否存在
+            const [existing] = await connection.execute(
+              `SELECT id FROM ${table} WHERE id = ?`,
+              [id]
+            )
+            
+            if (existing.length > 0) {
+              // 更新
+              const setClause = fields.map(f => `${f} = ?`).join(', ')
+              await connection.execute(
+                `UPDATE ${table} SET ${setClause}, updated_at = NOW() WHERE id = ?`,
+                [...values, id]
+              )
+            } else {
+              // 插入
+              const fieldList = ['id', ...fields].join(', ')
+              const placeholders = ['?', ...fields.map(() => '?')].join(', ')
+              await connection.execute(
+                `INSERT INTO ${table} (${fieldList}) VALUES (${placeholders})`,
+                [id, ...values]
+              )
+            }
+            successCount++
+          } catch (itemError) {
+            errorCount++
+            errors.push({ id: item.id, error: itemError.message })
+          }
+        }
+        
+        await connection.commit()
+        
+        // 记录同步日志
+        await logSync(
+          userId, 
+          table, 
+          'local_to_db', 
+          successCount, 
+          errorCount > 0 ? 'partial' : 'success',
+          errorCount > 0 ? JSON.stringify(errors) : null
+        )
+        
+        // 自动备份到本地文件（双重保险）
+        let backupSuccess = false
+        if (AUTO_BACKUP_ON_CHANGE && successCount > 0) {
+          try {
+            const [rows] = await pool.execute(
+              `SELECT * FROM ${table} WHERE user_id = ?`,
+              [userId]
+            )
+            backupSuccess = await backupToFile(table, rows)
+          } catch (backupError) {
+            console.warn(`同步后备份失败: ${backupError.message}`)
+          }
+        }
+        
+        res.json({
+          success: true,
+          table,
+          total: dataArray.length,
+          successCount,
+          errorCount,
+          errors: errorCount > 0 ? errors : null,
+          backedUp: backupSuccess
+        })
+        
+      } catch (error) {
+        await connection.rollback()
+        throw error
+      } finally {
+        connection.release()
+      }
+      
+    } catch (error) {
+      console.error(`同步 ${table} 失败:`, error)
+      res.status(500).json({ 
+        success: false, 
+        error: error.message 
+      })
+    }
+    return
   }
   
-  try {
+  // 如果 data 是对象（多表数据格式），处理多表同步
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const results = {}
     const connection = await pool.getConnection()
     
     try {
       await connection.beginTransaction()
       
-      let successCount = 0
-      let errorCount = 0
-      const errors = []
-      
-      for (const item of data) {
-        try {
-          // 构建 UPSERT 语句
-          const id = item.id
-          const fields = Object.keys(item).filter(k => k !== 'id')
-          const values = fields.map(k => item[k])
-          
-          // 检查记录是否存在
-          const [existing] = await connection.execute(
-            `SELECT id FROM ${table} WHERE id = ?`,
-            [id]
-          )
-          
-          if (existing.length > 0) {
-            // 更新
-            const setClause = fields.map(f => `${f} = ?`).join(', ')
-            await connection.execute(
-              `UPDATE ${table} SET ${setClause}, updated_at = NOW() WHERE id = ?`,
-              [...values, id]
+      for (const [tableName, tableData] of Object.entries(data)) {
+        if (!SYNC_TABLES.includes(tableName)) continue
+        if (!Array.isArray(tableData)) continue
+        
+        let successCount = 0
+        let errorCount = 0
+        
+        for (const item of tableData) {
+          try {
+            const id = item.id
+            const fields = Object.keys(item).filter(k => k !== 'id')
+            const values = fields.map(k => item[k])
+            
+            const [existing] = await connection.execute(
+              `SELECT id FROM ${tableName} WHERE id = ?`,
+              [id]
             )
-          } else {
-            // 插入
-            const fieldList = ['id', ...fields].join(', ')
-            const placeholders = ['?', ...fields.map(() => '?')].join(', ')
-            await connection.execute(
-              `INSERT INTO ${table} (${fieldList}) VALUES (${placeholders})`,
-              [id, ...values]
-            )
+            
+            if (existing.length > 0) {
+              const setClause = fields.map(f => `${f} = ?`).join(', ')
+              await connection.execute(
+                `UPDATE ${tableName} SET ${setClause}, updated_at = NOW() WHERE id = ?`,
+                [...values, id]
+              )
+            } else {
+              const fieldList = ['id', ...fields].join(', ')
+              const placeholders = ['?', ...fields.map(() => '?')].join(', ')
+              await connection.execute(
+                `INSERT INTO ${tableName} (${fieldList}) VALUES (${placeholders})`,
+                [id, ...values]
+              )
+            }
+            successCount++
+          } catch (itemError) {
+            errorCount++
           }
-          successCount++
-        } catch (itemError) {
-          errorCount++
-          errors.push({ id: item.id, error: itemError.message })
+        }
+        
+        results[tableName] = { successCount, errorCount }
+        
+        // 自动备份
+        if (AUTO_BACKUP_ON_CHANGE && successCount > 0) {
+          await backupToFile(tableName, tableData)
         }
       }
       
       await connection.commit()
       
-      // 记录同步日志
-      await logSync(
-        userId, 
-        table, 
-        'local_to_db', 
-        successCount, 
-        errorCount > 0 ? 'partial' : 'success',
-        errorCount > 0 ? JSON.stringify(errors) : null
-      )
-      
-      // 自动备份到本地文件（双重保险）
-      let backupSuccess = false
-      if (AUTO_BACKUP_ON_CHANGE && successCount > 0) {
-        // 获取更新后的完整数据并备份
-        try {
-          const [rows] = await pool.execute(
-            `SELECT * FROM ${table} WHERE user_id = ?`,
-            [userId]
-          )
-          backupSuccess = await backupToFile(table, rows)
-        } catch (backupError) {
-          console.warn(`同步后备份失败: ${backupError.message}`)
-        }
-      }
-      
       res.json({
         success: true,
-        table,
-        total: data.length,
-        successCount,
-        errorCount,
-        errors: errorCount > 0 ? errors : null,
-        backedUp: backupSuccess
+        ledgerId: effectiveLedgerId,
+        results,
+        message: '多表同步完成'
       })
       
     } catch (error) {
       await connection.rollback()
-      throw error
+      console.error('多表同步失败:', error)
+      res.status(500).json({ 
+        success: false, 
+        error: error.message 
+      })
     } finally {
       connection.release()
     }
-    
-  } catch (error) {
-    console.error(`同步 ${table} 失败:`, error)
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
-    })
+    return
   }
+  
+  // 如果 data 是数组（旧格式兼容）
+  if (data && Array.isArray(data)) {
+    res.status(400).json({ 
+      success: false, 
+      error: '缺少 table 参数' 
+    })
+    return
+  }
+  
+  res.status(400).json({ 
+    success: false, 
+    error: '无效的请求数据' 
+  })
 })
 
 // 从数据库获取数据 (MySQL -> Local)

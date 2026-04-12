@@ -1024,10 +1024,11 @@ onMounted(() => {
   expenseCategoryList.value = allCategories.filter(c => c.type === 'expense')
   
   const dimensions = coreDataStore.getDimensions()
-  members.value = dimensions.members || []
-  merchants.value = dimensions.merchants || []
-  tags.value = dimensions.tags || []
-  paymentChannels.value = dimensions.paymentChannels || []
+  // 确保维度数据是数组格式
+  members.value = Array.isArray(dimensions?.members) ? dimensions.members : []
+  merchants.value = Array.isArray(dimensions?.merchants) ? dimensions.merchants : []
+  tags.value = Array.isArray(dimensions?.tags) ? dimensions.tags : []
+  paymentChannels.value = Array.isArray(dimensions?.paymentChannels) ? dimensions.paymentChannels : []
   
   // 加载交易数据
   transactions.value = coreDataStore.getRaw('transactions') || []
