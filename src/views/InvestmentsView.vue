@@ -681,106 +681,81 @@ const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
 const fetchSingleAPI = async (url, source) => {
   const startTime = Date.now()
   try {
-    console.log(`[${source}] 请求URL: ${url}`)
-    const response = await fetchWithTimeout(url, {
-      method: 'GET'
-    })
+    console.log(`[${source}] 请求: ${url}`)
+    const response = await fetchWithTimeout(url, { method: 'GET' })
     const elapsed = Date.now() - startTime
     
     if (response.ok) {
       const data = await response.text()
-      console.log(`[${source}] 成功 (${elapsed}ms), 响应: ${data.substring(0, 150)}...`)
+      console.log(`[${source}] 成功 (${elapsed}ms)`)
       return { source, data, elapsed, success: true }
     } else {
-      console.log(`[${source}] 失败: HTTP ${response.status}`)
+      console.log(`[${source}] HTTP错误: ${response.status}`)
       return { source, data: null, elapsed, success: false }
     }
   } catch (error) {
     const elapsed = Date.now() - startTime
-    if (error.name === 'AbortError') {
-      console.log(`[${source}] 超时 (${elapsed}ms)`)
-    } else {
-      console.log(`[${source}] 错误: ${error.message} (${elapsed}ms)`)
-    }
+    console.log(`[${source}] 失败: ${error.message} (${elapsed}ms)`)
     return { source, data: null, elapsed, success: false }
   }
 }
 
-// 解析腾讯财经股票数据
-const parseTencentStockData = (data) => {
-  // 格式: v_sz000001="51~name~code~price~..."
-  // 使用正则提取等号后的内容
-  const match = data.match(/="([^"]+)"/)
-  if (!match) return null
-  
-  const fields = match[1].split('~')
-  if (fields.length < 4) return null
-  
-  const name = fields[1]
-  const price = parseFloat(fields[3])
-  
-  if (!name || price <= 0 || name === '无名') return null
-  
-  return { name, price }
-}
-
-// 解析新浪财经股票数据
-const parseSinaStockData = (data) => {
-  // 格式: var hq_str_sz000001="name,price,..."
-  const match = data.match(/="([^"]+)"/)
-  if (!match) return null
-  
-  const fields = match[1].split(',')
-  if (fields.length < 4) return null
-  
-  const name = fields[0]
-  const price = parseFloat(fields[3])
-  
-  if (!name || price <= 0) return null
-  
-  return { name, price }
-}
-
-// 解析天天基金数据
+// 解析天天基金数据 (UTF-8 JSON)
 const parseTianTianFundData = (data) => {
-  // 格式: jsonpgz({...});
-  const match = data.match(/jsonpgz\((.+)\)/)
-  if (!match) return null
-  
   try {
+    // 格式: jsonpgz({...});
+    const match = data.match(/jsonpgz\((.+)\)/)
+    if (!match) return null
+    
     const fundData = JSON.parse(match[1])
     if (!fundData.name) return null
     
-    let fundName = fundData.name
-    try {
-      fundName = decodeURIComponent(escape(fundData.name))
-    } catch (e) {}
-    
-    // 基金净值可能在 gsz(今日估算) 或 dwjz(昨日净值)
+    // gsz是估算净值(分)，dwjz是昨日净值
     const price = parseFloat(fundData.gsz) || parseFloat(fundData.dwjz) || 0
     
     return {
-      name: fundName,
+      name: fundData.name,
       price,
       updateDate: fundData.gztime || fundData.jzrq || new Date().toISOString().split('T')[0]
     }
   } catch (e) {
-    console.log('基金数据JSON解析失败:', e.message)
+    console.log('天天基金解析失败:', e.message)
     return null
   }
 }
 
-// 根据代码获取投资品种信息 - 重写版本
+// 解析东方财富股票数据 (UTF-8 JSON)
+const parseEastMoneyStockData = (data) => {
+  try {
+    const json = JSON.parse(data)
+    const stockData = json.data
+    if (!stockData || !stockData.f58) return null
+    
+    // f43是当前价格(单位：分)，需要转元
+    const price = (stockData.f43 || 0) / 100
+    
+    return {
+      name: stockData.f58,
+      price,
+      code: stockData.f57
+    }
+  } catch (e) {
+    console.log('东方财富解析失败:', e.message)
+    return null
+  }
+}
+
+// 根据代码获取投资品种信息
 const fetchInvestmentInfo = async (code, userSelectedType = null) => {
-  console.log('========== 开始获取投资信息 ==========')
-  console.log('代码:', code, '用户选择类型:', userSelectedType)
+  console.log('========== 获取投资信息 ==========')
+  console.log('代码:', code, '| 类型:', userSelectedType || '自动检测')
   
   // 检查代码格式
   if (!code || code.length !== 6 || !/^\d+$/.test(code)) {
     throw new Error('代码格式不正确，请输入6位数字代码')
   }
   
-  // 基金代码前缀: 1/5/4/8/0/2开头 (扩展判断)
+  // 基金代码前缀: 1/5/4/8/0/2开头
   const fundPrefixes = ['1', '5', '4', '8', '0', '2', '15']
   const isPossibleFund = fundPrefixes.some(p => code.startsWith(p))
   
@@ -788,63 +763,72 @@ const fetchInvestmentInfo = async (code, userSelectedType = null) => {
   const stockPrefixes = ['6', '0', '3', '8']
   const isPossibleStock = stockPrefixes.some(p => code.startsWith(p))
   
-  // 决定调用哪些API
-  const needFundAPI = userSelectedType === '基金' || (isPossibleFund && !userSelectedType)
-  const needStockAPI = userSelectedType === '股票' || (isPossibleStock && !userSelectedType)
+  // 用户指定类型
+  const userWantsFund = userSelectedType === '基金'
+  const userWantsStock = userSelectedType === '股票'
   
-  // 构建API调用任务
+  // 构建API任务
   const apiTasks = []
   
-  // 基金API - 天天基金实时估值 (只对非6开头调用，因为6是明显股票)
-  if (needFundAPI && !code.startsWith('6') && !code.startsWith('3')) {
+  // 1. 股票 - 东方财富API (推荐，支持UTF-8)
+  if (userWantsStock || (isPossibleStock && !userWantsFund)) {
+    // secid: 0=深市, 1=沪市
+    const secid = code.startsWith('6') ? `1.${code}` : `0.${code}`
     apiTasks.push({
-      url: `/api/js/${code}.js`,
-      source: '天天基金',
-      type: 'fund'
+      url: `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f43,f57,f58`,
+      source: '东方财富股票',
+      type: 'stock'
     })
   }
   
-  // 股票API
-  if (needStockAPI) {
-    if (code.startsWith('6')) {
-      // 沪市股票
-      apiTasks.push({ url: `/stock/sh${code}`, source: '腾讯沪市', type: 'stock' })
-      apiTasks.push({ url: `/sina/sh${code}`, source: '新浪沪市', type: 'stock' })
-    } else if (code.startsWith('0') || code.startsWith('3')) {
-      // 深市/创业板
-      apiTasks.push({ url: `/stock/sz${code}`, source: '腾讯深市', type: 'stock' })
-      apiTasks.push({ url: `/sina/sz${code}`, source: '新浪深市', type: 'stock' })
-    } else if (code.startsWith('8')) {
-      // 北交所
-      apiTasks.push({ url: `/sina/bj${code}`, source: '新浪北交所', type: 'stock' })
+  // 2. 基金 - 天天基金API (支持UTF-8)
+  if (userWantsFund || (isPossibleFund && !userWantsStock)) {
+    // 排除6开头(明显是股票)
+    if (!code.startsWith('6') && !code.startsWith('3')) {
+      apiTasks.push({
+        url: `https://fundgz.1234567.com.cn/js/${code}.js?rt=1`,
+        source: '天天基金',
+        type: 'fund'
+      })
     }
   }
-  
-  console.log('API调用任务:', apiTasks)
   
   if (apiTasks.length === 0) {
     throw new Error('无法识别代码类型，请手动选择品种类型')
   }
   
-  // 并行请求所有API
+  console.log('API任务:', apiTasks.map(t => t.source).join(', '))
+  
+  // 并行请求
   const results = await Promise.all(
     apiTasks.map(task => fetchSingleAPI(task.url, task.source))
   )
   
-  console.log('API响应结果:')
-  results.forEach((r, i) => {
-    console.log(`  ${i + 1}. [${r.source}] ${r.success ? '成功' : '失败'} - ${r.data?.substring(0, 100) || '无数据'}`)
-  })
-  
-  // 解析结果
+  // 解析结果 - 优先返回有效数据
   for (const result of results) {
     if (!result.success || !result.data) continue
     
-    // 解析天天基金
+    // 东方财富股票
+    if (result.source === '东方财富股票') {
+      const parsed = parseEastMoneyStockData(result.data)
+      if (parsed && parsed.name && parsed.price > 0) {
+        console.log('========== 成功: 东方财富股票 ==========')
+        console.log('名称:', parsed.name, '| 价格:', parsed.price)
+        return {
+          name: parsed.name,
+          type: '股票',
+          currentPrice: parsed.price,
+          updateDate: new Date().toISOString().split('T')[0]
+        }
+      }
+    }
+    
+    // 天天基金
     if (result.source === '天天基金') {
       const parsed = parseTianTianFundData(result.data)
-      if (parsed) {
-        console.log('========== 天天基金获取成功 ==========')
+      if (parsed && parsed.name && parsed.price > 0) {
+        console.log('========== 成功: 天天基金 ==========')
+        console.log('名称:', parsed.name, '| 净值:', parsed.price, '| 日期:', parsed.updateDate)
         return {
           name: parsed.name,
           type: '基金',
@@ -853,38 +837,10 @@ const fetchInvestmentInfo = async (code, userSelectedType = null) => {
         }
       }
     }
-    
-    // 解析腾讯财经股票
-    if (result.source.startsWith('腾讯')) {
-      const parsed = parseTencentStockData(result.data)
-      if (parsed) {
-        console.log('========== 腾讯财经获取成功 ==========')
-        return {
-          name: parsed.name,
-          type: '股票',
-          currentPrice: parsed.price,
-          updateDate: new Date().toISOString().split('T')[0]
-        }
-      }
-    }
-    
-    // 解析新浪财经股票
-    if (result.source.startsWith('新浪')) {
-      const parsed = parseSinaStockData(result.data)
-      if (parsed) {
-        console.log('========== 新浪财经获取成功 ==========')
-        return {
-          name: parsed.name,
-          type: '股票',
-          currentPrice: parsed.price,
-          updateDate: new Date().toISOString().split('T')[0]
-        }
-      }
-    }
   }
   
-  console.log('========== 所有API获取失败 ==========')
-  throw new Error(`无法获取代码 ${code} 的信息，请检查代码是否正确`)
+  console.log('========== 所有API失败 ==========')
+  throw new Error(`无法获取代码 ${code} 的信息`)
 }
 
 // 监听代码变化，自动获取投资品种信息
