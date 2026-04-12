@@ -481,8 +481,13 @@ const saveDefaults = () => {
 
 // 获取子分类
 const getSubCategories = (parentId) => {
+  // 先在一级分类中查找对应的children数组
   const allCategories = [...expenseCategories.value, ...incomeCategories.value]
-  return allCategories.filter(c => c.parentId === parentId)
+  const parent = allCategories.find(c => c.id === parentId)
+  if (parent && parent.children) {
+    return parent.children
+  }
+  return []
 }
 
 // 打开添加分类模态框

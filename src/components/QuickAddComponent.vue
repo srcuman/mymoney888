@@ -22,13 +22,29 @@
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div v-if="transactionType !== 'transfer'">
-        <label for="category" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">分类</label>
-        <select id="category" v-model="transaction.category" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
-          <option value="">请选择分类</option>
-          <optgroup v-for="category in (transactionType === 'income' ? incomeCategories : expenseCategories)" :key="category.name" :label="category.name">
-            <option v-for="subcategory in (category.children || [])" :key="subcategory.name" :value="`${category.name}-${subcategory.name}`">{{ subcategory.name }}</option>
-          </optgroup>
-        </select>
+        <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">分类</label>
+        <div class="space-y-1 max-h-48 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md p-2 bg-white dark:bg-gray-700">
+          <div v-for="category in (transactionType === 'income' ? incomeCategories : expenseCategories)" :key="category.id" class="text-sm">
+            <!-- 一级分类 -->
+            <div class="flex items-center py-1">
+              <button type="button" @click="toggleCategory(category.id)" class="mr-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                {{ expandedCategories.includes(category.id) ? '▼' : '▶' }}
+              </button>
+              <label class="flex items-center cursor-pointer flex-1">
+                <input type="radio" :name="'category-' + category.id" :value="category.name" v-model="selectedCategory" @change="selectCategory(category.name)" class="mr-2">
+                <span class="text-gray-700 dark:text-gray-300">{{ category.name }}</span>
+              </label>
+            </div>
+            <!-- 二级分类 -->
+            <div v-if="expandedCategories.includes(category.id) && category.children && category.children.length > 0" class="ml-6 space-y-1">
+              <label v-for="subcategory in category.children" :key="subcategory.id" class="flex items-center cursor-pointer py-1 hover:bg-gray-100 dark:hover:bg-gray-600 rounded px-2">
+                <input type="radio" :name="'subcategory-' + category.id" :value="`${category.name}-${subcategory.name}`" v-model="selectedCategory" @change="selectCategory(`${category.name}-${subcategory.name}`)" class="mr-2">
+                <span class="text-gray-600 dark:text-gray-400">{{ subcategory.name }}</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <input type="hidden" v-model="transaction.category" required>
       </div>
       <div :class="transactionType === 'transfer' ? 'md:col-span-2' : ''">
         <label :for="transactionType === 'transfer' ? 'from-account' : 'account'" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -128,6 +144,27 @@ const transaction = ref({
   paymentChannel: '',
   description: ''
 })
+
+// 分类折叠状态 - 默认全部折叠
+const expandedCategories = ref([])
+
+// 选中的分类
+const selectedCategory = ref('')
+
+// 切换分类展开/折叠
+const toggleCategory = (categoryId) => {
+  const index = expandedCategories.value.indexOf(categoryId)
+  if (index === -1) {
+    expandedCategories.value.push(categoryId)
+  } else {
+    expandedCategories.value.splice(index, 1)
+  }
+}
+
+// 选择分类
+const selectCategory = (category) => {
+  transaction.value.category = category
+}
 
 // 支出分类列表（从维度管理获取）
 const expenseCategories = ref([])

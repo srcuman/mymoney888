@@ -113,14 +113,15 @@ if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_
         echo "当前表数量: $TABLE_COUNT"
         
         # 检查关键表是否存在
-        REQUIRED_TABLES="users accounts categories transactions credit_cards credit_card_bills loans loan_payments installment_templates installments merchants projects members transaction_merchants transaction_projects transaction_members sync_logs user_settings"
+        REQUIRED_TABLES="users accounts categories transactions credit_cards credit_card_bills loans loan_payments installment_templates installments merchants projects members sync_logs user_settings investment_accounts investment_details dimensions ledgers user_defaults"
+        REQUIRED_COUNT=19
         
         echo "检查必需表..."
-        TABLES_EXIST=$(MYSQL_PWD="$DB_PASSWORD" mariadb -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" --skip-ssl --default-auth=mysql_native_password "$DB_NAME" -e "SHOW TABLES" 2>&1 | grep -E "users|accounts|categories|transactions|credit_cards|credit_card_bills|loans|loan_payments|installment_templates|installments|merchants|projects|members|transaction_merchants|transaction_projects|transaction_members|sync_logs|user_settings" | wc -l)
-        echo "找到必需表数量: $TABLES_EXIST/18"
+        TABLES_EXIST=$(MYSQL_PWD="$DB_PASSWORD" mariadb -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USER" --skip-ssl --default-auth=mysql_native_password "$DB_NAME" -e "SHOW TABLES" 2>&1 | grep -E "^users$|^accounts$|^categories$|^transactions$|^credit_cards$|^credit_card_bills$|^loans$|^loan_payments$|^installment_templates$|^installments$|^merchants$|^projects$|^members$|^sync_logs$|^user_settings$|^investment_accounts$|^investment_details$|^dimensions$|^ledgers$|^user_defaults$" | wc -l)
+        echo "找到必需表数量: $TABLES_EXIST/$REQUIRED_COUNT"
         
-        if [ "$TABLE_COUNT" -le 1 ] || [ "$TABLES_EXIST" -lt 18 ]; then
-            if [ "$TABLES_EXIST" -lt 18 ]; then
+        if [ "$TABLE_COUNT" -le 1 ] || [ "$TABLES_EXIST" -lt "$REQUIRED_COUNT" ]; then
+            if [ "$TABLES_EXIST" -lt "$REQUIRED_COUNT" ]; then
                 echo "检测到表结构不完整，开始重建数据库结构..."
             else
                 echo "数据库为空，开始初始化表结构..."

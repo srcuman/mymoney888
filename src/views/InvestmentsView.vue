@@ -793,10 +793,12 @@ const fetchInvestmentInfo = async (code) => {
     throw new Error('代码格式不正确，请输入6位数字代码')
   }
   
-  // 判断代码类型：基金以5开头，股票以0、3、6开头
-  const isFund = code.startsWith('5') || code.startsWith('1') || code.startsWith('15')
-  const isShanghaiStock = code.startsWith('6')
-  const isShenzhenStock = code.startsWith('0') || code.startsWith('3')
+  // 判断代码类型：基金以5开头（多数基金），也有0或4开头的基金；股票以0、3、6开头
+  // 005310 是东吴基金，属于0开头的基金
+  const isFund = code.startsWith('5') || code.startsWith('1') || code.startsWith('15') || 
+                 code.startsWith('0') || code.startsWith('4') || code.startsWith('2') || code.startsWith('8')
+  const isShanghaiStock = code.startsWith('6') && !isFund
+  const isShenzhenStock = (code.startsWith('0') || code.startsWith('3')) && !isFund
   
   // 并行调用多个API，根据代码类型选择合适的API
   const apiPromises = []
