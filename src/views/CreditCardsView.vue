@@ -140,28 +140,7 @@
 import { ref, onMounted } from 'vue'
 
 // 信用卡列表
-const creditCards = ref([
-  {
-    id: 1,
-    name: '招商银行信用卡',
-    bank: '招商银行',
-    number: '**** **** **** 1234',
-    creditLimit: 50000,
-    availableCredit: 35000,
-    billDay: 5,
-    dueDay: 25
-  },
-  {
-    id: 2,
-    name: '工商银行信用卡',
-    bank: '工商银行',
-    number: '**** **** **** 5678',
-    creditLimit: 30000,
-    availableCredit: 20000,
-    billDay: 10,
-    dueDay: 30
-  }
-])
+const creditCards = ref([])
 
 // 信用卡账单列表
 const creditCardBills = ref([
@@ -235,7 +214,7 @@ const saveCard = () => {
   } else {
     // 添加新信用卡
     const newCard = {
-      id: creditCards.value.length + 1,
+      id: Date.now(),
       name: formData.value.name,
       bank: formData.value.bank,
       number: formData.value.number,
@@ -245,6 +224,25 @@ const saveCard = () => {
       dueDay: formData.value.dueDay
     }
     creditCards.value.push(newCard)
+    
+    // 自动创建对应的账户到账户管理
+    const linkedAccount = {
+      id: `credit_${Date.now()}`,
+      name: `${formData.value.name} (信用卡)`,
+      type: 'credit_card',
+      balance: -formData.value.availableCredit, // 信用卡欠款为负
+      creditLimit: formData.value.creditLimit,
+      linkedCardId: newCard.id,
+      createdAt: new Date().toLocaleString()
+    }
+    
+    // 获取现有账户
+    const existingAccounts = JSON.parse(localStorage.getItem('accounts') || '[]')
+    existingAccounts.push(linkedAccount)
+    localStorage.setItem('accounts', JSON.stringify(existingAccounts))
+    
+    // 触发账户更新事件
+    window.dispatchEvent(new CustomEvent('accountsUpdated'))
   }
   
   // 保存到本地存储

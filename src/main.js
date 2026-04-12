@@ -9,7 +9,9 @@ app.use(createPinia())
 app.use(router)
 
 // 显示版本信息
-const version = '3.5.8'
+import { APP_VERSION } from './config/version.js'
+
+const version = APP_VERSION
 console.log('========================================')
 console.log('  MyMoney888 个人记账系统')
 console.log(`  版本: ${version}`)

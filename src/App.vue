@@ -8,7 +8,7 @@
           <span class="mr-2">💰</span>
           MyMoney888
         </router-link>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">v3.5.8</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">v{{ APP_VERSION }}</p>
       </div>
       <nav class="flex-1 p-4 space-y-1">
         <router-link to="/" :class="isActive('/')" class="flex items-center px-3 py-2 rounded-md text-sm font-medium">
@@ -132,6 +132,7 @@
 import { ref, onMounted, provide, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import QuickAddComponent from './components/QuickAddComponent.vue'
+import { APP_VERSION } from './config/version.js'
 
 const router = useRouter()
 const route = useRoute()

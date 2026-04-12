@@ -7,10 +7,8 @@ const upgradeService = {
   // 检查是否有新版本
   checkForUpdates: async () => {
     try {
-      // 从本地文件获取当前版本
-      const currentVersionResponse = await fetch('/package.json')
-      const currentVersionData = await currentVersionResponse.json()
-      const currentVersion = currentVersionData.version || '0.0.0'
+      // 使用统一版本配置
+      const currentVersion = APP_VERSION
       
       // 尝试从Gitee仓库获取最新版本信息
       const repoUrl = 'https://gitee.com/srcuman/mymoney888/raw/test/package.json'

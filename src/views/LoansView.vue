@@ -236,7 +236,7 @@ const saveLoan = () => {
   } else {
     // 添加新贷款
     const newLoan = {
-      id: loans.value.length + 1,
+      id: Date.now(),
       name: formData.value.name,
       type: formData.value.type,
       institution: formData.value.institution,
@@ -246,6 +246,25 @@ const saveLoan = () => {
       repaymentDay: formData.value.repaymentDay
     }
     loans.value.push(newLoan)
+    
+    // 自动创建对应的账户到账户管理
+    const linkedAccount = {
+      id: `loan_${Date.now()}`,
+      name: `${formData.value.name} (贷款)`,
+      type: 'loan',
+      balance: -formData.value.remainingAmount, // 贷款欠款为负
+      totalAmount: formData.value.amount,
+      linkedLoanId: newLoan.id,
+      createdAt: new Date().toLocaleString()
+    }
+    
+    // 获取现有账户
+    const existingAccounts = JSON.parse(localStorage.getItem('accounts') || '[]')
+    existingAccounts.push(linkedAccount)
+    localStorage.setItem('accounts', JSON.stringify(existingAccounts))
+    
+    // 触发账户更新事件
+    window.dispatchEvent(new CustomEvent('accountsUpdated'))
   }
   
   // 保存到本地存储

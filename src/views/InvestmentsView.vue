@@ -251,7 +251,7 @@
           </div>
           <div class="mb-4">
             <label for="detailCode" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">代码</label>
-            <input type="text" id="detailCode" v-model="newInvestmentDetail.code" @keyup.enter="handleCodeChange" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+            <input type="text" id="detailCode" v-model="newInvestmentDetail.code" @keydown.enter.prevent="handleCodeChange" @blur="handleCodeBlur" placeholder="输入6位代码后按回车或移出焦点获取信息" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           </div>
           <div v-if="apiLogs.length > 0" class="mb-4">
             <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">后台动作日志</label>
@@ -317,7 +317,7 @@
           </div>
           <div class="mb-4">
             <label for="editDetailCode" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">代码</label>
-            <input type="text" id="editDetailCode" v-model="editInvestmentDetail.code" @keyup.enter="handleEditCodeChange" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+            <input type="text" id="editDetailCode" v-model="editInvestmentDetail.code" @keydown.enter.prevent="handleEditCodeChange" @blur="handleEditCodeBlur" placeholder="输入6位代码后按回车或移出焦点获取信息" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
           </div>
           <div class="mb-4">
             <label for="editDetailName" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">名称</label>
@@ -659,7 +659,7 @@ const addApiLog = (message) => {
 }
 
 // 带超时的fetch函数
-const fetchWithTimeout = async (url, options, timeout = 2000) => {
+const fetchWithTimeout = async (url, options, timeout = 3000) => {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeout)
   
@@ -676,37 +676,35 @@ const fetchWithTimeout = async (url, options, timeout = 2000) => {
   }
 }
 
-// 调用单个API的函数
+// 调用单个API的函数 - 优化响应速度
 const fetchSingleAPI = async (url, source, code) => {
+  const startTime = Date.now()
   try {
-    addApiLog(`尝试调用${source}: ${url}`)
-    console.log(`尝试调用${source}:`, url)
+    console.log(`[${source}] 正在获取...`)
     const response = await fetchWithTimeout(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'text/plain'
       }
-    }, 2000) // 2秒超时
-    addApiLog(`${source}响应状态: ${response.status}`)
-    console.log(`${source}响应状态:`, response.status)
+    }, 3000)
+    const elapsed = Date.now() - startTime
     
     if (response.status === 200) {
       const data = await response.text()
-      addApiLog(`${source}响应成功，开始解析数据`)
-      console.log(`${source}响应数据:`, data)
-      return { source, data }
+      console.log(`[${source}] 成功 (${elapsed}ms)`)
+      return { source, data, elapsed }
     } else {
-      addApiLog(`${source}响应失败: 状态码 ${response.status}`)
+      console.log(`[${source}] 失败: ${response.status}`)
     }
   } catch (error) {
+    const elapsed = Date.now() - startTime
     if (error.name === 'AbortError') {
-      addApiLog(`${source}调用超时: 超过2秒未响应`)
+      console.log(`[${source}] 超时 (${elapsed}ms)`)
     } else {
-      addApiLog(`${source}调用失败: ${error.message}`)
+      console.log(`[${source}] 错误: ${error.message} (${elapsed}ms)`)
     }
-    console.log(`${source}调用失败:`, error)
   }
-  return { source, data: null }
+  return { source, data: null, elapsed: 0 }
 }
 
 // 解析API响应数据
@@ -723,15 +721,11 @@ const parseAPIResponse = (response, code) => {
         try {
           const fundData = JSON.parse(jsonStr)
           if (fundData.name && fundData.dwjz) {
-            // 处理乱码问题
             let fundName = fundData.name
             try {
               fundName = decodeURIComponent(escape(fundData.name))
-            } catch (e) {
-              console.log('解码基金名称失败，使用原始名称')
-            }
-            addApiLog(`成功获取天天基金数据: ${fundName}`)
-            console.log('成功获取天天基金数据:', fundName)
+            } catch (e) {}
+            console.log('天天基金实时估值获取成功:', fundName)
             return {
               source: '天天基金实时估值',
               name: fundName,
@@ -739,15 +733,10 @@ const parseAPIResponse = (response, code) => {
               currentPrice: parseFloat(parseFloat(fundData.dwjz).toFixed(4)) || 0,
               updateDate: fundData.jzrq || new Date().toISOString().split('T')[0]
             }
-          } else {
-            addApiLog('天天基金数据不完整，缺少名称或净值')
           }
         } catch (parseError) {
-          addApiLog(`解析JSONP数据失败: ${parseError.message}`)
-          console.log('解析JSONP数据失败:', parseError)
+          console.log('天天基金实时估值解析失败')
         }
-      } else {
-        addApiLog('天天基金响应数据格式不正确')
       }
     }
     
@@ -756,8 +745,7 @@ const parseAPIResponse = (response, code) => {
       if (data) {
         const nameMatch = data.match(/var fS_name = "([^"]+)"/)
         if (nameMatch && nameMatch[1]) {
-          addApiLog(`成功获取天天基金基本信息: ${nameMatch[1]}`)
-          console.log('成功获取天天基金基本信息:', nameMatch[1])
+          console.log('天天基金基本信息获取成功:', nameMatch[1])
           return {
             source: '天天基金基本信息',
             name: nameMatch[1],
@@ -765,23 +753,19 @@ const parseAPIResponse = (response, code) => {
             currentPrice: 0,
             updateDate: new Date().toISOString().split('T')[0]
           }
-        } else {
-          addApiLog('天天基金基本信息数据中未找到基金名称')
         }
       }
     }
     
     // 解析腾讯财经股票数据
     if (source === '腾讯财经上海' || source === '腾讯财经深圳') {
-      // 腾讯财经返回格式: v_sh600519="51~贵州茅台~600519~1780.00~1785.00~..."
       if (data && data.includes('~')) {
         const stockData = data.split('~')
         if (stockData.length > 4 && stockData[1] && stockData[3]) {
           const name = stockData[1]
           const price = parseFloat(stockData[3])
           if (name && !name.includes('无名') && price > 0) {
-            addApiLog(`成功获取${source}股票数据: ${name}`)
-            console.log(`成功获取${source}股票数据:`, name)
+            console.log(`腾讯财经股票获取成功:`, name)
             return {
               source: source,
               name: name,
@@ -789,26 +773,18 @@ const parseAPIResponse = (response, code) => {
               currentPrice: price || 0,
               updateDate: new Date().toISOString().split('T')[0]
             }
-          } else {
-            addApiLog(`${source}股票数据无效`)
           }
-        } else {
-          addApiLog(`${source}股票数据格式错误`)
         }
-      } else {
-        addApiLog(`${source}响应数据格式不正确`)
       }
     }
   } catch (error) {
-    addApiLog(`${source}解析异常: ${error.message}`)
     console.error(`${source}解析异常:`, error)
   }
   
-  addApiLog(`${source}解析失败，无有效数据`)
   return null
 }
 
-// 根据代码获取投资品种信息
+// 根据代码获取投资品种信息 - 优化并行调用
 const fetchInvestmentInfo = async (code) => {
   console.log('Fetching investment info for code:', code)
   
@@ -825,13 +801,12 @@ const fetchInvestmentInfo = async (code) => {
   // 并行调用多个API，根据代码类型选择合适的API
   const apiPromises = []
   
-  // 基金API
+  // 基金API - 优先使用实时估值
   if (isFund) {
     apiPromises.push(fetchSingleAPI(`/api/js/${code}.js`, '天天基金实时估值', code))
-    apiPromises.push(fetchSingleAPI(`/fund/pingzhongdata/${code}.js`, '天天基金基本信息', code))
   }
   
-  // 股票API
+  // 股票API - 腾讯财经
   if (isShanghaiStock) {
     apiPromises.push(fetchSingleAPI(`/stock/sh${code}`, '腾讯财经上海', code))
   }
@@ -839,7 +814,7 @@ const fetchInvestmentInfo = async (code) => {
     apiPromises.push(fetchSingleAPI(`/stock/sz${code}`, '腾讯财经深圳', code))
   }
   
-  // 等待所有API调用完成
+  // 等待所有API调用完成，使用 Promise.race 获取最快响应
   const responses = await Promise.all(apiPromises)
   
   // 解析所有API响应
@@ -847,16 +822,13 @@ const fetchInvestmentInfo = async (code) => {
     .map(response => parseAPIResponse(response, code))
     .filter(result => result !== null)
   
-  // 分析API结果
-  addApiLog(`API调用完成，共获取 ${apiResults.length} 个有效结果`)
-  console.log('所有API结果:', apiResults)
+  console.log('API调用完成，有效结果:', apiResults.length)
   
   if (apiResults.length > 0) {
     // 优先使用权威数据源的结果
     // 1. 天天基金实时估值（基金）
     const tianTianFundResult = apiResults.find(r => r.source === '天天基金实时估值')
     if (tianTianFundResult) {
-      addApiLog(`使用天天基金实时估值结果: ${tianTianFundResult.name}`)
       console.log('使用天天基金实时估值结果:', tianTianFundResult)
       return {
         name: tianTianFundResult.name,
@@ -869,7 +841,6 @@ const fetchInvestmentInfo = async (code) => {
     // 2. 腾讯财经上海（股票）
     const tencentShResult = apiResults.find(r => r.source === '腾讯财经上海')
     if (tencentShResult) {
-      addApiLog(`使用腾讯财经上海结果: ${tencentShResult.name}`)
       console.log('使用腾讯财经上海结果:', tencentShResult)
       return {
         name: tencentShResult.name,
@@ -882,7 +853,6 @@ const fetchInvestmentInfo = async (code) => {
     // 3. 腾讯财经深圳（股票）
     const tencentSzResult = apiResults.find(r => r.source === '腾讯财经深圳')
     if (tencentSzResult) {
-      addApiLog(`使用腾讯财经深圳结果: ${tencentSzResult.name}`)
       console.log('使用腾讯财经深圳结果:', tencentSzResult)
       return {
         name: tencentSzResult.name,
@@ -892,22 +862,8 @@ const fetchInvestmentInfo = async (code) => {
       }
     }
     
-    // 4. 天天基金基本信息（基金）
-    const tianTianInfoResult = apiResults.find(r => r.source === '天天基金基本信息')
-    if (tianTianInfoResult) {
-      addApiLog(`使用天天基金基本信息结果: ${tianTianInfoResult.name}`)
-      console.log('使用天天基金基本信息结果:', tianTianInfoResult)
-      return {
-        name: tianTianInfoResult.name,
-        type: tianTianInfoResult.type,
-        currentPrice: tianTianInfoResult.currentPrice,
-        updateDate: tianTianInfoResult.updateDate
-      }
-    }
-    
-    // 5. 使用第一个有效结果
+    // 4. 使用第一个有效结果
     const firstResult = apiResults[0]
-    addApiLog(`使用第一个有效结果: ${firstResult.name}`)
     console.log('使用第一个有效结果:', firstResult)
     return {
       name: firstResult.name,
@@ -917,8 +873,24 @@ const fetchInvestmentInfo = async (code) => {
     }
   }
   
-  // 所有API都失败
-  addApiLog('所有API调用失败，无法获取数据')
+  // 所有API都失败，尝试备用API
+  console.log('主API失败，尝试备用API...')
+  
+  // 备用基金API
+  if (isFund) {
+    const backupResult = await fetchSingleAPI(`/fund/pingzhongdata/${code}.js`, '天天基金基本信息', code)
+    const parsed = parseAPIResponse(backupResult, code)
+    if (parsed) {
+      console.log('备用API成功:', parsed)
+      return {
+        name: parsed.name,
+        type: parsed.type,
+        currentPrice: parsed.currentPrice,
+        updateDate: parsed.updateDate
+      }
+    }
+  }
+  
   console.log('所有API调用失败，无法获取数据')
   throw new Error(`无法获取代码 ${code} 的信息，请检查代码是否正确，或手动输入名称`)
 }
@@ -927,51 +899,13 @@ const fetchInvestmentInfo = async (code) => {
 const handleCodeChange = async () => {
   const code = newInvestmentDetail.value.code
   console.log('handleCodeChange called with code:', code)
-  
-  // 清空之前的日志
-  apiLogs.value = []
-  apiResponseTime.value = 0
-  
-  // 只在用户按Enter键且代码长度为6位时触发API调用
-  if (code && code.length === 6) {
-    // 检查代码是否只包含数字
-    if (!/^\d+$/.test(code)) {
-      addApiLog('代码格式不正确，请输入6位数字代码')
-      console.log('Code format is not valid:', code)
-      alert('代码格式不正确，请输入6位数字代码')
-      return
-    }
-    
-    try {
-      addApiLog(`开始获取代码 ${code} 的投资信息`)
-      console.log('Fetching investment info for code:', code)
-      
-      const startTime = Date.now()
-      const info = await fetchInvestmentInfo(code)
-      const endTime = Date.now()
-      apiResponseTime.value = endTime - startTime
-      
-      addApiLog(`获取投资信息成功，响应时间: ${apiResponseTime.value}ms`)
-      console.log('Received investment info:', info)
-      
-      newInvestmentDetail.value.name = info.name
-      newInvestmentDetail.value.type = info.type
-      newInvestmentDetail.value.currentPrice = info.currentPrice
-      
-      addApiLog(`已更新投资信息: ${info.name} (${info.type})`)
-      console.log('Updated newInvestmentDetail:', newInvestmentDetail.value)
-    } catch (error) {
-      addApiLog(`获取投资信息失败: ${error.message}`)
-      console.error('Failed to fetch investment info:', error)
-      // 清空自动填充的字段，让用户手动输入
-      newInvestmentDetail.value.name = ''
-      newInvestmentDetail.value.type = ''
-      newInvestmentDetail.value.currentPrice = 0
-      alert(error.message || '无法获取该代码的信息，请检查代码是否正确，或手动输入名称')
-    }
-  } else {
-    addApiLog(`代码长度不正确: ${code?.length || 0}位，需要6位数字`)
-    console.log('Code length is not 6:', code?.length)
+  await fetchAndFillInvestmentInfo(code, 'new')
+}
+
+const handleCodeBlur = async () => {
+  const code = newInvestmentDetail.value.code
+  if (code && code.length === 6 && /^\d+$/.test(code)) {
+    await fetchAndFillInvestmentInfo(code, 'new')
   }
 }
 
@@ -979,33 +913,46 @@ const handleCodeChange = async () => {
 const handleEditCodeChange = async () => {
   const code = editInvestmentDetail.value.code
   console.log('handleEditCodeChange called with code:', code)
-  // 只在用户按Enter键且代码长度为6位时触发API调用
-  if (code && code.length === 6) {
-    // 检查代码是否只包含数字
-    if (!/^\d+$/.test(code)) {
-      console.log('Code format is not valid:', code)
-      alert('代码格式不正确，请输入6位数字代码')
-      return
-    }
+  await fetchAndFillInvestmentInfo(code, 'edit')
+}
+
+const handleEditCodeBlur = async () => {
+  const code = editInvestmentDetail.value.code
+  if (code && code.length === 6 && /^\d+$/.test(code)) {
+    await fetchAndFillInvestmentInfo(code, 'edit')
+  }
+}
+
+// 统一的获取投资信息并填充的方法
+const fetchAndFillInvestmentInfo = async (code, mode) => {
+  if (!code || code.length !== 6 || !/^\d+$/.test(code)) {
+    return
+  }
+  
+  const targetRef = mode === 'edit' ? editInvestmentDetail : newInvestmentDetail
+  
+  try {
+    addApiLog(`开始获取代码 ${code} 的投资信息...`)
+    console.log(`Fetching investment info for code:`, code)
     
-    try {
-      console.log('Fetching investment info for code:', code)
-      const info = await fetchInvestmentInfo(code)
-      console.log('Received investment info:', info)
-      editInvestmentDetail.value.name = info.name
-      editInvestmentDetail.value.type = info.type
-      editInvestmentDetail.value.currentPrice = info.currentPrice
-      console.log('Updated editInvestmentDetail:', editInvestmentDetail.value)
-    } catch (error) {
-      console.error('Failed to fetch investment info:', error)
-      // 清空自动填充的字段，让用户手动输入
-      editInvestmentDetail.value.name = ''
-      editInvestmentDetail.value.type = ''
-      editInvestmentDetail.value.currentPrice = 0
-      alert(error.message || '无法获取该代码的信息，请检查代码是否正确，或手动输入名称')
-    }
-  } else {
-    console.log('Code length is not 6:', code?.length)
+    const startTime = Date.now()
+    const info = await fetchInvestmentInfo(code)
+    const endTime = Date.now()
+    apiResponseTime.value = endTime - startTime
+    
+    targetRef.value.name = info.name
+    targetRef.value.type = info.type
+    targetRef.value.currentPrice = info.currentPrice
+    
+    addApiLog(`获取成功: ${info.name} (${info.type}) 现价: ${info.currentPrice}，耗时: ${apiResponseTime.value}ms`)
+    console.log(`获取成功:`, info)
+  } catch (error) {
+    addApiLog(`获取失败: ${error.message}`)
+    console.error(`获取失败:`, error)
+    // 清空自动填充的字段，让用户手动输入
+    targetRef.value.name = ''
+    targetRef.value.type = ''
+    targetRef.value.currentPrice = 0
   }
 }
 
