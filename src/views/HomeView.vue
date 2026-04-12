@@ -98,6 +98,9 @@
                 备注
               </th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                分期
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                 操作
               </th>
             </tr>
@@ -126,6 +129,22 @@
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {{ transaction.description || '-' }}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <!-- 分期信息 -->
+                <span v-if="transaction.isInstallment" class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                  {{ transaction.installmentIndex }}/{{ transaction.installmentTotal }}
+                </span>
+                <span v-if="transaction.isInstallment && transaction.installmentId" class="ml-1">
+                  <button @click="showInstallmentDetail(transaction)" class="text-primary hover:text-blue-700 dark:hover:text-blue-400 text-xs">
+                    [查看全部分期]
+                  </button>
+                </span>
+                <span v-if="transaction.isInstallment && transaction.creditCardBillId" class="ml-1">
+                  <button @click="showBillDetail(transaction)" class="text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 text-xs">
+                    [查看账单]
+                  </button>
+                </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                 <button @click="editTransaction(transaction)" class="text-primary hover:text-blue-700 dark:hover:text-blue-400 mr-2">
@@ -163,6 +182,139 @@
             末页
           </button>
         </nav>
+      </div>
+    </div>
+
+    <!-- 分期详情模态框 -->
+    <div v-if="showInstallmentModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white">分期详情</h3>
+          <button @click="showInstallmentModal = false" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div v-if="installmentDetail" class="space-y-4">
+          <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <span class="text-sm text-gray-500 dark:text-gray-400">分期ID</span>
+                <p class="font-medium text-gray-900 dark:text-white">{{ installmentDetail.installmentId }}</p>
+              </div>
+              <div>
+                <span class="text-sm text-gray-500 dark:text-gray-400">总金额</span>
+                <p class="font-medium text-gray-900 dark:text-white">¥{{ installmentDetail.totalAmount?.toFixed(2) }}</p>
+              </div>
+              <div>
+                <span class="text-sm text-gray-500 dark:text-gray-400">分期期数</span>
+                <p class="font-medium text-gray-900 dark:text-white">{{ installmentDetail.totalPeriods }}期</p>
+              </div>
+              <div>
+                <span class="text-sm text-gray-500 dark:text-gray-400">每期金额</span>
+                <p class="font-medium text-gray-900 dark:text-white">¥{{ (installmentDetail.totalAmount / installmentDetail.totalPeriods)?.toFixed(2) }}</p>
+              </div>
+            </div>
+          </div>
+          
+          <h4 class="font-medium text-gray-900 dark:text-white">分期记录</h4>
+          <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300">期数</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300">日期</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300">金额</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300">状态</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+              <tr v-for="record in installmentDetail.records" :key="record.id">
+                <td class="px-4 py-2 text-sm text-gray-900 dark:text-white">{{ record.installmentIndex }}/{{ record.installmentTotal }}</td>
+                <td class="px-4 py-2 text-sm text-gray-900 dark:text-white">{{ record.date }}</td>
+                <td class="px-4 py-2 text-sm text-gray-900 dark:text-white">¥{{ record.amount.toFixed(2) }}</td>
+                <td class="px-4 py-2">
+                  <span v-if="record.installmentIndex <= getCurrentInstallmentIndex(installmentDetail.records)" class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                    已入账
+                  </span>
+                  <span v-else class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                    待入账
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 账单详情模态框 -->
+    <div v-if="showBillModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white">账单详情 - {{ billDetail?.cardName }}</h3>
+          <button @click="showBillModal = false" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div v-if="billDetail" class="space-y-4">
+          <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <span class="text-sm text-gray-500 dark:text-gray-400">账单周期</span>
+                <p class="font-medium text-gray-900 dark:text-white">{{ getBillMonth(billDetail.billDate) }}</p>
+              </div>
+              <div>
+                <span class="text-sm text-gray-500 dark:text-gray-400">账单金额</span>
+                <p class="font-medium text-gray-900 dark:text-white">¥{{ billDetail.amount?.toFixed(2) }}</p>
+              </div>
+              <div>
+                <span class="text-sm text-gray-500 dark:text-gray-400">已还金额</span>
+                <p class="font-medium text-gray-900 dark:text-white">¥{{ billDetail.paidAmount?.toFixed(2) }}</p>
+              </div>
+              <div>
+                <span class="text-sm text-gray-500 dark:text-gray-400">剩余金额</span>
+                <p class="font-medium text-danger">¥{{ billDetail.remainingAmount?.toFixed(2) }}</p>
+              </div>
+            </div>
+            <div class="mt-2">
+              <span class="text-sm text-gray-500 dark:text-gray-400">还款日: </span>
+              <span class="font-medium text-gray-900 dark:text-white">{{ billDetail.dueDate }}</span>
+              <span :class="billDetail.status === 'paid' ? 'ml-2 text-success' : billDetail.status === 'overdue' ? 'ml-2 text-danger' : 'ml-2 text-warning'" class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs">
+                {{ billDetail.status === 'unpaid' ? '未还款' : billDetail.status === 'partial_paid' ? '部分还款' : billDetail.status === 'paid' ? '已还款' : '逾期' }}
+              </span>
+            </div>
+          </div>
+          
+          <h4 class="font-medium text-gray-900 dark:text-white">账单内交易</h4>
+          <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300">日期</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300">分类</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300">金额</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300">备注</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+              <tr v-for="t in billDetail.transactions" :key="t.id">
+                <td class="px-4 py-2 text-sm text-gray-900 dark:text-white">{{ t.date }}</td>
+                <td class="px-4 py-2 text-sm text-gray-900 dark:text-white">{{ t.category || '-' }}</td>
+                <td class="px-4 py-2 text-sm text-danger">-¥{{ t.amount.toFixed(2) }}</td>
+                <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                  {{ t.description || '-' }}
+                  <span v-if="t.isInstallment" class="ml-1 text-xs text-purple-600 dark:text-purple-400">
+                    [{{ t.installmentIndex }}/{{ t.installmentTotal }}期]
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -576,5 +728,92 @@ onMounted(() => {
   loadLedgerData()
   // 监听账套切换事件
   window.addEventListener('ledgerChanged', handleLedgerChange)
+  // 监听从信用卡管理跳转过来的事件
+  window.addEventListener('showBillDetail', (e) => {
+    if (e.detail && e.detail.billId) {
+      const bills = loadCreditCardBills()
+      const bill = bills.find(b => b.id === e.detail.billId)
+      if (bill) {
+        const billTransactions = transactions.value.filter(t => t.creditCardBillId === e.detail.billId)
+        billDetail.value = { ...bill, transactions: billTransactions }
+        showBillModal.value = true
+      }
+    }
+  })
 })
+
+// ========== 信用卡分期联查功能 ==========
+
+// 分期详情模态框状态
+const showInstallmentModal = ref(false)
+const installmentDetail = ref(null)
+
+// 账单详情模态框状态
+const showBillModal = ref(false)
+const billDetail = ref(null)
+
+// 加载信用卡账单数据
+const loadCreditCardBills = () => {
+  try {
+    const saved = localStorage.getItem('creditCardBills')
+    return saved ? JSON.parse(saved) : []
+  } catch (e) {
+    console.error('加载账单失败:', e)
+    return []
+  }
+}
+
+// 显示分期详情
+const showInstallmentDetail = (transaction) => {
+  if (!transaction.installmentId) return
+  
+  // 查找所有分期记录
+  const allInstallments = transactions.value.filter(t => t.installmentId === transaction.installmentId)
+    .sort((a, b) => a.installmentIndex - b.installmentIndex)
+  
+  installmentDetail.value = {
+    installmentId: transaction.installmentId,
+    totalAmount: transaction.totalAmount || (transaction.amount * transaction.installmentTotal),
+    totalPeriods: transaction.installmentTotal,
+    records: allInstallments
+  }
+  
+  showInstallmentModal.value = true
+}
+
+// 显示账单详情
+const showBillDetail = (transaction) => {
+  if (!transaction.creditCardBillId) return
+  
+  const bills = loadCreditCardBills()
+  const bill = bills.find(b => b.id === transaction.creditCardBillId)
+  
+  if (bill) {
+    // 查找该账单下的所有交易
+    const billTransactions = transactions.value.filter(t => t.creditCardBillId === transaction.creditCardBillId)
+    
+    billDetail.value = {
+      ...bill,
+      transactions: billTransactions
+    }
+    showBillModal.value = true
+  }
+}
+
+// 获取账单月份显示
+const getBillMonth = (billDate) => {
+  const date = new Date(billDate)
+  return `${date.getFullYear()}年${date.getMonth() + 1}月`
+}
+
+// 获取当前已入账的分期期数
+const getCurrentInstallmentIndex = (records) => {
+  if (!records || records.length === 0) return 0
+  const today = new Date().toISOString().split('T')[0]
+  let count = 0
+  for (const r of records) {
+    if (r.date <= today) count++
+  }
+  return count
+}
 </script>

@@ -70,7 +70,17 @@
           <div class="flex items-center text-sm mt-1">
             <span class="text-gray-500 dark:text-gray-400">还款日: {{ bill.dueDate }}</span>
           </div>
-          <div class="mt-3 flex justify-end">
+          <!-- 分期交易预览 -->
+          <div v-if="getBillTransactions(bill.id).length > 0" class="mt-2 text-xs text-purple-600 dark:text-purple-400">
+            包含 {{ getBillTransactions(bill.id).length }} 笔交易
+            <span v-if="getInstallmentCount(bill.id) > 0" class="ml-2">
+              ({{ getInstallmentCount(bill.id) }}笔分期)
+            </span>
+          </div>
+          <div class="mt-3 flex justify-end space-x-2">
+            <button @click="viewBillTransactions(bill)" class="px-3 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm font-medium">
+              查看交易
+            </button>
             <button @click="payBill(bill)" :disabled="bill.status === 'paid'" class="px-3 py-1 bg-primary text-white rounded-md hover:bg-blue-700 text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed">
               {{ bill.status === 'paid' ? '已还款' : '立即还款' }}
             </button>
@@ -290,6 +300,35 @@ onMounted(() => {
     creditCardBills.value = JSON.parse(savedBills)
   }
 })
+
+// 获取账单关联的交易
+const getBillTransactions = (billId) => {
+  try {
+    const transactions = JSON.parse(localStorage.getItem('transactions') || '[]')
+    return transactions.filter(t => t.creditCardBillId === billId)
+  } catch (e) {
+    return []
+  }
+}
+
+// 获取账单中分期交易数量
+const getInstallmentCount = (billId) => {
+  return getBillTransactions(billId).filter(t => t.isInstallment).length
+}
+
+// 查看账单交易详情
+const viewBillTransactions = (bill) => {
+  // 跳转到交易流水并筛选该账单的交易
+  // 通过URL参数传递账单ID
+  window.dispatchEvent(new CustomEvent('navigateToTransactions', {
+    detail: { billId: bill.id }
+  }))
+  
+  // 同时触发事件让HomeView打开账单详情
+  window.dispatchEvent(new CustomEvent('showBillDetail', {
+    detail: { billId: bill.id }
+  }))
+}
 </script>
 
 <style scoped>
