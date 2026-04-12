@@ -785,7 +785,7 @@ const parseAPIResponse = (response, code) => {
 }
 
 // 根据代码获取投资品种信息 - 优化并行调用
-const fetchInvestmentInfo = async (code) => {
+const fetchInvestmentInfo = async (code, userSelectedType = null) => {
   console.log('Fetching investment info for code:', code)
   
   // 检查代码格式
@@ -793,12 +793,36 @@ const fetchInvestmentInfo = async (code) => {
     throw new Error('代码格式不正确，请输入6位数字代码')
   }
   
-  // 判断代码类型：基金以5开头（多数基金），也有0或4开头的基金；股票以0、3、6开头
-  // 005310 是东吴基金，属于0开头的基金
-  const isFund = code.startsWith('5') || code.startsWith('1') || code.startsWith('15') || 
-                 code.startsWith('0') || code.startsWith('4') || code.startsWith('2') || code.startsWith('8')
-  const isShanghaiStock = code.startsWith('6') && !isFund
-  const isShenzhenStock = (code.startsWith('0') || code.startsWith('3')) && !isFund
+  // 根据用户选择的类型或代码规则判断品种类型
+  // 优先级：用户选择 > 代码规则
+  let isFund = false
+  let isStock = false
+  
+  if (userSelectedType === '基金') {
+    isFund = true
+    isStock = false
+  } else if (userSelectedType === '股票') {
+    isFund = false
+    isStock = true
+  } else {
+    // 根据代码规则判断
+    // 基金代码规则：
+    // - 5开头：场外基金（大多数）
+    // - 15开头：上交所ETF
+    // - 1开头：货币基金、理财基金
+    // 注意：0开头的基金很少（如东吴基金005310），且和股票代码冲突
+    // 股票代码规则：
+    // - 6开头：上海证券交易所
+    // - 0开头：深圳证券交易所（包括主板、中小板）
+    // - 3开头：创业板
+    // - 8开头：北京证券交易所
+    isFund = code.startsWith('5') || code.startsWith('15') || code.startsWith('1')
+    isStock = code.startsWith('6') || code.startsWith('0') || code.startsWith('3') || code.startsWith('8')
+  }
+  
+  const isShanghaiStock = code.startsWith('6')
+  const isShenzhenStock = code.startsWith('0') || code.startsWith('3')
+  const isBeijingStock = code.startsWith('8')
   
   // 并行调用多个API，根据代码类型选择合适的API
   const apiPromises = []
@@ -814,6 +838,9 @@ const fetchInvestmentInfo = async (code) => {
   }
   if (isShenzhenStock) {
     apiPromises.push(fetchSingleAPI(`/stock/sz${code}`, '腾讯财经深圳', code))
+  }
+  if (isBeijingStock) {
+    apiPromises.push(fetchSingleAPI(`/stock/sz${code}`, '腾讯财经北京', code))
   }
   
   // 等待所有API调用完成，使用 Promise.race 获取最快响应
@@ -937,8 +964,11 @@ const fetchAndFillInvestmentInfo = async (code, mode) => {
     addApiLog(`开始获取代码 ${code} 的投资信息...`)
     console.log(`Fetching investment info for code:`, code)
     
+    // 传递用户选择的品种类型，用于API判断
+    const userSelectedType = targetRef.value.type || null
+    
     const startTime = Date.now()
-    const info = await fetchInvestmentInfo(code)
+    const info = await fetchInvestmentInfo(code, userSelectedType)
     const endTime = Date.now()
     apiResponseTime.value = endTime - startTime
     

@@ -17,7 +17,7 @@
       </div>
       <div>
         <label for="amount" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">金额</label>
-        <input type="number" id="amount" v-model.number="transaction.amount" required min="0.01" step="0.01" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+        <input type="text" id="amount" v-model="transaction.amount" @keydown.enter.prevent="calculateAmount" required min="0.01" step="0.01" placeholder="输入金额或算式（如100+50*2），按回车计算" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
       </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -166,6 +166,36 @@ const selectCategory = (category) => {
   transaction.value.category = category
 }
 
+// 计算金额（支持简单四则运算）
+const calculateAmount = () => {
+  const input = transaction.value.amount
+  if (!input) return
+  
+  // 如果是纯数字，直接返回
+  if (!isNaN(input) && input.trim() !== '') {
+    return
+  }
+  
+  // 尝试解析算术表达式
+  try {
+    // 清理输入，只保留数字、运算符和小数点
+    const cleanedInput = input.replace(/[^\d+\-*/().]/g, '')
+    if (cleanedInput === '') return
+    
+    // 使用Function构造函数安全地计算表达式
+    // 注意：这里只允许数字和基本运算符，不允许任何其他字符
+    const result = new Function('return ' + cleanedInput)()
+    
+    if (typeof result === 'number' && isFinite(result)) {
+      // 保留2位小数
+      transaction.value.amount = Math.round(result * 100) / 100
+    }
+  } catch (e) {
+    // 计算失败，不做任何处理
+    console.log('金额计算失败:', e)
+  }
+}
+
 // 支出分类列表（从维度管理获取）
 const expenseCategories = ref([])
 
@@ -213,10 +243,18 @@ const transactions = ref([])
 
 // 添加交易
 const addTransaction = () => {
+  // 确保金额是数字类型
+  let amount = transaction.value.amount
+  if (typeof amount === 'string') {
+    // 如果是算式，先计算
+    calculateAmount()
+    amount = parseFloat(transaction.value.amount) || 0
+  }
+  
   const newTransaction = {
     id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
     type: transactionType.value,
-    amount: transaction.value.amount,
+    amount: amount,
     category: transaction.value.category,
     account: transaction.value.account,
     toAccount: transactionType.value === 'transfer' ? transaction.value.toAccount : null,
@@ -265,6 +303,7 @@ const addTransaction = () => {
     paymentChannel: '',
     description: ''
   }
+  selectedCategory.value = ''
   transactionType.value = 'expense'
   
   // 关闭弹窗
