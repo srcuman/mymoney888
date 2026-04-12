@@ -1065,7 +1065,7 @@ const loadAllAccounts = () => {
   
   // 加载投资账户
   try {
-    const savedInvestments = JSON.stringify(coreDataStore.getRaw('investmentAccounts'))
+    const savedInvestments = JSON.stringify(coreDataStore.getRaw('investment_accounts'))
     if (savedInvestments) {
       const invAccts = JSON.parse(savedInvestments)
       invAccts.forEach(acc => {
@@ -1081,7 +1081,7 @@ const loadAllAccounts = () => {
   
   // 加载信用卡
   try {
-    const savedCards = JSON.stringify(coreDataStore.getRaw('creditCards'))
+    const savedCards = JSON.stringify(coreDataStore.getRaw('credit_cards'))
     if (savedCards) {
       const cards = JSON.parse(savedCards)
       cards.forEach(card => {

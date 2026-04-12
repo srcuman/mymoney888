@@ -193,8 +193,8 @@ const incomeCategories = computed(() => coreDataStore.getRaw('categories')?.filt
 
 // 账户列表（包括关联账户）
 const accounts = computed(() => coreDataStore.getRaw('accounts') || [])
-const investmentAccounts = computed(() => coreDataStore.getRaw('investmentAccounts') || [])
-const creditCards = computed(() => coreDataStore.getRaw('creditCards') || [])
+const investmentAccounts = computed(() => coreDataStore.getRaw('investment_accounts') || [])
+const creditCards = computed(() => coreDataStore.getRaw('credit_cards') || [])
 
 // 所有账户（统一格式）
 const allAccounts = computed(() => {

@@ -103,8 +103,8 @@ const accounts = computed(() => {
     result.push({ ...account })
   })
   
-  // 2. 添加信用卡账户（从 creditCards 计算，但显示为独立账户）
-  const creditCards = coreDataStore.getRaw('creditCards') || []
+  // 2. 添加信用卡账户（从 credit_cards 计算，但显示为独立账户）
+  const creditCards = coreDataStore.getRaw('credit_cards') || []
   creditCards.forEach(card => {
     // 查找是否已存在（通过 linkedCreditCardId 关联）
     const existingByLink = result.find(a => a.linkedCreditCardId === card.id)
@@ -127,8 +127,8 @@ const accounts = computed(() => {
     }
   })
   
-  // 3. 添加投资账户（从 investmentAccounts 计算）
-  const investmentAccounts = coreDataStore.getRaw('investmentAccounts') || []
+  // 3. 添加投资账户（从 investment_accounts 计算）
+  const investmentAccounts = coreDataStore.getRaw('investment_accounts') || []
   investmentAccounts.forEach(account => {
     // 查找是否已存在（通过 linkedInvestmentAccountId 关联）
     const existingByLink = result.find(a => a.linkedInvestmentAccountId === account.id)

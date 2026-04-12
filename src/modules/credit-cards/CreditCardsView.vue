@@ -151,10 +151,10 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import coreDataStore from '../../services/core-data-store.js'
 
 // 信用卡列表（从 DataStore 获取）
-const creditCards = computed(() => coreDataStore.getRaw('creditCards') || [])
+const creditCards = computed(() => coreDataStore.getRaw('credit_cards') || [])
 
 // 信用卡账单列表（从 DataStore 获取）
-const creditCardBills = computed(() => coreDataStore.getRaw('creditCardBills') || [])
+const creditCardBills = computed(() => coreDataStore.getRaw('credit_card_bills') || [])
 
 // 数据版本号（用于触发响应式更新）
 const dataVersion = ref(0)
@@ -205,7 +205,7 @@ const editCard = (card) => {
 const saveCard = async () => {
   if (showEditCardModal.value) {
     // 更新现有信用卡
-    await coreDataStore.update('creditCards', formData.value.id, {
+    await coreDataStore.update('credit_cards', formData.value.id, {
       name: formData.value.name,
       bank: formData.value.bank,
       number: formData.value.number,
@@ -250,7 +250,7 @@ const deleteCard = async (cardId) => {
 const payBill = async (bill) => {
   if (confirm(`确定要偿还 ${bill.cardName} 的账单吗？金额：¥${(bill.remainingAmount || 0).toFixed(2)}`)) {
     // 更新账单状态
-    await coreDataStore.update('creditCardBills', bill.id, {
+    await coreDataStore.update('credit_card_bills', bill.id, {
       paidAmount: bill.amount,
       remainingAmount: 0,
       status: 'paid'
@@ -259,7 +259,7 @@ const payBill = async (bill) => {
     // 更新信用卡可用额度（还款后可用额度增加）
     const card = creditCards.value.find(c => c.name === bill.cardName)
     if (card) {
-      await coreDataStore.update('creditCards', card.id, {
+      await coreDataStore.update('credit_cards', card.id, {
         availableCredit: (card.availableCredit || 0) + (bill.remainingAmount || 0)
       })
     }

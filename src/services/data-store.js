@@ -223,7 +223,7 @@ class DataStore {
    * 已用额度 = 所有未还交易金额
    */
   computedCreditCardBalance(cardName) {
-    const card = this.getRaw('creditCards').find(c => c.name === cardName)
+    const card = this.getRaw('credit_cards').find(c => c.name === cardName)
     if (!card) return 0
     
     const totalCredit = card.totalCredit || card.creditLimit || 0
@@ -247,7 +247,7 @@ class DataStore {
     }
     
     // 从账单中获取未还金额
-    const bills = this.getRaw('creditCardBills')
+    const bills = this.getRaw('credit_card_bills')
     const cardBills = bills.filter(b => b.cardName === cardName)
     for (const bill of cardBills) {
       if (bill.status !== 'paid') {
@@ -264,7 +264,7 @@ class DataStore {
    */
   computedAllCreditCardBalances() {
     const balances = {}
-    const cards = this.getRaw('creditCards')
+    const cards = this.getRaw('credit_cards')
     
     for (const card of cards) {
       balances[card.name] = this.computedCreditCardBalance(card.name)
@@ -292,7 +292,7 @@ class DataStore {
     }
     
     // 从还款计划中计算
-    const repaymentPlans = this.getRaw('repaymentPlans')
+    const repaymentPlans = this.getRaw('loan_payments')
     const loanPlans = repaymentPlans.filter(p => p.loanId === loanId)
     for (const plan of loanPlans) {
       if (plan.status === 'paid' || plan.isPaid) {
@@ -338,7 +338,7 @@ class DataStore {
    */
   computedAllInvestmentAccountBalances() {
     const balances = {}
-    const accounts = this.getRaw('investmentAccounts')
+    const accounts = this.getRaw('investment_accounts')
     
     for (const account of accounts) {
       balances[account.id] = this.computedInvestmentAccountBalance(account.id)

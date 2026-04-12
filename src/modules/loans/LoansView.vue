@@ -147,7 +147,7 @@ import coreDataStore from '../../services/core-data-store.js'
 const loans = computed(() => coreDataStore.getRaw('loans') || [])
 
 // 还款计划列表（从 DataStore 获取）
-const repaymentPlans = computed(() => coreDataStore.getRaw('repaymentPlans') || [])
+const repaymentPlans = computed(() => coreDataStore.getRaw('loan_payments') || [])
 
 // 数据版本号（用于触发响应式更新）
 const dataVersion = ref(0)
@@ -242,7 +242,7 @@ const deleteLoan = async (loanId) => {
 const payRepayment = async (plan) => {
   if (confirm(`确定要偿还 ${plan.loanName} 的还款吗？金额：¥${(plan.remainingAmount || 0).toFixed(2)}`)) {
     // 更新还款计划状态
-    await coreDataStore.update('repaymentPlans', plan.id, {
+    await coreDataStore.update('loan_payments', plan.id, {
       paidAmount: plan.amount,
       remainingAmount: 0,
       status: 'paid'

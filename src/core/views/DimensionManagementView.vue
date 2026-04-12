@@ -342,11 +342,10 @@ const activeTab = ref('categories')
 const isSubCategory = ref(false)
 
 // 收支分类（从 dimensions 获取）
-const dimensions = computed(() => coreDataStore.get('dimensions').value || {})
 const expenseCategories = ref([])
 const incomeCategories = ref([])
 
-// 成员/商家/标签/支付渠道（独立存储）
+// 成员/商家/标签/支付渠道（从 dimensions 获取）
 const members = ref([])
 const merchants = ref([])
 const tags = ref([])
@@ -387,21 +386,28 @@ const paymentChannelForm = ref({ id: null, name: '' })
 
 // 加载数据
 const loadDimensions = () => {
-  const dims = coreDataStore.get('dimensions').value || {}
+  // 获取维度数据
+  const dims = coreDataStore.getDimensions() || {}
+  
+  // 收支分类
   expenseCategories.value = dims.expenseCategories || []
   incomeCategories.value = dims.incomeCategories || []
-  members.value = coreDataStore.get('members').value || []
-  merchants.value = coreDataStore.get('merchants').value || []
-  tags.value = coreDataStore.get('tags').value || []
-  paymentChannels.value = coreDataStore.get('paymentChannels').value || []
+  
+  // 成员/商家/标签/支付渠道（使用兼容方法获取对象数组格式）
+  members.value = coreDataStore.getDimensionItems('members')
+  merchants.value = coreDataStore.getDimensionItems('merchants')
+  tags.value = coreDataStore.getDimensionItems('tags')
+  paymentChannels.value = coreDataStore.getDimensionItems('paymentChannels')
 }
 
 // 保存维度数据
 const saveDimensions = () => {
-  coreDataStore.set('dimensions', {
-    expenseCategories: expenseCategories.value,
-    incomeCategories: incomeCategories.value
-  }, { skipSync: true })
+  const dims = coreDataStore.getDimensions() || {}
+  dims.expenseCategories = expenseCategories.value
+  dims.incomeCategories = incomeCategories.value
+  // 保存回 dimensions
+  coreDataStore._data.value.dimensions = dims
+  coreDataStore._save('dimensions')
 }
 
 // 获取子分类
@@ -548,13 +554,20 @@ const saveMember = async () => {
 // 删除成员（检查使用情况）
 const deleteMember = async (memberId) => {
   const member = members.value.find(m => m.id === memberId)
-  if (member && coreDataStore.isDimensionUsed('members', member.name)) {
+  if (!member) return
+  
+  // 检查是否被使用
+  if (coreDataStore.isDimensionUsed('members', member.name)) {
     alert('该成员已被交易使用，无法删除，只能修改名称')
     return
   }
   
   if (!confirm('确定要删除此成员吗？')) return
-  await coreDataStore.deleteDimension('members', memberId)
+  const result = await coreDataStore.deleteDimension('members', memberId)
+  if (result.success === false) {
+    alert(result.message || '删除失败')
+    return
+  }
   loadDimensions()
 }
 
@@ -592,13 +605,19 @@ const saveMerchant = async () => {
 // 删除商家（检查使用情况）
 const deleteMerchant = async (merchantId) => {
   const merchant = merchants.value.find(m => m.id === merchantId)
-  if (merchant && coreDataStore.isDimensionUsed('merchants', merchant.name)) {
+  if (!merchant) return
+  
+  if (coreDataStore.isDimensionUsed('merchants', merchant.name)) {
     alert('该商家已被交易使用，无法删除，只能修改名称')
     return
   }
   
   if (!confirm('确定要删除此商家吗？')) return
-  await coreDataStore.deleteDimension('merchants', merchantId)
+  const result = await coreDataStore.deleteDimension('merchants', merchantId)
+  if (result.success === false) {
+    alert(result.message || '删除失败')
+    return
+  }
   loadDimensions()
 }
 
@@ -641,13 +660,19 @@ const saveTag = async () => {
 // 删除标签（检查使用情况）
 const deleteTag = async (tagId) => {
   const tag = tags.value.find(t => t.id === tagId)
-  if (tag && coreDataStore.isDimensionUsed('tags', tag.name)) {
+  if (!tag) return
+  
+  if (coreDataStore.isDimensionUsed('tags', tag.name)) {
     alert('该标签已被交易使用，无法删除，只能修改名称')
     return
   }
   
   if (!confirm('确定要删除此标签吗？')) return
-  await coreDataStore.deleteDimension('tags', tagId)
+  const result = await coreDataStore.deleteDimension('tags', tagId)
+  if (result.success === false) {
+    alert(result.message || '删除失败')
+    return
+  }
   loadDimensions()
 }
 
@@ -685,13 +710,19 @@ const savePaymentChannel = async () => {
 // 删除支付渠道（检查使用情况）
 const deletePaymentChannel = async (channelId) => {
   const channel = paymentChannels.value.find(c => c.id === channelId)
-  if (channel && coreDataStore.isDimensionUsed('paymentChannels', channel.name)) {
+  if (!channel) return
+  
+  if (coreDataStore.isDimensionUsed('paymentChannels', channel.name)) {
     alert('该支付渠道已被交易使用，无法删除，只能修改名称')
     return
   }
   
   if (!confirm('确定要删除此支付渠道吗？')) return
-  await coreDataStore.deleteDimension('paymentChannels', channelId)
+  const result = await coreDataStore.deleteDimension('paymentChannels', channelId)
+  if (result.success === false) {
+    alert(result.message || '删除失败')
+    return
+  }
   loadDimensions()
 }
 

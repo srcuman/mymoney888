@@ -632,12 +632,12 @@ const resetTransactionForm = () => {
 // 更新信用卡额度
 const updateCreditCardBalance = async (cardName, amountChange) => {
   try {
-    const allCards = coreDataStore.getRaw('creditCards')
+    const allCards = coreDataStore.getRaw('credit_cards')
     const card = allCards.find(c => c.name === cardName)
     if (card) {
       // amountChange 为正表示增加欠款（消费），为负表示减少欠款（还款）
       const newAvailableCredit = (card.availableCredit || 0) - amountChange
-      await coreDataStore.update('creditCards', card.id, {
+      await coreDataStore.update('credit_cards', card.id, {
         availableCredit: newAvailableCredit
       })
     }

@@ -597,19 +597,19 @@ const forceUpdate = () => {
 // 投资账户列表（从 DataStore 获取）
 const investmentAccounts = computed(() => {
   void dataVersion.value
-  return coreDataStore.getRaw('investmentAccounts') || []
+  return coreDataStore.getRaw('investment_accounts') || []
 })
 
 // 投资明细列表（从 DataStore 获取）
 const investmentDetails = computed(() => {
   void dataVersion.value
-  return coreDataStore.getRaw('investmentDetails') || []
+  return coreDataStore.getRaw('investment_details') || []
 })
 
 // 历史净值记录 (用于收益分析)
 const netValueHistory = computed(() => {
   void dataVersion.value
-  return coreDataStore.getRaw('netValueHistory') || []
+  return coreDataStore.getRaw('net_value_history') || []
 })
 
 // 筛选后的投资明细（用于收益分析）
@@ -741,7 +741,7 @@ const addInvestmentAccount = async () => {
 
 // 更新投资账户
 const updateInvestmentAccount = async () => {
-  await coreDataStore.update('investmentAccounts', editInvestmentAccount.value.id, {
+  await coreDataStore.update('investment_accounts', editInvestmentAccount.value.id, {
     name: editInvestmentAccount.value.name,
     type: editInvestmentAccount.value.type,
     description: editInvestmentAccount.value.description
@@ -1147,7 +1147,7 @@ const updateInvestmentDetail = async () => {
   const today = new Date().toISOString().split('T')[0]
   const oldAccountId = investmentDetails.value.find(d => d.id === editInvestmentDetail.value.id)?.accountId
   
-  await coreDataStore.update('investmentDetails', editInvestmentDetail.value.id, {
+  await coreDataStore.update('investment_details', editInvestmentDetail.value.id, {
     accountId: editInvestmentDetail.value.accountId,
     accountName: investmentAccounts.value.find(a => String(a.id) === String(editInvestmentDetail.value.accountId))?.name || '',
     type: editInvestmentDetail.value.type,
@@ -1173,7 +1173,7 @@ const updateInvestmentDetail = async () => {
 const deleteInvestmentDetail = async (id) => {
   const detail = investmentDetails.value.find(d => String(d.id) === String(id))
   if (detail) {
-    await coreDataStore.remove('investmentDetails', id)
+    await coreDataStore.remove('investment_details', id)
     updateAccountAsset(detail.accountId)
     forceUpdate()
   }
@@ -1209,13 +1209,13 @@ const recordNetValue = async (detail) => {
   if (existingIndex !== -1) {
     // 更新现有记录
     const existing = allHistory[existingIndex]
-    await coreDataStore.update('netValueHistory', existing.id, {
+    await coreDataStore.update('net_value_history', existing.id, {
       price: detail.currentPrice,
       updateTime: new Date().toISOString()
     })
   } else {
     // 添加新记录
-    await coreDataStore.add('netValueHistory', {
+    await coreDataStore.add('net_value_history', {
       code: detail.code,
       name: detail.name,
       date: today,
@@ -1239,7 +1239,7 @@ const refreshAllNetValues = async () => {
     try {
       const info = await fetchInvestmentInfo(detail.code, detail.type)
       if (info.currentPrice) {
-        await coreDataStore.update('investmentDetails', detail.id, {
+        await coreDataStore.update('investment_details', detail.id, {
           currentPrice: info.currentPrice,
           netValueDate: info.updateDate || new Date().toISOString().split('T')[0]
         })
@@ -1565,7 +1565,7 @@ const scheduleNetValueUpdate = () => {
       try {
         const info = await fetchInvestmentInfo(detail.code, detail.type)
         if (info.currentPrice) {
-          await coreDataStore.update('investmentDetails', detail.id, {
+          await coreDataStore.update('investment_details', detail.id, {
             currentPrice: info.currentPrice,
             netValueDate: info.updateDate || new Date().toISOString().split('T')[0],
             updateDate: new Date().toISOString().split('T')[0]

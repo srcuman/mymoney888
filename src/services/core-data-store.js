@@ -30,11 +30,12 @@
  *    - 交易 ← 投资（损益记录）
  * 
  * =============================================================================
- * 版本: 3.8.0
+ * 版本: 引用自 src/config/version.js
  * =============================================================================
  */
 
 import { ref, computed, shallowRef } from 'vue'
+import { APP_VERSION } from '../config/version.js'
 
 /**
  * 数据类型分类（snake_case 与 MySQL 对应）
@@ -115,7 +116,7 @@ class CoreDataStore {
     // 加载所有数据
     this.loadAllData()
 
-    console.log('[CoreDataStore] v3.8.0 初始化完成')
+    console.log(`[CoreDataStore] v${APP_VERSION} 初始化完成`)
   }
 
   // =========================================================================
@@ -1112,6 +1113,104 @@ class CoreDataStore {
   }
 
   /**
+   * 获取指定类型的维度列表（兼容 DimensionManagementView 格式）
+   * 返回对象数组 [{id, name}] 用于支持删除功能
+   */
+  getDimensionItems(type) {
+    const dimensions = this._data.value.dimensions || this._getDefaultDimensions()
+    const items = dimensions[type] || []
+    // 如果是字符串数组，转换为对象数组
+    if (items.length > 0 && typeof items[0] === 'string') {
+      return items.map((name, index) => ({
+        id: `dim_${type}_${index}`,
+        name: name
+      }))
+    }
+    // 如果已经是对象数组，直接返回
+    return items.map((item, index) => ({
+      id: item.id || `dim_${type}_${index}`,
+      name: item.name || item
+    }))
+  }
+
+  /**
+   * 添加维度成员（兼容 DimensionManagementView）
+   */
+  async addDimension(type, item) {
+    const name = typeof item === 'string' ? item : item.name
+    return await this.addDimensionMember(type, name)
+  }
+
+  /**
+   * 更新维度成员（兼容 DimensionManagementView）
+   */
+  async updateDimension(type, id, updates) {
+    // 找到对应的维度成员
+    const dimensions = this._data.value.dimensions || this._getDefaultDimensions()
+    if (!dimensions[type]) return null
+
+    const items = dimensions[type]
+    let oldName = null
+    let index = -1
+
+    // 如果是字符串数组
+    if (typeof items[0] === 'string') {
+      // 通过索引查找
+      const idx = items.findIndex((item, i) => `dim_${type}_${i}` === id)
+      if (idx !== -1) {
+        oldName = items[idx]
+        index = idx
+      }
+    } else {
+      // 通过 id 查找
+      index = items.findIndex(item => item.id === id)
+      if (index !== -1) {
+        oldName = items[index].name
+      }
+    }
+
+    if (index === -1 || !oldName) return null
+
+    const newName = updates.name
+    if (newName && newName !== oldName) {
+      return await this.renameDimensionMember(type, oldName, newName)
+    }
+
+    return { success: true }
+  }
+
+  /**
+   * 删除维度成员（兼容 DimensionManagementView）
+   */
+  async deleteDimension(type, id) {
+    // 找到对应的维度成员
+    const dimensions = this._data.value.dimensions || this._getDefaultDimensions()
+    if (!dimensions[type]) return { success: false, message: '维度类型不存在' }
+
+    const items = dimensions[type]
+    let name = null
+    let index = -1
+
+    // 如果是字符串数组
+    if (typeof items[0] === 'string') {
+      const idx = items.findIndex((item, i) => `dim_${type}_${i}` === id)
+      if (idx !== -1) {
+        name = items[idx]
+        index = idx
+      }
+    } else {
+      index = items.findIndex(item => item.id === id)
+      if (index !== -1) {
+        name = items[index].name
+      }
+    }
+
+    if (index === -1 || !name) return { success: false, message: '成员不存在' }
+
+    return await this.deleteDimensionMember(type, name)
+  }
+
+  /**
    * 更新维度使用情况
    */
   _updateDimensionUsage(mode, transaction) {
@@ -1372,7 +1471,7 @@ class CoreDataStore {
    */
   exportLedgerData() {
     return {
-      version: '3.8.0',
+      version: APP_VERSION,
       ledgerId: this.currentLedgerId.value,
       exportedAt: new Date().toISOString(),
       data: this._data.value
