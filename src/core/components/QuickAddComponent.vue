@@ -72,14 +72,14 @@
         <label for="member" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">成员</label>
         <input list="members-list" id="member" v-model="transaction.member" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" placeholder="选择或输入成员">
         <datalist id="members-list">
-          <option v-for="m in members" :key="m" :value="m">
+          <option v-for="m in members" :key="m" :value="m"></option>
         </datalist>
       </div>
       <div>
         <label for="merchant" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">商户</label>
         <input list="merchants-list" id="merchant" v-model="transaction.merchant" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" placeholder="选择或输入商户">
         <datalist id="merchants-list">
-          <option v-for="m in merchants" :key="m" :value="m">
+          <option v-for="m in merchants" :key="m" :value="m"></option>
         </datalist>
       </div>
     </div>
@@ -88,14 +88,14 @@
         <label for="tags" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">标签</label>
         <input list="tags-list" id="tags" v-model="transaction.tags" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" placeholder="选择或输入标签">
         <datalist id="tags-list">
-          <option v-for="t in tags" :key="t" :value="t">
+          <option v-for="t in tags" :key="t" :value="t"></option>
         </datalist>
       </div>
       <div>
         <label for="paymentChannel" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">支付渠道</label>
         <input list="channels-list" id="paymentChannel" v-model="transaction.paymentChannel" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white" placeholder="选择或输入支付渠道">
         <datalist id="channels-list">
-          <option v-for="c in paymentChannels" :key="c" :value="c">
+          <option v-for="c in paymentChannels" :key="c" :value="c"></option>
         </datalist>
       </div>
     </div>
