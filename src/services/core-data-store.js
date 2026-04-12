@@ -188,6 +188,7 @@ class CoreDataStore {
 
   /**
    * 加载所有数据到内存（从 API 加载，按账套隔离）
+   * DataStore 数据必须通过 API 存储到 DATA_DIR 本地文件
    */
   async loadAllData() {
     const ledgerId = this.currentLedgerId.value
@@ -203,51 +204,31 @@ class CoreDataStore {
     // 全局数据（不按账套隔离）
     const globalKeys = ['ledgers', 'users', 'user_settings', 'user_defaults']
 
-    try {
-      // 从 API 加载账套数据
-      const response = await apiRequest(`/api/datastore/load?ledgerId=${encodeURIComponent(ledgerId)}`)
-      
-      if (response.success && response.data) {
-        // 合并 API 返回的数据
-        Object.assign(data, response.data)
-        console.log(`[CoreDataStore] 从 API 加载账套数据: ${ledgerId}, savedAt: ${response.savedAt || 'N/A'}`)
-      } else {
-        // 没有数据，使用默认值
-        console.log(`[CoreDataStore] 账套 ${ledgerId} 暂无数据，使用默认值`)
+    // 从 API 加载账套数据
+    const response = await apiRequest(`/api/datastore/load?ledgerId=${encodeURIComponent(ledgerId)}`)
+    
+    if (response.success && response.data) {
+      Object.assign(data, response.data)
+      console.log(`[CoreDataStore] 加载账套数据: ${ledgerId}, savedAt: ${response.savedAt || 'N/A'}`)
+    } else {
+      console.log(`[CoreDataStore] 账套 ${ledgerId} 暂无数据，使用默认值`)
+    }
+    
+    // 确保所有账套数据键存在
+    for (const key of ledgerKeys) {
+      if (!data[key]) {
+        data[key] = []
       }
-      
-      // 确保所有账套数据键存在
-      for (const key of ledgerKeys) {
-        if (!data[key]) {
-          data[key] = []
-        }
-      }
-      
-      // 确保维度数据存在
-      if (!data.dimensions) {
-        data.dimensions = this._getDefaultDimensions()
-      }
-      
-    } catch (error) {
-      console.warn(`[CoreDataStore] 从 API 加载失败，尝试使用本地缓存:`, error.message)
-      
-      // 尝试从本地缓存加载
-      for (const key of ledgerKeys) {
-        const cacheKey = `datastore_${ledgerId}_${key}`
-        const cached = localStorage.getItem(cacheKey)
-        data[key] = cached ? this._parseJSON(cached) : []
-      }
-      
-      const dimsCacheKey = `datastore_${ledgerId}_dimensions`
-      const dimsCached = localStorage.getItem(dimsCacheKey)
-      data.dimensions = dimsCached ? this._parseJSON(dimsCached) : this._getDefaultDimensions()
+    }
+    
+    // 确保维度数据存在
+    if (!data.dimensions) {
+      data.dimensions = this._getDefaultDimensions()
     }
 
-    // 加载全局数据（始终从 API 或使用默认值）
+    // 全局数据（使用默认值或 API 数据）
     for (const key of globalKeys) {
-      const cacheKey = `datastore_global_${key}`
-      const cached = localStorage.getItem(cacheKey)
-      data[key] = cached ? this._parseJSON(cached) : []
+      data[key] = data[key] || []
     }
 
     this._data.value = data
@@ -480,59 +461,33 @@ class CoreDataStore {
   }
 
   /**
-   * 保存到 API（支持 DATA_DIR 配置）
-   * 同时保留本地缓存用于离线场景
+   * 保存到 API（数据存储到 DATA_DIR 本地文件）
    */
   async _save(key) {
-    const globalTables = ['ledgers', 'users', 'user_settings', 'user_defaults']
-    const ledgerId = globalTables.includes(key) ? 'global' : this.currentLedgerId.value
-    
-    // 同时保存到本地缓存（用于离线或 API 不可用时）
-    const cacheKey = `datastore_${ledgerId}_${key}`
-    localStorage.setItem(cacheKey, JSON.stringify(this._data.value[key]))
-    
-    // 保存到 API
-    try {
-      await apiRequest('/api/datastore/save', {
-        method: 'POST',
-        body: JSON.stringify({
-          ledgerId: this.currentLedgerId.value,
-          data: {
-            [key]: this._data.value[key]
-          }
-        })
+    await apiRequest('/api/datastore/save', {
+      method: 'POST',
+      body: JSON.stringify({
+        ledgerId: this.currentLedgerId.value,
+        data: {
+          [key]: this._data.value[key]
+        }
       })
-    } catch (error) {
-      console.warn(`[CoreDataStore] 保存 ${key} 到 API 失败，本地缓存已保存:`, error.message)
-    }
+    })
   }
   
   /**
    * 批量保存所有数据（完整保存）
    */
   async _saveAll() {
-    const ledgerId = this.currentLedgerId.value
-    
-    // 保存到本地缓存
-    for (const [key, value] of Object.entries(this._data.value)) {
-      const cacheKey = `datastore_${ledgerId}_${key}`
-      localStorage.setItem(cacheKey, JSON.stringify(value))
-    }
-    
-    // 保存到 API
-    try {
-      const response = await apiRequest('/api/datastore/save', {
-        method: 'POST',
-        body: JSON.stringify({
-          ledgerId,
-          data: this._data.value
-        })
+    const response = await apiRequest('/api/datastore/save', {
+      method: 'POST',
+      body: JSON.stringify({
+        ledgerId: this.currentLedgerId.value,
+        data: this._data.value
       })
-      if (response.success) {
-        console.log(`[CoreDataStore] 完整保存成功: ledger=${ledgerId}, tables=${Object.keys(response.tables || {}).length}`)
-      }
-    } catch (error) {
-      console.warn(`[CoreDataStore] 完整保存到 API 失败，本地缓存已保存:`, error.message)
+    })
+    if (response.success) {
+      console.log(`[CoreDataStore] 完整保存: ledger=${this.currentLedgerId.value}, tables=${Object.keys(response.tables || {}).length}`)
     }
   }
 
