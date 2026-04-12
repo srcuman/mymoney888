@@ -97,7 +97,7 @@
               快速记账
             </button>
             <!-- 当前版本 -->
-            <span class="text-sm text-gray-600 dark:text-gray-400">v3.6.2</span>
+            <span class="text-sm text-gray-600 dark:text-gray-400">v3.7.0</span>
           </div>
         </div>
       </header>

@@ -19,7 +19,7 @@
                 </div>
                 <div>
                   <h3 class="text-lg font-medium text-gray-900 dark:text-white">{{ account.name }}</h3>
-                  <div class="text-sm text-gray-500 dark:text-gray-400">余额: ¥{{ account.balance.toFixed(2) }}</div>
+                  <div class="text-sm text-gray-500 dark:text-gray-400">余额: ¥{{ (account.balance || 0).toFixed(2) }}</div>
                 </div>
               </div>
               <div class="flex space-x-2">
@@ -74,7 +74,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import dataStore from '../services/data-store.js'
+import unifiedDataStore from '../services/unified-data-store.js'
 
 // 账户类别列表
 const accountCategories = [
@@ -86,9 +86,6 @@ const accountCategories = [
   { value: 'other', label: '其他' }
 ]
 
-// 基础账户列表（只包含手动创建的账户）
-const baseAccounts = ref([])
-
 // 数据版本号（用于触发响应式更新）
 const dataVersion = ref(0)
 
@@ -98,68 +95,77 @@ const accounts = computed(() => {
   const version = dataVersion.value
   void version
   
-  const result = [...baseAccounts.value]
+  const result = []
   
-  // 添加信用卡账户（从 creditCards 计算）
-  const creditCards = dataStore.getRaw('creditCards')
+  // 1. 基础账户（手动创建的账户）
+  const baseAccounts = unifiedDataStore.getRaw('accounts') || []
+  baseAccounts.forEach(account => {
+    result.push({ ...account })
+  })
+  
+  // 2. 添加信用卡账户（从 creditCards 计算，但显示为独立账户）
+  const creditCards = unifiedDataStore.getRaw('creditCards') || []
   creditCards.forEach(card => {
-    const totalCredit = card.totalCredit || card.creditLimit || 0
-    const balance = dataStore.computedCreditCardBalance(card.name)
-    const usedAmount = totalCredit - balance
-    
-    const existing = result.find(a => a.name === card.name && a.category === 'credit_card')
-    if (existing) {
-      existing.balance = usedAmount
+    // 查找是否已存在（通过 linkedCreditCardId 关联）
+    const existingByLink = result.find(a => a.linkedCreditCardId === card.id)
+    if (existingByLink) {
+      // 关联账户已存在，更新余额
+      existingByLink.balance = card.usedCredit || (card.creditLimit - card.availableCredit)
+      existingByLink.name = card.name
     } else {
+      // 创建关联的账户（用于在账户管理页面展示）
       result.push({
-        id: `credit_card_${card.id || card.name}`,
+        id: card.id,
         name: card.name,
-        balance: usedAmount,
+        balance: card.usedCredit || (card.creditLimit - card.availableCredit),
         category: 'credit_card',
         sourceType: 'creditCard',
-        sourceId: card.id || card.name
+        linkedCreditCardId: card.id,
+        creditLimit: card.creditLimit,
+        availableCredit: card.availableCredit
       })
     }
   })
   
-  // 添加投资账户（从 investmentAccounts 计算）
-  const investmentAccounts = dataStore.getRaw('investmentAccounts')
+  // 3. 添加投资账户（从 investmentAccounts 计算）
+  const investmentAccounts = unifiedDataStore.getRaw('investmentAccounts') || []
   investmentAccounts.forEach(account => {
-    const balance = dataStore.computedInvestmentAccountBalance(account.id)
-    
-    const existing = result.find(a => a.name === account.name && a.category === 'investment')
-    if (existing) {
-      existing.balance = balance
+    // 查找是否已存在（通过 linkedInvestmentAccountId 关联）
+    const existingByLink = result.find(a => a.linkedInvestmentAccountId === account.id)
+    if (existingByLink) {
+      // 关联账户已存在，更新余额
+      existingByLink.balance = account.totalValue || 0
     } else {
+      // 创建关联的账户
       result.push({
-        id: `investment_${account.id}`,
+        id: account.id,
         name: account.name,
-        balance: balance,
+        balance: account.totalValue || 0,
         category: 'investment',
         sourceType: 'investmentAccount',
-        sourceId: account.id
+        linkedInvestmentAccountId: account.id
       })
     }
   })
   
-  // 添加贷款账户（从 loans 计算）
-  const loans = dataStore.getRaw('loans')
+  // 4. 添加贷款账户（从 loans 计算）
+  const loans = unifiedDataStore.getRaw('loans') || []
   loans.forEach(loan => {
-    const paidAmount = dataStore.computedLoanPaidAmount(loan.id)
-    const totalAmount = loan.totalAmount || loan.amount || 0
-    const remainingAmount = totalAmount - paidAmount
-    
-    const existing = result.find(a => a.name === loan.name && a.category === 'loan')
-    if (existing) {
-      existing.balance = -remainingAmount
+    // 查找是否已存在（通过 linkedLoanId 关联）
+    const existingByLink = result.find(a => a.linkedLoanId === loan.id)
+    if (existingByLink) {
+      // 关联账户已存在，更新余额
+      existingByLink.balance = -(loan.remainingAmount || loan.amount)
     } else {
+      // 创建关联的账户（贷款余额为负表示负债）
       result.push({
-        id: `loan_${loan.id}`,
+        id: loan.id,
         name: loan.name,
-        balance: -remainingAmount,
+        balance: -(loan.remainingAmount || loan.amount),
         category: 'loan',
         sourceType: 'loan',
-        sourceId: loan.id
+        linkedLoanId: loan.id,
+        totalAmount: loan.amount
       })
     }
   })
@@ -223,10 +229,11 @@ const saveAccount = async () => {
   }
   
   if (showEditAccountModal.value) {
-    const index = baseAccounts.value.findIndex(a => a.id === formData.value.id)
-    if (index !== -1) {
-      baseAccounts.value[index] = { ...formData.value }
-    }
+    await unifiedDataStore.update('accounts', formData.value.id, {
+      name: formData.value.name,
+      balance: formData.value.balance,
+      category: formData.value.category
+    })
   } else {
     const newAccount = {
       id: generateId(),
@@ -236,11 +243,8 @@ const saveAccount = async () => {
       initialBalance: formData.value.balance,
       sourceType: 'manual'
     }
-    baseAccounts.value.push(newAccount)
+    await unifiedDataStore.add('accounts', newAccount)
   }
-  
-  // 保存到 DataStore
-  await dataStore.set('accounts', baseAccounts.value)
   
   // 关闭模态框并重置表单
   showAddAccountModal.value = false
@@ -250,20 +254,19 @@ const saveAccount = async () => {
 
 // 删除账户（只删除基础账户）
 const deleteAccount = async (accountId) => {
-  const account = baseAccounts.value.find(a => a.id === accountId)
+  const account = accounts.value.find(a => String(a.id) === String(accountId))
   if (account && account.sourceType) {
     alert('这是从其他模块同步的账户，不能直接删除')
     return
   }
   
   if (confirm('确定要删除此账户吗？')) {
-    baseAccounts.value = baseAccounts.value.filter(a => a.id !== accountId)
-    await dataStore.set('accounts', baseAccounts.value)
+    await unifiedDataStore.remove('accounts', accountId)
   }
 }
 
 // 监听数据变更
-const handleDataStoreChange = () => {
+const handleDataChanged = () => {
   dataVersion.value++
 }
 
@@ -273,23 +276,8 @@ const handleOtherModuleUpdate = () => {
 }
 
 onMounted(() => {
-  // 从 DataStore 加载基础账户
-  const savedAccounts = dataStore.getRaw('accounts')
-  if (savedAccounts && savedAccounts.length > 0) {
-    baseAccounts.value = savedAccounts
-  } else {
-    const legacyAccounts = localStorage.getItem('accounts')
-    if (legacyAccounts) {
-      try {
-        baseAccounts.value = JSON.parse(legacyAccounts)
-      } catch (e) {
-        baseAccounts.value = []
-      }
-    }
-  }
-  
   // 监听 DataStore 变更事件
-  window.addEventListener('dataStoreChanged', handleDataStoreChange)
+  window.addEventListener('dataChanged', handleDataChanged)
   
   // 监听其他模块的更新事件
   window.addEventListener('investmentAccountsUpdated', handleOtherModuleUpdate)
@@ -300,7 +288,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('dataStoreChanged', handleDataStoreChange)
+  window.removeEventListener('dataChanged', handleDataChanged)
   window.removeEventListener('investmentAccountsUpdated', handleOtherModuleUpdate)
   window.removeEventListener('creditCardsUpdated', handleOtherModuleUpdate)
   window.removeEventListener('loanAccountsUpdated', handleOtherModuleUpdate)

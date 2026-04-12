@@ -1,30 +1,71 @@
 /**
  * 统一数据存储服务 (Unified DataStore)
  * 
- * 设计原则：
- * 1. 单一数据源：DataStore 是前端唯一的本地数据源
- * 2. 单向同步：本地变更 -> MySQL -> JSON文件备份
- * 3. 初始化策略：
- *    - 有MySQL数据：MySQL → localStorage
- *    - 无MySQL数据：localStorage → MySQL
- *    - 离线优先：localStorage 作为即时缓存
- * 4. 账套隔离：通过 ledgerId 在 localStorage 中隔离
+ * =============================================================================
+ * 设计理念：记账是核心，其他功能（信用卡、贷款、投资）都是辅助记账
+ * =============================================================================
  * 
- * 数据流向：
- * ┌──────────────────────────────────────────────────────────────┐
- * │  浏览器                                                      │
- * │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
- * │  │   Vue组件   │───►│  DataStore  │───►│ localStorage │     │
- * │  └─────────────┘    └─────────────┘    └─────────────┘     │
- * └─────────────────────────────┬────────────────────────────────┘
- *                              │ 推送变化
- * ┌─────────────────────────────▼────────────────────────────────┐
- * │  服务器                                                      │
- * │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐      │
- * │  │   MySQL     │◄───│  定时备份   │───►│  JSON文件   │      │
- * │  │(主数据源)   │    │             │    │ (Docker卷)  │      │
- * │  └─────────────┘    └─────────────┘    └─────────────┘      │
- * └──────────────────────────────────────────────────────────────┘
+ * 架构原则：
+ * 1. 单一数据源：localStorage 是浏览器端唯一的真实存储
+ * 2. DataStore 只是 localStorage 的响应式包装（ViewModel）
+ * 3. MySQL 是服务器端备份，用于多设备同步
+ * 4. JSON文件 是 MySQL 的镜像备份，不算独立数据源
+ * 
+ * 数据流向（单向）：
+ * 
+ *    ┌─────────────────────────────────────────────────────────────┐
+ *    │  Vue组件  ◄────►  DataStore(响应式包装)  ◄────►  localStorage │
+ *    └─────────────────────────────────────────────────────────────┘
+ *                                                           │
+ *                                                           ▼ 异步推送
+ *    ┌─────────────────────────────────────────────────────────────┐
+ *    │                    MySQL (服务器主数据源)                      │
+ *    └─────────────────────────────────────────────────────────────┘
+ *                                                           │
+ *                                                           ▼ 定时/变更备份
+ *    ┌─────────────────────────────────────────────────────────────┐
+ *    │                 JSON文件 (Docker Volume)                      │
+ *    └─────────────────────────────────────────────────────────────┘
+ * 
+ * 初始化策略：
+ * 1. 已登录用户：MySQL → localStorage（覆盖本地）
+ * 2. 未登录用户/首次：localStorage 自行运转
+ * 3. 首次同步：localStorage → MySQL（建立备份）
+ * 
+ * 账套隔离策略：
+ * - localStorage 键格式：{数据key}_{账套id}，如 accounts_default, transactions_user1
+ * - MySQL 表包含 user_id + ledger_id 双字段隔离
+ * 
+ * 数据分类（按重要性）：
+ * 
+ * 【核心数据】- 记账必须依赖
+ * - transactions: 交易记录（最核心）
+ * - accounts: 账户（记录余额）
+ * - categories: 收支分类
+ * 
+ * 【辅助数据】- 服务于记账
+ * - creditCards: 信用卡（交易时自动关联）
+ * - creditCardBills: 信用卡账单（关联信用卡交易）
+ * - loans: 贷款账户（还款交易关联）
+ * - repaymentPlans: 还款计划
+ * 
+ * 【扩展数据】- 记账的补充
+ * - investmentAccounts: 投资账户
+ * - investmentDetails: 投资明细
+ * - netValueHistory: 净值历史
+ * 
+ * 【维度数据】- 记账的标签/属性
+ * - dimensions: 维度总表（包含 members, merchants, tags, paymentChannels）
+ * - expenseCategories: 支出分类
+ * - incomeCategories: 收入分类
+ * 
+ * 【系统数据】- 应用配置
+ * - ledgers: 账套管理
+ * - users: 用户管理
+ * 
+ * =============================================================================
+ * 核心原则：所有数据变更必须通过 DataStore，确保联动一致
+ * =============================================================================
  */
 
 import { ref } from 'vue'
@@ -34,7 +75,7 @@ class UnifiedDataStore {
     // 当前账套ID
     this.currentLedgerId = ref(localStorage.getItem('currentLedgerId') || 'default')
     
-    // 内部数据存储（按账套隔离）
+    // 内部数据存储（按账套隔离的视图）
     this._data = {}
     
     // 数据版本号，用于检测变更
@@ -381,6 +422,305 @@ class UnifiedDataStore {
       lastSyncTime: this._lastSyncTime.value,
       isOnline: this._isOnline,
       currentLedger: this.currentLedgerId.value
+    }
+  }
+
+  // =========================================================================
+  // 核心记账功能：交易与账户联动
+  // =========================================================================
+
+  /**
+   * 添加交易并自动更新关联账户余额
+   * @param {Object} transaction - 交易对象
+   * @returns {Object} 添加的交易对象
+   */
+  async addTransaction(transaction) {
+    // 确保ID存在
+    if (!transaction.id) {
+      transaction.id = Date.now().toString() + Math.random().toString(36).substr(2, 9)
+    }
+
+    // 添加交易记录
+    await this.add('transactions', transaction)
+
+    // 自动更新关联账户余额
+    await this._updateAccountBalanceForTransaction(transaction, 'add')
+
+    // 如果是信用卡交易，自动更新信用卡额度
+    if (transaction.creditCardAccount) {
+      await this._updateCreditCardBalance(transaction)
+    }
+
+    return transaction
+  }
+
+  /**
+   * 更新交易并自动调整账户余额
+   * @param {string} transactionId - 交易ID
+   * @param {Object} updates - 更新内容
+   */
+  async updateTransaction(transactionId, updates) {
+    const oldTransaction = this.find('transactions', t => String(t.id) === String(transactionId))
+    
+    // 先还原旧交易的影响
+    if (oldTransaction) {
+      await this._updateAccountBalanceForTransaction(oldTransaction, 'reverse')
+    }
+
+    // 更新交易
+    await this.update('transactions', transactionId, updates)
+
+    // 应用新交易的影响
+    const newTransaction = { ...oldTransaction, ...updates }
+    await this._updateAccountBalanceForTransaction(newTransaction, 'add')
+
+    // 如果涉及信用卡，更新信用卡额度
+    if (oldTransaction?.creditCardAccount || updates.creditCardAccount) {
+      // 还原旧的影响
+      if (oldTransaction?.creditCardAccount) {
+        await this._updateCreditCardBalance({ ...oldTransaction, amount: -oldTransaction.amount })
+      }
+      // 应用新的影响
+      if (newTransaction.creditCardAccount) {
+        await this._updateCreditCardBalance(newTransaction)
+      }
+    }
+  }
+
+  /**
+   * 删除交易并还原账户余额
+   * @param {string} transactionId - 交易ID
+   */
+  async deleteTransaction(transactionId) {
+    const transaction = this.find('transactions', t => String(t.id) === String(transactionId))
+    
+    if (transaction) {
+      // 还原账户余额
+      await this._updateAccountBalanceForTransaction(transaction, 'reverse')
+
+      // 如果是信用卡交易，还原信用卡额度
+      if (transaction.creditCardAccount) {
+        await this._updateCreditCardBalance({ ...transaction, amount: -transaction.amount })
+      }
+
+      // 删除交易记录
+      await this.remove('transactions', transactionId)
+    }
+  }
+
+  /**
+   * 根据交易更新账户余额
+   * @param {Object} trans - 交易对象
+   * @param {string} mode - 'add' 添加影响, 'reverse' 还原影响
+   */
+  async _updateAccountBalanceForTransaction(trans, mode) {
+    const multiplier = mode === 'add' ? 1 : -1
+
+    if (trans.type === 'transfer') {
+      // 转账：减少转出账户，增加转入账户
+      const fromAccount = this.find('accounts', a => String(a.id) === String(trans.account))
+      const toAccount = this.find('accounts', a => String(a.id) === String(trans.toAccount))
+      
+      if (fromAccount) {
+        await this.update('accounts', fromAccount.id, {
+          balance: fromAccount.balance - (trans.amount * multiplier)
+        })
+      }
+      if (toAccount) {
+        await this.update('accounts', toAccount.id, {
+          balance: toAccount.balance + (trans.amount * multiplier)
+        })
+      }
+    } else {
+      // 收入/支出：更新单个账户
+      const account = this.find('accounts', a => String(a.id) === String(trans.account))
+      if (account) {
+        let newBalance
+        if (trans.type === 'income') {
+          newBalance = account.balance + (trans.amount * multiplier)
+        } else {
+          newBalance = account.balance - (trans.amount * multiplier)
+        }
+        await this.update('accounts', account.id, { balance: newBalance })
+      }
+    }
+  }
+
+  /**
+   * 更新信用卡额度（消费增加欠款，还款减少欠款）
+   * @param {Object} trans - 信用卡交易
+   */
+  async _updateCreditCardBalance(trans) {
+    const card = this.find('creditCards', c => c.name === trans.creditCardAccount || c.id === trans.creditCardAccount)
+    if (card) {
+      // 消费增加欠款（可用额度减少），还款减少欠款（可用额度增加）
+      await this.update('creditCards', card.id, {
+        availableCredit: card.availableCredit - trans.amount
+      })
+    }
+  }
+
+  // =========================================================================
+  // 辅助功能：信用卡、贷款、投资与核心记账联动
+  // =========================================================================
+
+  /**
+   * 创建信用卡并自动同步到账户管理
+   * @param {Object} card - 信用卡数据
+   */
+  async addCreditCard(card) {
+    if (!card.id) {
+      card.id = Date.now().toString() + Math.random().toString(36).substr(2, 9)
+    }
+    await this.add('creditCards', card)
+
+    // 自动创建关联的账户记录
+    await this.add('accounts', {
+      id: card.id,
+      name: card.name,
+      category: 'credit_card',
+      balance: 0,
+      creditLimit: card.creditLimit,
+      availableCredit: card.availableCredit,
+      // 关联信用卡ID
+      linkedCreditCardId: card.id
+    })
+
+    return card
+  }
+
+  /**
+   * 删除信用卡并清理关联数据
+   * @param {string} cardId - 信用卡ID
+   */
+  async deleteCreditCard(cardId) {
+    // 查找关联的账户
+    const linkedAccount = this.find('accounts', a => a.linkedCreditCardId === cardId)
+    if (linkedAccount) {
+      await this.remove('accounts', linkedAccount.id)
+    }
+
+    // 删除信用卡
+    await this.remove('creditCards', cardId)
+
+    // 清理关联的账单
+    const bills = this.filter('creditCardBills', b => String(b.creditCardId) === String(cardId))
+    for (const bill of bills) {
+      await this.remove('creditCardBills', bill.id)
+    }
+  }
+
+  /**
+   * 创建贷款并自动同步到账户管理
+   * @param {Object} loan - 贷款数据
+   */
+  async addLoan(loan) {
+    if (!loan.id) {
+      loan.id = Date.now().toString() + Math.random().toString(36).substr(2, 9)
+    }
+    await this.add('loans', loan)
+
+    // 自动创建关联的账户记录
+    await this.add('accounts', {
+      id: loan.id,
+      name: loan.name,
+      category: 'loan',
+      balance: loan.remainingAmount || loan.amount,
+      // 关联贷款ID
+      linkedLoanId: loan.id
+    })
+
+    return loan
+  }
+
+  /**
+   * 删除贷款并清理关联数据
+   * @param {string} loanId - 贷款ID
+   */
+  async deleteLoan(loanId) {
+    // 查找关联的账户
+    const linkedAccount = this.find('accounts', a => a.linkedLoanId === loanId)
+    if (linkedAccount) {
+      await this.remove('accounts', linkedAccount.id)
+    }
+
+    // 删除贷款
+    await this.remove('loans', loanId)
+
+    // 清理关联的还款计划
+    const plans = this.filter('repaymentPlans', p => String(p.loanId) === String(loanId))
+    for (const plan of plans) {
+      await this.remove('repaymentPlans', plan.id)
+    }
+  }
+
+  /**
+   * 创建投资账户并自动同步到账户管理
+   * @param {Object} account - 投资账户数据
+   */
+  async addInvestmentAccount(account) {
+    if (!account.id) {
+      account.id = Date.now().toString() + Math.random().toString(36).substr(2, 9)
+    }
+    await this.add('investmentAccounts', account)
+
+    // 自动创建关联的账户记录
+    await this.add('accounts', {
+      id: account.id,
+      name: account.name,
+      category: 'investment',
+      balance: account.totalValue || 0,
+      // 关联投资账户ID
+      linkedInvestmentAccountId: account.id
+    })
+
+    return account
+  }
+
+  /**
+   * 更新投资账户并同步余额到账户管理
+   * @param {string} accountId - 投资账户ID
+   * @param {Object} updates - 更新内容
+   */
+  async updateInvestmentAccount(accountId, updates) {
+    await this.update('investmentAccounts', accountId, updates)
+
+    // 同步余额到账户管理
+    const investmentAccount = this.find('investmentAccounts', a => String(a.id) === String(accountId))
+    if (investmentAccount && updates.totalValue !== undefined) {
+      const linkedAccount = this.find('accounts', a => a.linkedInvestmentAccountId === accountId)
+      if (linkedAccount) {
+        await this.update('accounts', linkedAccount.id, {
+          balance: updates.totalValue
+        })
+      }
+    }
+  }
+
+  /**
+   * 删除投资账户并清理关联数据
+   * @param {string} accountId - 投资账户ID
+   */
+  async deleteInvestmentAccount(accountId) {
+    // 查找关联的账户
+    const linkedAccount = this.find('accounts', a => a.linkedInvestmentAccountId === accountId)
+    if (linkedAccount) {
+      await this.remove('accounts', linkedAccount.id)
+    }
+
+    // 删除投资账户
+    await this.remove('investmentAccounts', accountId)
+
+    // 清理关联的投资明细
+    const details = this.filter('investmentDetails', d => String(d.accountId) === String(accountId))
+    for (const detail of details) {
+      await this.remove('investmentDetails', detail.id)
+    }
+
+    // 清理关联的净值历史
+    const history = this.filter('netValueHistory', h => String(h.accountId) === String(accountId))
+    for (const record of history) {
+      await this.remove('netValueHistory', record.id)
     }
   }
 }

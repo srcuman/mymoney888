@@ -23,8 +23,8 @@
                 <span class="text-gray-500 dark:text-gray-400">卡号: {{ card.number }}</span>
               </div>
               <div class="flex items-center text-sm mt-1">
-                <span class="text-gray-500 dark:text-gray-400 mr-4">信用额度: ¥{{ card.creditLimit.toFixed(2) }}</span>
-                <span class="text-gray-500 dark:text-gray-400">可用额度: ¥{{ card.availableCredit.toFixed(2) }}</span>
+                <span class="text-gray-500 dark:text-gray-400 mr-4">信用额度: ¥{{ (card.creditLimit || 0).toFixed(2) }}</span>
+                <span class="text-gray-500 dark:text-gray-400">可用额度: ¥{{ (card.availableCredit || 0).toFixed(2) }}</span>
               </div>
               <div class="flex items-center text-sm mt-1">
                 <span class="text-gray-500 dark:text-gray-400 mr-4">账单日: {{ card.billDay }}日</span>
@@ -63,9 +63,9 @@
             </span>
           </div>
           <div class="flex items-center text-sm mt-2">
-            <span class="text-gray-500 dark:text-gray-400 mr-4">账单金额: ¥{{ bill.amount.toFixed(2) }}</span>
-            <span class="text-gray-500 dark:text-gray-400 mr-4">已还金额: ¥{{ bill.paidAmount.toFixed(2) }}</span>
-            <span class="text-gray-500 dark:text-gray-400">剩余金额: ¥{{ bill.remainingAmount.toFixed(2) }}</span>
+            <span class="text-gray-500 dark:text-gray-400 mr-4">账单金额: ¥{{ (bill.amount || 0).toFixed(2) }}</span>
+            <span class="text-gray-500 dark:text-gray-400 mr-4">已还金额: ¥{{ (bill.paidAmount || 0).toFixed(2) }}</span>
+            <span class="text-gray-500 dark:text-gray-400">剩余金额: ¥{{ (bill.remainingAmount || 0).toFixed(2) }}</span>
           </div>
           <div class="flex items-center text-sm mt-1">
             <span class="text-gray-500 dark:text-gray-400">还款日: {{ bill.dueDate }}</span>
@@ -147,35 +147,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import syncService from '../services/sync-service.js'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import unifiedDataStore from '../services/unified-data-store.js'
 
-// 信用卡列表
-const creditCards = ref([])
+// 信用卡列表（从 DataStore 获取）
+const creditCards = computed(() => unifiedDataStore.getRaw('creditCards') || [])
 
-// 信用卡账单列表
-const creditCardBills = ref([
-  {
-    id: 1,
-    cardName: '招商银行信用卡',
-    billDate: '2026-03-05',
-    dueDate: '2026-03-25',
-    amount: 15000,
-    paidAmount: 0,
-    remainingAmount: 15000,
-    status: 'unpaid'
-  },
-  {
-    id: 2,
-    cardName: '工商银行信用卡',
-    billDate: '2026-03-10',
-    dueDate: '2026-03-30',
-    amount: 10000,
-    paidAmount: 5000,
-    remainingAmount: 5000,
-    status: 'partial_paid'
-  }
-])
+// 信用卡账单列表（从 DataStore 获取）
+const creditCardBills = computed(() => unifiedDataStore.getRaw('creditCardBills') || [])
+
+// 数据版本号（用于触发响应式更新）
+const dataVersion = ref(0)
+
+// 强制更新
+const forceUpdate = () => {
+  dataVersion.value++
+}
 
 // 模态框状态
 const showAddCardModal = ref(false)
@@ -217,15 +204,8 @@ const editCard = (card) => {
 // 保存信用卡
 const saveCard = async () => {
   if (showEditCardModal.value) {
-    // 更新现有信用卡 - 使用 String() 转换进行类型安全比较
-    const index = creditCards.value.findIndex(c => String(c.id) === String(formData.value.id))
-    if (index !== -1) {
-      creditCards.value[index] = { ...formData.value }
-    }
-  } else {
-    // 添加新信用卡
-    const newCard = {
-      id: Date.now(),
+    // 更新现有信用卡
+    await unifiedDataStore.update('creditCards', formData.value.id, {
       name: formData.value.name,
       bank: formData.value.bank,
       number: formData.value.number,
@@ -233,37 +213,23 @@ const saveCard = async () => {
       availableCredit: formData.value.availableCredit,
       billDay: formData.value.billDay,
       dueDay: formData.value.dueDay
-    }
-    creditCards.value.push(newCard)
-    
-    // 自动创建对应的账户到账户管理
-    const linkedAccount = {
-      id: `credit_${Date.now()}`,
-      name: `${formData.value.name} (信用卡)`,
-      type: 'credit_card',
-      balance: -formData.value.availableCredit, // 信用卡欠款为负
+    })
+  } else {
+    // 添加新信用卡（使用 DataStore 的联动方法）
+    await unifiedDataStore.addCreditCard({
+      name: formData.value.name,
+      bank: formData.value.bank,
+      number: formData.value.number,
       creditLimit: formData.value.creditLimit,
-      linkedCardId: newCard.id,
-      createdAt: new Date().toLocaleString()
-    }
-    
-    // 获取现有账户
-    const existingAccounts = JSON.parse(localStorage.getItem('accounts') || '[]')
-    existingAccounts.push(linkedAccount)
-    localStorage.setItem('accounts', JSON.stringify(existingAccounts))
+      availableCredit: formData.value.availableCredit,
+      billDay: formData.value.billDay,
+      dueDay: formData.value.dueDay,
+      usedCredit: formData.value.creditLimit - formData.value.availableCredit
+    })
   }
   
-  // 保存到本地存储
-  localStorage.setItem('creditCards', JSON.stringify(creditCards.value))
-  
-  // 同步到数据库
-  await syncService.syncOnDataChange('creditCards')
-  
-  // 通知其他组件信用卡数据已更新
-  window.dispatchEvent(new CustomEvent('creditCardsUpdated'))
-  
-  // 触发账户更新事件
-  window.dispatchEvent(new CustomEvent('accountsUpdated'))
+  // 触发更新
+  forceUpdate()
   
   // 关闭模态框并重置表单
   showAddCardModal.value = false
@@ -274,83 +240,41 @@ const saveCard = async () => {
 // 删除信用卡
 const deleteCard = async (cardId) => {
   if (confirm('确定要删除此信用卡吗？')) {
-    // 使用 String() 转换进行类型安全比较
-    creditCards.value = creditCards.value.filter(c => String(c.id) !== String(cardId))
-    // 保存到本地存储
-    localStorage.setItem('creditCards', JSON.stringify(creditCards.value))
-    // 同步到数据库
-    await syncService.syncOnDataChange('creditCards')
-    // 通知其他组件信用卡数据已更新
-    window.dispatchEvent(new CustomEvent('creditCardsUpdated'))
-    // 触发账户更新事件
-    window.dispatchEvent(new CustomEvent('accountsUpdated'))
+    // 使用 DataStore 的联动方法（会同时删除关联的账户）
+    await unifiedDataStore.deleteCreditCard(cardId)
+    forceUpdate()
   }
 }
 
 // 还款
 const payBill = async (bill) => {
-  if (confirm(`确定要偿还 ${bill.cardName} 的账单吗？金额：¥${bill.remainingAmount.toFixed(2)}`)) {
-    // 使用 String() 转换进行类型安全比较
-    const index = creditCardBills.value.findIndex(b => String(b.id) === String(bill.id))
-    if (index !== -1) {
-      creditCardBills.value[index].paidAmount = bill.amount
-      creditCardBills.value[index].remainingAmount = 0
-      creditCardBills.value[index].status = 'paid'
-    }
+  if (confirm(`确定要偿还 ${bill.cardName} 的账单吗？金额：¥${(bill.remainingAmount || 0).toFixed(2)}`)) {
+    // 更新账单状态
+    await unifiedDataStore.update('creditCardBills', bill.id, {
+      paidAmount: bill.amount,
+      remainingAmount: 0,
+      status: 'paid'
+    })
     
     // 更新信用卡可用额度（还款后可用额度增加）
-    const cardIndex = creditCards.value.findIndex(c => c.name === bill.cardName)
-    if (cardIndex !== -1) {
-      creditCards.value[cardIndex].availableCredit += bill.remainingAmount
-      localStorage.setItem('creditCards', JSON.stringify(creditCards.value))
+    const card = creditCards.value.find(c => c.name === bill.cardName)
+    if (card) {
+      await unifiedDataStore.update('creditCards', card.id, {
+        availableCredit: (card.availableCredit || 0) + (bill.remainingAmount || 0)
+      })
     }
     
-    // 保存到本地存储
-    localStorage.setItem('creditCardBills', JSON.stringify(creditCardBills.value))
-    // 同步到数据库
-    await syncService.syncOnDataChange('creditCardBills')
-    await syncService.syncOnDataChange('creditCards')
-    // 通知其他组件信用卡数据已更新
-    window.dispatchEvent(new CustomEvent('creditCardsUpdated'))
-    // 触发账户更新事件
-    window.dispatchEvent(new CustomEvent('accountsUpdated'))
+    forceUpdate()
   }
 }
 
-onMounted(() => {
-  // 从本地存储加载数据
-  const savedCards = localStorage.getItem('creditCards')
-  const savedBills = localStorage.getItem('creditCardBills')
-  
-  if (savedCards) {
-    creditCards.value = JSON.parse(savedCards)
-  }
-  
-  if (savedBills) {
-    creditCardBills.value = JSON.parse(savedBills)
-  }
-})
-
 // 获取账单关联的交易
 const getBillTransactions = (billId) => {
-  try {
-    // 获取账套特定的交易数据
-    const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
-    let transactions = []
-    const savedTransactions = localStorage.getItem(`transactions_${currentLedgerId}`)
-    if (savedTransactions) {
-      transactions = JSON.parse(savedTransactions)
-    } else {
-      const oldTransactions = localStorage.getItem('transactions')
-      if (oldTransactions) {
-        transactions = JSON.parse(oldTransactions)
-      }
-    }
-    // 使用 String() 转换进行类型安全比较
-    return transactions.filter(t => String(t.creditCardBillId) === String(billId))
-  } catch (e) {
-    return []
-  }
+  // 访问 version 触发响应式
+  void dataVersion.value
+  
+  const transactions = unifiedDataStore.getRaw('transactions') || []
+  return transactions.filter(t => String(t.creditCardBillId) === String(billId))
 }
 
 // 获取账单中分期交易数量
@@ -365,6 +289,22 @@ const viewBillTransactions = (bill) => {
     detail: { billId: bill.id }
   }))
 }
+
+// 监听数据变更
+const handleDataChanged = () => {
+  forceUpdate()
+}
+
+onMounted(() => {
+  // 监听 DataStore 变更事件
+  window.addEventListener('dataChanged', handleDataChanged)
+  window.addEventListener('transactionsUpdated', handleDataChanged)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('dataChanged', handleDataChanged)
+  window.removeEventListener('transactionsUpdated', handleDataChanged)
+})
 </script>
 
 <style scoped>

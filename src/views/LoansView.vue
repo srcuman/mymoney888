@@ -23,11 +23,11 @@
                 <span class="text-gray-500 dark:text-gray-400">机构: {{ loan.institution }}</span>
               </div>
               <div class="flex items-center text-sm mt-1">
-                <span class="text-gray-500 dark:text-gray-400 mr-4">贷款金额: ¥{{ loan.amount.toFixed(2) }}</span>
-                <span class="text-gray-500 dark:text-gray-400">剩余金额: ¥{{ loan.remainingAmount.toFixed(2) }}</span>
+                <span class="text-gray-500 dark:text-gray-400 mr-4">贷款金额: ¥{{ (loan.amount || 0).toFixed(2) }}</span>
+                <span class="text-gray-500 dark:text-gray-400">剩余金额: ¥{{ (loan.remainingAmount || 0).toFixed(2) }}</span>
               </div>
               <div class="flex items-center text-sm mt-1">
-                <span class="text-gray-500 dark:text-gray-400 mr-4">利率: {{ (loan.interestRate * 100).toFixed(2) }}%</span>
+                <span class="text-gray-500 dark:text-gray-400 mr-4">利率: {{ ((loan.interestRate || 0) * 100).toFixed(2) }}%</span>
                 <span class="text-gray-500 dark:text-gray-400">还款日期: {{ loan.repaymentDay }}日</span>
               </div>
             </div>
@@ -63,9 +63,9 @@
             </span>
           </div>
           <div class="flex items-center text-sm mt-2">
-            <span class="text-gray-500 dark:text-gray-400 mr-4">应还金额: ¥{{ plan.amount.toFixed(2) }}</span>
-            <span class="text-gray-500 dark:text-gray-400 mr-4">已还金额: ¥{{ plan.paidAmount.toFixed(2) }}</span>
-            <span class="text-gray-500 dark:text-gray-400">剩余金额: ¥{{ plan.remainingAmount.toFixed(2) }}</span>
+            <span class="text-gray-500 dark:text-gray-400 mr-4">应还金额: ¥{{ (plan.amount || 0).toFixed(2) }}</span>
+            <span class="text-gray-500 dark:text-gray-400 mr-4">已还金额: ¥{{ (plan.paidAmount || 0).toFixed(2) }}</span>
+            <span class="text-gray-500 dark:text-gray-400">剩余金额: ¥{{ (plan.remainingAmount || 0).toFixed(2) }}</span>
           </div>
           <div class="mt-3 flex justify-end">
             <button @click="payRepayment(plan)" :disabled="plan.status === 'paid'" class="px-3 py-1 bg-primary text-white rounded-md hover:bg-blue-700 text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed">
@@ -140,54 +140,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import syncService from '../services/sync-service.js'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import unifiedDataStore from '../services/unified-data-store.js'
 
-// 贷款列表
-const loans = ref([
-  {
-    id: 1,
-    name: '住房贷款',
-    type: '房贷',
-    institution: '工商银行',
-    amount: 1000000,
-    remainingAmount: 800000,
-    interestRate: 0.049,
-    repaymentDay: 15
-  },
-  {
-    id: 2,
-    name: '汽车贷款',
-    type: '车贷',
-    institution: '招商银行',
-    amount: 200000,
-    remainingAmount: 100000,
-    interestRate: 0.058,
-    repaymentDay: 10
-  }
-])
+// 贷款列表（从 DataStore 获取）
+const loans = computed(() => unifiedDataStore.getRaw('loans') || [])
 
-// 还款计划列表
-const repaymentPlans = ref([
-  {
-    id: 1,
-    loanName: '住房贷款',
-    repaymentDate: '2026-04-15',
-    amount: 5000,
-    paidAmount: 0,
-    remainingAmount: 5000,
-    status: 'unpaid'
-  },
-  {
-    id: 2,
-    loanName: '汽车贷款',
-    repaymentDate: '2026-04-10',
-    amount: 3000,
-    paidAmount: 3000,
-    remainingAmount: 0,
-    status: 'paid'
-  }
-])
+// 还款计划列表（从 DataStore 获取）
+const repaymentPlans = computed(() => unifiedDataStore.getRaw('repaymentPlans') || [])
+
+// 数据版本号（用于触发响应式更新）
+const dataVersion = ref(0)
+
+// 强制更新
+const forceUpdate = () => {
+  dataVersion.value++
+}
 
 // 模态框状态
 const showAddLoanModal = ref(false)
@@ -230,14 +198,7 @@ const editLoan = (loan) => {
 const saveLoan = async () => {
   if (showEditLoanModal.value) {
     // 更新现有贷款
-    const index = loans.value.findIndex(l => l.id === formData.value.id)
-    if (index !== -1) {
-      loans.value[index] = { ...formData.value }
-    }
-  } else {
-    // 添加新贷款
-    const newLoan = {
-      id: Date.now(),
+    await unifiedDataStore.update('loans', formData.value.id, {
       name: formData.value.name,
       type: formData.value.type,
       institution: formData.value.institution,
@@ -245,37 +206,22 @@ const saveLoan = async () => {
       remainingAmount: formData.value.remainingAmount,
       interestRate: formData.value.interestRate,
       repaymentDay: formData.value.repaymentDay
-    }
-    loans.value.push(newLoan)
-    
-    // 自动创建对应的账户到账户管理
-    const linkedAccount = {
-      id: `loan_${Date.now()}`,
-      name: `${formData.value.name} (贷款)`,
-      type: 'loan',
-      balance: -formData.value.remainingAmount, // 贷款欠款为负
-      totalAmount: formData.value.amount,
-      linkedLoanId: newLoan.id,
-      createdAt: new Date().toLocaleString()
-    }
-    
-    // 获取现有账户
-    const existingAccounts = JSON.parse(localStorage.getItem('accounts') || '[]')
-    existingAccounts.push(linkedAccount)
-    localStorage.setItem('accounts', JSON.stringify(existingAccounts))
+    })
+  } else {
+    // 添加新贷款（使用 DataStore 的联动方法）
+    await unifiedDataStore.addLoan({
+      name: formData.value.name,
+      type: formData.value.type,
+      institution: formData.value.institution,
+      amount: formData.value.amount,
+      remainingAmount: formData.value.remainingAmount,
+      interestRate: formData.value.interestRate,
+      repaymentDay: formData.value.repaymentDay
+    })
   }
   
-  // 保存到本地存储
-  localStorage.setItem('loans', JSON.stringify(loans.value))
-  
-  // 同步到数据库
-  await syncService.syncOnDataChange('loans')
-  
-  // 通知其他组件贷款数据已更新
-  window.dispatchEvent(new CustomEvent('loanAccountsUpdated'))
-  
-  // 触发账户更新事件
-  window.dispatchEvent(new CustomEvent('accountsUpdated'))
+  // 触发更新
+  forceUpdate()
   
   // 关闭模态框并重置表单
   showAddLoanModal.value = false
@@ -286,48 +232,48 @@ const saveLoan = async () => {
 // 删除贷款
 const deleteLoan = async (loanId) => {
   if (confirm('确定要删除此贷款吗？')) {
-    loans.value = loans.value.filter(l => l.id !== loanId)
-    // 保存到本地存储
-    localStorage.setItem('loans', JSON.stringify(loans.value))
-    // 同步到数据库
-    await syncService.syncOnDataChange('loans')
-    // 通知其他组件贷款数据已更新
-    window.dispatchEvent(new CustomEvent('loanAccountsUpdated'))
-    // 触发账户更新事件
-    window.dispatchEvent(new CustomEvent('accountsUpdated'))
+    // 使用 DataStore 的联动方法（会同时删除关联的账户）
+    await unifiedDataStore.deleteLoan(loanId)
+    forceUpdate()
   }
 }
 
 // 还款
 const payRepayment = async (plan) => {
-  if (confirm(`确定要偿还 ${plan.loanName} 的还款吗？金额：¥${plan.remainingAmount.toFixed(2)}`)) {
-    const index = repaymentPlans.value.findIndex(p => p.id === plan.id)
-    if (index !== -1) {
-      repaymentPlans.value[index].paidAmount = plan.amount
-      repaymentPlans.value[index].remainingAmount = 0
-      repaymentPlans.value[index].status = 'paid'
+  if (confirm(`确定要偿还 ${plan.loanName} 的还款吗？金额：¥${(plan.remainingAmount || 0).toFixed(2)}`)) {
+    // 更新还款计划状态
+    await unifiedDataStore.update('repaymentPlans', plan.id, {
+      paidAmount: plan.amount,
+      remainingAmount: 0,
+      status: 'paid'
+    })
+    
+    // 更新贷款剩余金额
+    const loan = loans.value.find(l => l.name === plan.loanName)
+    if (loan) {
+      await unifiedDataStore.update('loans', loan.id, {
+        remainingAmount: Math.max(0, (loan.remainingAmount || 0) - (plan.remainingAmount || 0))
+      })
     }
-    // 保存到本地存储
-    localStorage.setItem('repaymentPlans', JSON.stringify(repaymentPlans.value))
-    // 同步到数据库
-    await syncService.syncOnDataChange('repaymentPlans')
-    // 通知其他组件贷款数据已更新
-    window.dispatchEvent(new CustomEvent('loanAccountsUpdated'))
+    
+    forceUpdate()
   }
 }
 
+// 监听数据变更
+const handleDataChanged = () => {
+  forceUpdate()
+}
+
 onMounted(() => {
-  // 从本地存储加载数据
-  const savedLoans = localStorage.getItem('loans')
-  const savedPlans = localStorage.getItem('repaymentPlans')
-  
-  if (savedLoans) {
-    loans.value = JSON.parse(savedLoans)
-  }
-  
-  if (savedPlans) {
-    repaymentPlans.value = JSON.parse(savedPlans)
-  }
+  // 监听 DataStore 变更事件
+  window.addEventListener('dataChanged', handleDataChanged)
+  window.addEventListener('transactionsUpdated', handleDataChanged)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('dataChanged', handleDataChanged)
+  window.removeEventListener('transactionsUpdated', handleDataChanged)
 })
 </script>
 

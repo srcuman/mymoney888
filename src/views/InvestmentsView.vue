@@ -582,23 +582,40 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import Chart from 'chart.js/auto'
-import syncService from '../services/sync-service.js'
+import unifiedDataStore from '../services/unified-data-store.js'
 
-// 投资账户列表
-const investmentAccounts = ref([])
+// 数据版本号（用于触发响应式更新）
+const dataVersion = ref(0)
 
-// 投资明细列表
-const investmentDetails = ref([])
+// 强制更新
+const forceUpdate = () => {
+  dataVersion.value++
+}
+
+// 投资账户列表（从 DataStore 获取）
+const investmentAccounts = computed(() => {
+  void dataVersion.value
+  return unifiedDataStore.getRaw('investmentAccounts') || []
+})
+
+// 投资明细列表（从 DataStore 获取）
+const investmentDetails = computed(() => {
+  void dataVersion.value
+  return unifiedDataStore.getRaw('investmentDetails') || []
+})
+
+// 历史净值记录 (用于收益分析)
+const netValueHistory = computed(() => {
+  void dataVersion.value
+  return unifiedDataStore.getRaw('netValueHistory') || []
+})
 
 // 筛选后的投资明细（用于收益分析）
 const filteredProfitDetails = computed(() => {
   return filterInvestmentDetailsByTimeRange()
 })
-
-// 历史净值记录 (用于收益分析)
-const netValueHistory = ref([])
 
 // 图表引用
 const typeDistributionChart = ref(null)
@@ -710,40 +727,34 @@ const openEditInvestmentDetailModal = (detail) => {
 
 // 添加投资账户
 const addInvestmentAccount = async () => {
-  const newAccount = {
-    id: Date.now().toString(),
+  // 使用 DataStore 的联动方法（会自动创建关联的账户）
+  await unifiedDataStore.addInvestmentAccount({
     name: newInvestmentAccount.value.name,
     type: newInvestmentAccount.value.type,
     description: newInvestmentAccount.value.description,
     totalAsset: 0,
     profitLoss: 0
-  }
-  investmentAccounts.value.push(newAccount)
-  await saveInvestmentAccounts()
+  })
+  forceUpdate()
   showAddInvestmentAccountModal.value = false
 }
 
 // 更新投资账户
 const updateInvestmentAccount = async () => {
-  const index = investmentAccounts.value.findIndex(a => a.id === editInvestmentAccount.value.id)
-  if (index !== -1) {
-    investmentAccounts.value[index] = {
-      ...investmentAccounts.value[index],
-      name: editInvestmentAccount.value.name,
-      type: editInvestmentAccount.value.type,
-      description: editInvestmentAccount.value.description
-    }
-    await saveInvestmentAccounts()
-    showEditInvestmentAccountModal.value = false
-  }
+  await unifiedDataStore.update('investmentAccounts', editInvestmentAccount.value.id, {
+    name: editInvestmentAccount.value.name,
+    type: editInvestmentAccount.value.type,
+    description: editInvestmentAccount.value.description
+  })
+  forceUpdate()
+  showEditInvestmentAccountModal.value = false
 }
 
 // 删除投资账户
 const deleteInvestmentAccount = async (id) => {
-  investmentAccounts.value = investmentAccounts.value.filter(a => a.id !== id)
-  investmentDetails.value = investmentDetails.value.filter(d => d.accountId !== id)
-  await saveInvestmentAccounts()
-  await saveInvestmentDetails()
+  // 使用 DataStore 的联动方法（会同时删除关联的投资明细和账户）
+  await unifiedDataStore.deleteInvestmentAccount(id)
+  forceUpdate()
 }
 
 // 格式化更新时间显示
@@ -1104,10 +1115,10 @@ const fetchAndFillInvestmentInfo = async (code, mode) => {
 
 // 添加投资明细
 const addInvestmentDetail = async () => {
-  const account = investmentAccounts.value.find(a => a.id === newInvestmentDetail.value.accountId)
   const today = new Date().toISOString().split('T')[0]
-  const newDetail = {
-    id: Date.now().toString(),
+  const account = investmentAccounts.value.find(a => String(a.id) === String(newInvestmentDetail.value.accountId))
+  
+  await unifiedDataStore.add('investmentDetails', {
     accountId: newInvestmentDetail.value.accountId,
     accountName: account ? account.name : '',
     type: newInvestmentDetail.value.type,
@@ -1118,157 +1129,93 @@ const addInvestmentDetail = async () => {
     currentPrice: newInvestmentDetail.value.currentPrice,
     netValueDate: today,
     updateDate: today
-  }
-  investmentDetails.value.push(newDetail)
+  })
+  
+  // 更新账户资产
   updateAccountAsset(newInvestmentDetail.value.accountId)
-  await saveInvestmentDetails()
+  
   // 异步记录净值历史（不阻塞UI）
+  const newDetail = { ...newInvestmentDetail.value, netValueDate: today, updateDate: today }
   recordNetValue(newDetail).catch(err => console.error('记录净值失败:', err))
+  
+  forceUpdate()
   showAddInvestmentDetailModal.value = false
 }
 
 // 更新投资明细
 const updateInvestmentDetail = async () => {
-  const index = investmentDetails.value.findIndex(d => d.id === editInvestmentDetail.value.id)
-  if (index !== -1) {
-    const oldAccountId = investmentDetails.value[index].accountId
-    const today = new Date().toISOString().split('T')[0]
-    investmentDetails.value[index] = {
-      ...investmentDetails.value[index],
-      accountId: editInvestmentDetail.value.accountId,
-      accountName: investmentAccounts.value.find(a => a.id === editInvestmentDetail.value.accountId)?.name || '',
-      type: editInvestmentDetail.value.type,
-      code: editInvestmentDetail.value.code,
-      name: editInvestmentDetail.value.name,
-      shares: editInvestmentDetail.value.shares,
-      costPrice: editInvestmentDetail.value.costPrice,
-      currentPrice: editInvestmentDetail.value.currentPrice,
-      updateDate: today
-    }
-    updateAccountAsset(oldAccountId)
+  const today = new Date().toISOString().split('T')[0]
+  const oldAccountId = investmentDetails.value.find(d => d.id === editInvestmentDetail.value.id)?.accountId
+  
+  await unifiedDataStore.update('investmentDetails', editInvestmentDetail.value.id, {
+    accountId: editInvestmentDetail.value.accountId,
+    accountName: investmentAccounts.value.find(a => String(a.id) === String(editInvestmentDetail.value.accountId))?.name || '',
+    type: editInvestmentDetail.value.type,
+    code: editInvestmentDetail.value.code,
+    name: editInvestmentDetail.value.name,
+    shares: editInvestmentDetail.value.shares,
+    costPrice: editInvestmentDetail.value.costPrice,
+    currentPrice: editInvestmentDetail.value.currentPrice,
+    updateDate: today
+  })
+  
+  // 更新相关账户资产
+  if (oldAccountId) updateAccountAsset(oldAccountId)
+  if (editInvestmentDetail.value.accountId !== oldAccountId) {
     updateAccountAsset(editInvestmentDetail.value.accountId)
-    await saveInvestmentDetails()
-    showEditInvestmentDetailModal.value = false
   }
+  
+  forceUpdate()
+  showEditInvestmentDetailModal.value = false
 }
 
 // 删除投资明细
 const deleteInvestmentDetail = async (id) => {
-  const detail = investmentDetails.value.find(d => d.id === id)
+  const detail = investmentDetails.value.find(d => String(d.id) === String(id))
   if (detail) {
-    investmentDetails.value = investmentDetails.value.filter(d => d.id !== id)
+    await unifiedDataStore.remove('investmentDetails', id)
     updateAccountAsset(detail.accountId)
-    await saveInvestmentDetails()
+    forceUpdate()
   }
 }
 
 // 更新账户资产
 const updateAccountAsset = async (accountId) => {
-  const account = investmentAccounts.value.find(a => a.id === accountId)
+  const account = investmentAccounts.value.find(a => String(a.id) === String(accountId))
   if (account) {
-    const accountDetails = investmentDetails.value.filter(d => d.accountId === accountId)
-    const totalAsset = accountDetails.reduce((total, d) => total + d.shares * d.currentPrice, 0)
-    const totalCost = accountDetails.reduce((total, d) => total + d.shares * d.costPrice, 0)
+    const accountDetails = investmentDetails.value.filter(d => String(d.accountId) === String(accountId))
+    const totalAsset = accountDetails.reduce((total, d) => total + (d.shares || 0) * (d.currentPrice || 0), 0)
+    const totalCost = accountDetails.reduce((total, d) => total + (d.shares || 0) * (d.costPrice || 0), 0)
     const profitLoss = totalAsset - totalCost
     
-    account.totalAsset = totalAsset
-    account.profitLoss = profitLoss
-    await saveInvestmentAccounts()
+    // 使用 DataStore 更新（会自动同步到账户管理）
+    await unifiedDataStore.updateInvestmentAccount(accountId, {
+      totalAsset,
+      profitLoss,
+      totalValue: totalAsset
+    })
   }
 }
 
-// 保存投资账户到本地存储并同步数据库
-const saveInvestmentAccounts = async () => {
-  localStorage.setItem('investmentAccounts', JSON.stringify(investmentAccounts.value))
-  // 同步到数据库
-  try {
-    const user = JSON.parse(localStorage.getItem('user'))
-    if (user && user.id && navigator.onLine) {
-      await syncService.syncOnDataChange('investmentAccounts')
-    }
-  } catch (error) {
-    console.error('同步投资账户到数据库失败:', error)
-  }
-  // 通知其他组件投资账户已更新
-  window.dispatchEvent(new CustomEvent('investmentAccountsUpdated'))
-}
-
-// 保存投资明细到本地存储并同步数据库
-const saveInvestmentDetails = async () => {
-  localStorage.setItem('investmentDetails', JSON.stringify(investmentDetails.value))
-  // 同步到数据库
-  try {
-    const user = JSON.parse(localStorage.getItem('user'))
-    if (user && user.id && navigator.onLine) {
-      await syncService.syncOnDataChange('investmentDetails')
-    }
-  } catch (error) {
-    console.error('同步投资明细到数据库失败:', error)
-  }
-  // 通知其他组件投资账户已更新（因为明细变化会影响账户余额）
-  window.dispatchEvent(new CustomEvent('investmentAccountsUpdated'))
-}
-
-// 保存历史净值记录（本地+数据库）
-const saveNetValueHistory = async () => {
-  // 保存到本地
-  localStorage.setItem('netValueHistory', JSON.stringify(netValueHistory.value))
-  
-  // 同步到数据库
-  try {
-    const user = JSON.parse(localStorage.getItem('user'))
-    if (user && user.id && navigator.onLine) {
-      await syncService.updateServerData('netValueHistory', user.id, netValueHistory.value)
-      console.log('净值历史已同步到数据库')
-    }
-  } catch (error) {
-    console.error('同步净值历史到数据库失败:', error)
-  }
-}
-
-// 加载历史净值记录（优先本地，合并数据库数据）
-const loadNetValueHistory = async () => {
-  // 先从本地加载
-  const saved = localStorage.getItem('netValueHistory')
-  if (saved) {
-    netValueHistory.value = JSON.parse(saved)
-  }
-  
-  // 尝试从数据库获取更新的数据
-  try {
-    const user = JSON.parse(localStorage.getItem('user'))
-    if (user && user.id && navigator.onLine) {
-      const serverData = await syncService.getServerData('netValueHistory', user.id, null)
-      if (serverData && serverData.length > 0) {
-        // 合并本地和服务器数据
-        const localIds = new Set(netValueHistory.value.map(h => `${h.code}-${h.date}`))
-        const newRecords = serverData.filter(h => !localIds.has(`${h.code}-${h.date}`))
-        
-        if (newRecords.length > 0) {
-          netValueHistory.value = [...netValueHistory.value, ...newRecords]
-          netValueHistory.value.sort((a, b) => new Date(b.date) - new Date(a.date))
-          localStorage.setItem('netValueHistory', JSON.stringify(netValueHistory.value))
-          console.log(`从数据库同步了 ${newRecords.length} 条净值记录`)
-        }
-      }
-    }
-  } catch (error) {
-    console.error('从数据库加载净值历史失败:', error)
-  }
-}
-
-// 记录净值到历史（异步保存到本地和数据库）
+// 记录净值到历史（异步保存）
 const recordNetValue = async (detail) => {
   const today = new Date().toISOString().split('T')[0]
-  const existing = netValueHistory.value.find(
+  const allHistory = netValueHistory.value
+  
+  const existingIndex = allHistory.findIndex(
     h => h.code === detail.code && h.date === today
   )
   
-  if (existing) {
-    existing.price = detail.currentPrice
-    existing.updateTime = new Date().toISOString()
+  if (existingIndex !== -1) {
+    // 更新现有记录
+    const existing = allHistory[existingIndex]
+    await unifiedDataStore.update('netValueHistory', existing.id, {
+      price: detail.currentPrice,
+      updateTime: new Date().toISOString()
+    })
   } else {
-    netValueHistory.value.push({
+    // 添加新记录
+    await unifiedDataStore.add('netValueHistory', {
       code: detail.code,
       name: detail.name,
       date: today,
@@ -1276,7 +1223,6 @@ const recordNetValue = async (detail) => {
       updateTime: new Date().toISOString()
     })
   }
-  await saveNetValueHistory()
 }
 
 // 刷新所有净值
@@ -1293,9 +1239,11 @@ const refreshAllNetValues = async () => {
     try {
       const info = await fetchInvestmentInfo(detail.code, detail.type)
       if (info.currentPrice) {
-        detail.currentPrice = info.currentPrice
-        detail.netValueDate = info.updateDate || new Date().toISOString().split('T')[0]
-        recordNetValue(detail)
+        await unifiedDataStore.update('investmentDetails', detail.id, {
+          currentPrice: info.currentPrice,
+          netValueDate: info.updateDate || new Date().toISOString().split('T')[0]
+        })
+        recordNetValue({ ...detail, currentPrice: info.currentPrice, netValueDate: info.updateDate })
         successCount++
         addApiLog(`${detail.name}: ${info.currentPrice}`)
       }
@@ -1309,31 +1257,33 @@ const refreshAllNetValues = async () => {
     await updateAccountAsset(account.id)
   }
   
-  await saveInvestmentDetails()
-  await saveInvestmentAccounts()
-  
+  forceUpdate()
   addApiLog(`刷新完成: 成功${successCount}个, 失败${failCount}个`)
   isRefreshing.value = false
 }
 
 // 计算总投资资产
 const totalInvestmentAsset = computed(() => {
-  return investmentAccounts.value.reduce((total, account) => total + account.totalAsset, 0)
+  void dataVersion.value
+  return investmentAccounts.value.reduce((total, account) => total + (account.totalAsset || 0), 0)
 })
 
 // 计算总收益
 const totalProfitLoss = computed(() => {
-  return investmentAccounts.value.reduce((total, account) => total + account.profitLoss, 0)
+  void dataVersion.value
+  return investmentAccounts.value.reduce((total, account) => total + (account.profitLoss || 0), 0)
 })
 
 // 计算总收益率
 const totalProfitRate = computed(() => {
+  void dataVersion.value
   const totalCost = totalInvestmentAsset.value - totalProfitLoss.value
   return totalCost > 0 ? (totalProfitLoss.value / totalCost) * 100 : 0
 })
 
 // 计算持仓类型分布
 const typeDistribution = computed(() => {
+  void dataVersion.value
   const typeMap = {}
   const typeColors = {
     '基金': 'bg-blue-500',
@@ -1344,8 +1294,8 @@ const typeDistribution = computed(() => {
   
   // 统计各类型的资产
   investmentDetails.value.forEach(detail => {
-    const type = detail.type
-    const value = detail.shares * detail.currentPrice
+    const type = detail.type || '其他'
+    const value = (detail.shares || 0) * (detail.currentPrice || 0)
     if (typeMap[type]) {
       typeMap[type] += value
     } else {
@@ -1577,22 +1527,6 @@ const filterInvestmentDetailsByTimeRange = () => {
   })
 }
 
-// 从本地存储加载数据
-const loadData = async () => {
-  const savedAccounts = localStorage.getItem('investmentAccounts')
-  const savedDetails = localStorage.getItem('investmentDetails')
-  
-  if (savedAccounts) {
-    investmentAccounts.value = JSON.parse(savedAccounts)
-  }
-  
-  if (savedDetails) {
-    investmentDetails.value = JSON.parse(savedDetails)
-  }
-  
-  await loadNetValueHistory()
-}
-
 // 定时更新持仓产品净值
 const scheduleNetValueUpdate = () => {
   // 每天的更新时间：9:30, 11:30, 15:30
@@ -1629,12 +1563,14 @@ const scheduleNetValueUpdate = () => {
     
     for (const detail of investmentDetails.value) {
       try {
-        const info = await fetchInvestmentInfo(detail.code)
+        const info = await fetchInvestmentInfo(detail.code, detail.type)
         if (info.currentPrice) {
-          detail.currentPrice = info.currentPrice
-          detail.netValueDate = info.updateDate || new Date().toISOString().split('T')[0]
-          detail.updateDate = new Date().toISOString().split('T')[0]
-          recordNetValue(detail)
+          await unifiedDataStore.update('investmentDetails', detail.id, {
+            currentPrice: info.currentPrice,
+            netValueDate: info.updateDate || new Date().toISOString().split('T')[0],
+            updateDate: new Date().toISOString().split('T')[0]
+          })
+          recordNetValue({ ...detail, currentPrice: info.currentPrice })
         }
       } catch (error) {
         console.error(`Failed to update net value for ${detail.code}:`, error)
@@ -1646,10 +1582,7 @@ const scheduleNetValueUpdate = () => {
       await updateAccountAsset(account.id)
     }
     
-    // 保存数据
-    await saveInvestmentDetails()
-    await saveInvestmentAccounts()
-    
+    forceUpdate()
     console.log('Net value update completed')
   }
   
@@ -1678,10 +1611,25 @@ watch([investmentAccounts, investmentDetails], () => {
   updateCharts()
 }, { deep: true })
 
+// 监听 DataStore 变更事件
+const handleDataChanged = () => {
+  forceUpdate()
+  updateCharts()
+}
+
 // 组件挂载时启动定时更新
 onMounted(async () => {
-  await loadData()
+  // 监听 DataStore 变更事件
+  window.addEventListener('dataChanged', handleDataChanged)
+  window.addEventListener('investmentAccountsUpdated', handleDataChanged)
+  
   initCharts()
   scheduleNetValueUpdate()
+})
+
+// 组件卸载时移除监听
+onUnmounted(() => {
+  window.removeEventListener('dataChanged', handleDataChanged)
+  window.removeEventListener('investmentAccountsUpdated', handleDataChanged)
 })
 </script>
