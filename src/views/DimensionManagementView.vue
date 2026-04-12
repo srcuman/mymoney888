@@ -647,8 +647,9 @@ const deletePaymentChannel = (channelId) => {
   saveDimensions()
 }
 
-// 保存维度数据
+// 保存维度数据（支持多账套）
 const saveDimensions = () => {
+  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
   const dimensions = {
     expenseCategories: expenseCategories.value,
     incomeCategories: incomeCategories.value,
@@ -657,27 +658,94 @@ const saveDimensions = () => {
     tags: tags.value,
     paymentChannels: paymentChannels.value
   }
-  localStorage.setItem('dimensions', JSON.stringify(dimensions))
+  localStorage.setItem(`dimensions_${currentLedgerId}`, JSON.stringify(dimensions))
 }
 
-// 保存默认值
+// 获取账套特定数据或使用模板默认数据
+const getLedgerDimensions = (ledgerId) => {
+  const dimensionsData = localStorage.getItem(`dimensions_${ledgerId}`)
+  if (dimensionsData) {
+    return JSON.parse(dimensionsData)
+  }
+  return null
+}
+
+// 保存默认值（支持多账套）
 const saveDefaults = () => {
-  localStorage.setItem('defaults', JSON.stringify(defaults.value))
+  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
+  localStorage.setItem(`defaults_${currentLedgerId}`, JSON.stringify(defaults.value))
   alert('默认值保存成功')
 }
 
-onMounted(() => {
-  // 从本地存储加载数据
-  const savedDimensions = localStorage.getItem('dimensions')
-  if (savedDimensions) {
-    const dimensions = JSON.parse(savedDimensions)
-    expenseCategories.value = dimensions.expenseCategories || []
-    incomeCategories.value = dimensions.incomeCategories || []
-    members.value = dimensions.members || []
-    merchants.value = dimensions.merchants || []
-    tags.value = dimensions.tags || []
-    paymentChannels.value = dimensions.paymentChannels || []
+// 监听账套切换事件
+const handleLedgerChange = () => {
+  loadDimensions()
+}
+
+// 加载维度数据
+const loadDimensions = () => {
+  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
+  
+  // 尝试加载账套特定数据
+  const ledgerDimensions = getLedgerDimensions(currentLedgerId)
+  
+  if (ledgerDimensions) {
+    expenseCategories.value = ledgerDimensions.expenseCategories || []
+    incomeCategories.value = ledgerDimensions.incomeCategories || []
+    members.value = ledgerDimensions.members || []
+    merchants.value = ledgerDimensions.merchants || []
+    tags.value = ledgerDimensions.tags || []
+    paymentChannels.value = ledgerDimensions.paymentChannels || []
+  } else {
+    // 使用模板默认数据（已导入的）
   }
+  
+  // 加载默认值
+  const savedDefaults = localStorage.getItem(`defaults_${currentLedgerId}`)
+  if (savedDefaults) {
+    defaults.value = JSON.parse(savedDefaults)
+  } else {
+    defaults.value = {
+      expenseCategory: '',
+      incomeCategory: '',
+      member: '',
+      merchant: '',
+      tag: '',
+      paymentChannel: ''
+    }
+  }
+}
+
+// 重置为模板默认数据
+const resetToTemplate = () => {
+  if (confirm('确定要重置为模板默认数据吗？这将覆盖当前数据。')) {
+    import('../utils/ledger-templates.js').then(({ 
+      defaultExpenseCategories, 
+      defaultIncomeCategories, 
+      defaultMembers, 
+      defaultMerchants, 
+      defaultTags, 
+      defaultPaymentChannels 
+    }) => {
+      expenseCategories.value = JSON.parse(JSON.stringify(defaultExpenseCategories))
+      incomeCategories.value = JSON.parse(JSON.stringify(defaultIncomeCategories))
+      members.value = JSON.parse(JSON.stringify(defaultMembers))
+      merchants.value = JSON.parse(JSON.stringify(defaultMerchants))
+      tags.value = JSON.parse(JSON.stringify(defaultTags))
+      paymentChannels.value = JSON.parse(JSON.stringify(defaultPaymentChannels))
+      
+      saveDimensions()
+      alert('已重置为模板默认数据')
+    })
+  }
+}
+
+onMounted(() => {
+  loadDimensions()
+  
+  // 监听账套切换
+  window.addEventListener('ledgerChanged', handleLedgerChange)
+})
   
   // 确保默认数据存在
   if (expenseCategories.value.length === 0) {

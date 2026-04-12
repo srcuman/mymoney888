@@ -171,6 +171,18 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 
+// 获取账套特定的存储键
+const getStorageKey = (key) => {
+  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
+  return `${key}_${currentLedgerId}`
+}
+
+// 保存账套特定数据
+const saveLedgerData = () => {
+  localStorage.setItem(getStorageKey('accounts'), JSON.stringify(accounts.value))
+  localStorage.setItem(getStorageKey('transactions'), JSON.stringify(transactions.value))
+}
+
 // 支出分类列表（从维度管理获取）
 const expenseCategories = ref([])
 
@@ -388,8 +400,7 @@ const addTransaction = () => {
   }
   
   // 保存到本地存储
-  localStorage.setItem('accounts', JSON.stringify(accounts.value))
-  localStorage.setItem('transactions', JSON.stringify(transactions.value))
+  saveLedgerData()
   
   // 重置表单
   transaction.value = {
@@ -441,8 +452,7 @@ const editTransaction = (editTransaction) => {
     }
   }
   // 保存到本地存储
-  localStorage.setItem('accounts', JSON.stringify(accounts.value))
-  localStorage.setItem('transactions', JSON.stringify(transactions.value))
+  saveLedgerData()
 }
 
 // 复制交易
@@ -512,24 +522,17 @@ const deleteTransaction = (transactionId) => {
       // 从列表中删除
       transactions.value = transactions.value.filter(t => t.id !== transactionId)
       // 保存到本地存储
-      localStorage.setItem('accounts', JSON.stringify(accounts.value))
-      localStorage.setItem('transactions', JSON.stringify(transactions.value))
+      saveLedgerData()
     }
   }
 }
 
-onMounted(() => {
-  // 从本地存储加载数据
-  const savedAccounts = localStorage.getItem('accounts')
-  const savedTransactions = localStorage.getItem('transactions')
-  const savedDimensions = localStorage.getItem('dimensions')
+// 加载账套特定数据
+const loadLedgerData = () => {
+  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
   
-  if (savedAccounts) {
-    accounts.value = JSON.parse(savedAccounts)
-  }
-  if (savedTransactions) {
-    transactions.value = JSON.parse(savedTransactions)
-  }
+  // 加载账套特定的维度数据
+  const savedDimensions = localStorage.getItem(`dimensions_${currentLedgerId}`)
   if (savedDimensions) {
     const dimensions = JSON.parse(savedDimensions)
     paymentChannels.value = dimensions.paymentChannels || []
@@ -539,5 +542,39 @@ onMounted(() => {
     expenseCategories.value = dimensions.expenseCategories || []
     incomeCategories.value = dimensions.incomeCategories || []
   }
+  
+  // 加载账套特定的账户和交易数据
+  const savedAccounts = localStorage.getItem(`accounts_${currentLedgerId}`)
+  if (savedAccounts) {
+    accounts.value = JSON.parse(savedAccounts)
+  } else {
+    // 兼容旧数据
+    const oldAccounts = localStorage.getItem('accounts')
+    if (oldAccounts) {
+      accounts.value = JSON.parse(oldAccounts)
+    }
+  }
+  
+  const savedTransactions = localStorage.getItem(`transactions_${currentLedgerId}`)
+  if (savedTransactions) {
+    transactions.value = JSON.parse(savedTransactions)
+  } else {
+    // 兼容旧数据
+    const oldTransactions = localStorage.getItem('transactions')
+    if (oldTransactions) {
+      transactions.value = JSON.parse(oldTransactions)
+    }
+  }
+}
+
+// 监听账套切换
+const handleLedgerChange = () => {
+  loadLedgerData()
+}
+
+onMounted(() => {
+  loadLedgerData()
+  // 监听账套切换事件
+  window.addEventListener('ledgerChanged', handleLedgerChange)
 })
 </script>
