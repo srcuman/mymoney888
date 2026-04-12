@@ -401,13 +401,13 @@ const filteredTransactions = computed(() => {
       return false
     }
     
-    // 分类过滤
+    // 分类过滤（支持模糊匹配）
     if (filters.value.category && transaction.category !== filters.value.category) {
       return false
     }
     
-    // 账户过滤
-    if (filters.value.account && transaction.account !== filters.value.account) {
+    // 账户过滤（统一类型比较）
+    if (filters.value.account && String(transaction.account) !== String(filters.value.account)) {
       return false
     }
     
@@ -439,7 +439,8 @@ const totalPages = computed(() => {
 
 // 根据账户ID获取账户名称
 const getAccountName = (accountId) => {
-  const account = accounts.value.find(a => a.id === accountId)
+  if (!accountId) return ''
+  const account = accounts.value.find(a => String(a.id) === String(accountId))
   return account ? account.name : ''
 }
 
@@ -513,15 +514,28 @@ const transaction = ref({
   tag: ''
 })
 
-// 添加交易
+// 正在编辑的交易ID（用于区分添加和编辑模式）
+const editingTransactionId = ref(null)
+
+// 添加/保存交易
 const addTransaction = async () => {
-  const newTransaction = {
-    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+  // 表单验证
+  if (!transaction.value.amount || parseFloat(transaction.value.amount) <= 0) {
+    alert('请输入有效金额')
+    return
+  }
+  
+  // 构建交易对象，确保 account 字段为字符串类型
+  const accountId = transaction.value.account?.toString() || ''
+  const toAccountId = transactionType.value === 'transfer' ? (transaction.value.toAccount?.toString() || '') : null
+  
+  const transactionData = {
+    id: editingTransactionId.value || (Date.now().toString() + Math.random().toString(36).substr(2, 9)),
     type: transactionType.value,
     amount: parseFloat(transaction.value.amount),
     category: transaction.value.category,
-    account: transaction.value.account,
-    toAccount: transactionType.value === 'transfer' ? transaction.value.toAccount : null,
+    account: accountId,
+    toAccount: toAccountId,
     description: transaction.value.description,
     paymentChannel: transaction.value.paymentChannel,
     member: transaction.value.member,
@@ -529,34 +543,32 @@ const addTransaction = async () => {
     tag: transaction.value.tag,
     date: new Date().toISOString().split('T')[0]
   }
-  transactions.value.unshift(newTransaction)
   
-  // 检查是否是信用卡账户的交易，并更新信用卡额度
-  const account = accounts.value.find(a => a.id === newTransaction.account)
-  if (account && account.category === 'credit_card') {
-    await updateCreditCardBalance(account.name, newTransaction.type === 'expense' ? newTransaction.amount : -newTransaction.amount)
+  // 如果是编辑模式，先删除原交易
+  if (editingTransactionId.value) {
+    const oldTransaction = transactions.value.find(t => t.id === editingTransactionId.value)
+    if (oldTransaction) {
+      // 还原旧交易影响的账户余额
+      await reverseTransactionEffect(oldTransaction)
+    }
   }
   
-  // 更新账户余额
-  if (transactionType.value === 'transfer') {
-    // 转账：减少转出账户余额，增加转入账户余额
-    const fromAccountIndex = accounts.value.findIndex(a => a.id === newTransaction.account)
-    const toAccountIndex = accounts.value.findIndex(a => a.id === newTransaction.toAccount)
-    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
-      accounts.value[fromAccountIndex].balance -= newTransaction.amount
-      accounts.value[toAccountIndex].balance += newTransaction.amount
+  // 添加新交易或更新
+  if (editingTransactionId.value) {
+    // 编辑模式：在原位置插入更新后的交易
+    const index = transactions.value.findIndex(t => t.id === editingTransactionId.value)
+    if (index !== -1) {
+      transactions.value[index] = transactionData
+    } else {
+      transactions.value.unshift(transactionData)
     }
   } else {
-    // 收入/支出：更新单个账户余额
-    const accountIndex = accounts.value.findIndex(a => a.id === newTransaction.account)
-    if (accountIndex !== -1) {
-      if (newTransaction.type === 'income') {
-        accounts.value[accountIndex].balance += newTransaction.amount
-      } else {
-        accounts.value[accountIndex].balance -= newTransaction.amount
-      }
-    }
+    // 添加模式
+    transactions.value.unshift(transactionData)
   }
+  
+  // 应用新交易的影响
+  await applyTransactionEffect(transactionData)
   
   // 保存到本地存储
   saveLedgerData()
@@ -568,6 +580,69 @@ const addTransaction = async () => {
   window.dispatchEvent(new CustomEvent('accountsUpdated'))
   
   // 重置表单
+  resetTransactionForm()
+}
+
+// 应用交易的影响（更新信用卡额度、账户余额）
+const applyTransactionEffect = async (trans) => {
+  // 检查是否是信用卡账户的交易，并更新信用卡额度
+  const account = accounts.value.find(a => String(a.id) === String(trans.account))
+  if (account && account.category === 'credit_card') {
+    await updateCreditCardBalance(account.name, trans.type === 'expense' ? trans.amount : -trans.amount)
+  }
+  
+  // 更新账户余额
+  if (trans.type === 'transfer') {
+    // 转账：减少转出账户余额，增加转入账户余额
+    const fromAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
+    const toAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.toAccount))
+    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
+      accounts.value[fromAccountIndex].balance -= trans.amount
+      accounts.value[toAccountIndex].balance += trans.amount
+    }
+  } else {
+    // 收入/支出：更新单个账户余额
+    const accountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
+    if (accountIndex !== -1) {
+      if (trans.type === 'income') {
+        accounts.value[accountIndex].balance += trans.amount
+      } else {
+        accounts.value[accountIndex].balance -= trans.amount
+      }
+    }
+  }
+}
+
+// 还原交易的影响（用于编辑前或删除时）
+const reverseTransactionEffect = async (trans) => {
+  // 还原信用卡额度
+  const account = accounts.value.find(a => String(a.id) === String(trans.account))
+  if (account && account.category === 'credit_card') {
+    await updateCreditCardBalance(account.name, trans.type === 'expense' ? -trans.amount : trans.amount)
+  }
+  
+  // 还原账户余额
+  if (trans.type === 'transfer') {
+    const fromAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
+    const toAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.toAccount))
+    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
+      accounts.value[fromAccountIndex].balance += trans.amount
+      accounts.value[toAccountIndex].balance -= trans.amount
+    }
+  } else {
+    const accountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
+    if (accountIndex !== -1) {
+      if (trans.type === 'income') {
+        accounts.value[accountIndex].balance -= trans.amount
+      } else {
+        accounts.value[accountIndex].balance += trans.amount
+      }
+    }
+  }
+}
+
+// 重置交易表单
+const resetTransactionForm = () => {
   transaction.value = {
     amount: '',
     category: '',
@@ -580,6 +655,7 @@ const addTransaction = async () => {
     tag: ''
   }
   transactionType.value = 'expense'
+  editingTransactionId.value = null
 }
 
 // 更新信用卡额度
@@ -605,70 +681,45 @@ const updateCreditCardBalance = async (cardName, amountChange) => {
 }
 
 // 编辑交易
-const editTransaction = async (editTransaction) => {
+const editTransaction = (editTransaction) => {
+  // 设置编辑模式
+  editingTransactionId.value = editTransaction.id
   transactionType.value = editTransaction.type
   transaction.value = {
-    amount: editTransaction.amount,
-    category: editTransaction.category,
-    account: editTransaction.account.toString(),
+    amount: editTransaction.amount?.toString() || '',
+    category: editTransaction.category || '',
+    account: editTransaction.account?.toString() || '',
     toAccount: editTransaction.toAccount ? editTransaction.toAccount.toString() : '',
-    description: editTransaction.description,
+    description: editTransaction.description || '',
     paymentChannel: editTransaction.paymentChannel || '',
     member: editTransaction.member || '',
     merchant: editTransaction.merchant || '',
     tag: editTransaction.tag || ''
   }
   
-  // 获取账户信息检查是否是信用卡
-  const account = accounts.value.find(a => a.id === editTransaction.account)
-  if (account && account.category === 'credit_card') {
-    // 编辑交易的反向操作：如果是支出（增加欠款），现在要减少欠款
-    const reverseAmount = editTransaction.type === 'expense' ? -editTransaction.amount : editTransaction.amount
-    await updateCreditCardBalance(account.name, reverseAmount)
-  }
-  
-  // 从列表中删除该交易
-  transactions.value = transactions.value.filter(t => t.id !== editTransaction.id)
-  // 更新账户余额
-  if (editTransaction.type === 'transfer') {
-    const fromAccountIndex = accounts.value.findIndex(a => a.id === editTransaction.account)
-    const toAccountIndex = accounts.value.findIndex(a => a.id === editTransaction.toAccount)
-    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
-      accounts.value[fromAccountIndex].balance += editTransaction.amount
-      accounts.value[toAccountIndex].balance -= editTransaction.amount
-    }
-  } else {
-    const accountIndex = accounts.value.findIndex(a => a.id === editTransaction.account)
-    if (accountIndex !== -1) {
-      if (editTransaction.type === 'income') {
-        accounts.value[accountIndex].balance -= editTransaction.amount
-      } else {
-        accounts.value[accountIndex].balance += editTransaction.amount
-      }
-    }
-  }
-  // 保存到本地存储
-  saveLedgerData()
-  // 同步交易到数据库
-  await syncService.syncOnDataChange('transactions')
-  // 通知其他组件账户已更新
-  window.dispatchEvent(new CustomEvent('accountsUpdated'))
+  // 滚动到表单区域（如果需要）
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-// 复制交易
+// 复制交易（创建新交易，填充表单）
 const copyTransaction = (copyTransaction) => {
+  // 重置编辑模式（新交易）
+  editingTransactionId.value = null
   transactionType.value = copyTransaction.type
   transaction.value = {
-    amount: copyTransaction.amount,
-    category: copyTransaction.category,
-    account: copyTransaction.account.toString(),
+    amount: copyTransaction.amount?.toString() || '',
+    category: copyTransaction.category || '',
+    account: copyTransaction.account?.toString() || '',
     toAccount: copyTransaction.toAccount ? copyTransaction.toAccount.toString() : '',
-    description: copyTransaction.description,
+    description: copyTransaction.description || '',
     paymentChannel: copyTransaction.paymentChannel || '',
     member: copyTransaction.member || '',
     merchant: copyTransaction.merchant || '',
     tag: copyTransaction.tag || ''
   }
+  
+  // 滚动到表单区域
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 // 金额计算功能
@@ -701,34 +752,17 @@ const deleteTransaction = async (transactionId) => {
   if (confirm('确定要删除这条交易记录吗？')) {
     const transactionToDelete = transactions.value.find(t => t.id === transactionId)
     if (transactionToDelete) {
-      // 检查是否是信用卡账户的交易
-      const account = accounts.value.find(a => a.id === transactionToDelete.account)
-      if (account && account.category === 'credit_card') {
-        // 删除的反向操作：如果是支出（增加欠款），现在要减少欠款
-        const reverseAmount = transactionToDelete.type === 'expense' ? -transactionToDelete.amount : transactionToDelete.amount
-        await updateCreditCardBalance(account.name, reverseAmount)
+      // 还原交易的影响
+      await reverseTransactionEffect(transactionToDelete)
+      
+      // 如果正在编辑这个交易，重置表单
+      if (editingTransactionId.value === transactionId) {
+        resetTransactionForm()
       }
       
-      // 更新账户余额
-      if (transactionToDelete.type === 'transfer') {
-        const fromAccountIndex = accounts.value.findIndex(a => a.id === transactionToDelete.account)
-        const toAccountIndex = accounts.value.findIndex(a => a.id === transactionToDelete.toAccount)
-        if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
-          accounts.value[fromAccountIndex].balance += transactionToDelete.amount
-          accounts.value[toAccountIndex].balance -= transactionToDelete.amount
-        }
-      } else {
-        const accountIndex = accounts.value.findIndex(a => a.id === transactionToDelete.account)
-        if (accountIndex !== -1) {
-          if (transactionToDelete.type === 'income') {
-            accounts.value[accountIndex].balance -= transactionToDelete.amount
-          } else {
-            accounts.value[accountIndex].balance += transactionToDelete.amount
-          }
-        }
-      }
       // 从列表中删除
       transactions.value = transactions.value.filter(t => t.id !== transactionId)
+      
       // 保存到本地存储
       saveLedgerData()
       // 同步交易到数据库
@@ -792,13 +826,33 @@ onMounted(() => {
   window.addEventListener('showBillDetail', (e) => {
     if (e.detail && e.detail.billId) {
       const bills = loadCreditCardBills()
-      const bill = bills.find(b => b.id === e.detail.billId)
+      const bill = bills.find(b => String(b.id) === String(e.detail.billId))
       if (bill) {
-        const billTransactions = transactions.value.filter(t => t.creditCardBillId === e.detail.billId)
+        // 获取账套特定的交易数据
+        const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
+        let allTransactions = []
+        const savedTransactions = localStorage.getItem(`transactions_${currentLedgerId}`)
+        if (savedTransactions) {
+          allTransactions = JSON.parse(savedTransactions)
+        } else {
+          const oldTransactions = localStorage.getItem('transactions')
+          if (oldTransactions) {
+            allTransactions = JSON.parse(oldTransactions)
+          }
+        }
+        
+        const billTransactions = allTransactions.filter(t => String(t.creditCardBillId) === String(e.detail.billId))
         billDetail.value = { ...bill, transactions: billTransactions }
         showBillModal.value = true
+      } else {
+        console.warn('未找到账单:', e.detail.billId)
       }
     }
+  })
+  
+  // 监听交易数据更新事件，刷新数据
+  window.addEventListener('transactionsUpdated', () => {
+    loadLedgerData()
   })
 })
 

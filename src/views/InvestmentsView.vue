@@ -438,7 +438,22 @@
       
       <!-- 收益分析 -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-8">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">收益分析</h3>
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">收益分析</h3>
+          <div class="flex items-center space-x-4">
+            <div class="flex items-center">
+              <label class="text-sm text-gray-600 dark:text-gray-400 mr-2">时间区间:</label>
+              <select v-model="profitTimeRange" @change="updateProfitAnalysisChart" class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white">
+                <option value="all">全部时间</option>
+                <option value="1m">近1月</option>
+                <option value="3m">近3月</option>
+                <option value="6m">近6月</option>
+                <option value="1y">近1年</option>
+                <option value="ytd">今年至今</option>
+              </select>
+            </div>
+          </div>
+        </div>
         <div class="h-64">
           <canvas ref="profitAnalysisChart"></canvas>
         </div>
@@ -446,7 +461,12 @@
       
       <!-- 收益明细 -->
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">收益明细</h3>
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">收益明细</h3>
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ filteredProfitDetails.length }} 个投资品种
+          </span>
+        </div>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead class="bg-gray-50 dark:bg-gray-800">
@@ -472,7 +492,7 @@
               </tr>
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              <tr v-for="detail in investmentDetails" :key="detail.id">
+              <tr v-for="detail in filteredProfitDetails" :key="detail.id">
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="text-sm font-medium text-gray-900 dark:text-white">{{ detail.name }}</div>
                   <div class="text-xs text-gray-500 dark:text-gray-400">{{ detail.code }}</div>
@@ -572,6 +592,11 @@ const investmentAccounts = ref([])
 // 投资明细列表
 const investmentDetails = ref([])
 
+// 筛选后的投资明细（用于收益分析）
+const filteredProfitDetails = computed(() => {
+  return filterInvestmentDetailsByTimeRange()
+})
+
 // 历史净值记录 (用于收益分析)
 const netValueHistory = ref([])
 
@@ -579,6 +604,9 @@ const netValueHistory = ref([])
 const typeDistributionChart = ref(null)
 const accountDistributionChart = ref(null)
 const profitAnalysisChart = ref(null)
+
+// 收益分析时间区间筛选
+const profitTimeRange = ref('all')
 
 // 图表实例
 let typeChartInstance = null
@@ -1468,8 +1496,11 @@ const updateProfitAnalysisChart = () => {
     profitChartInstance.destroy()
   }
   
-  const labels = investmentDetails.value.map(detail => detail.name)
-  const profitData = investmentDetails.value.map(detail => {
+  // 根据时间区间筛选净值历史数据
+  const filteredDetails = filterInvestmentDetailsByTimeRange()
+  
+  const labels = filteredDetails.map(detail => detail.name)
+  const profitData = filteredDetails.map(detail => {
     return (detail.currentPrice - detail.costPrice) * detail.shares
   })
   const backgroundColor = profitData.map(profit => {
@@ -1506,6 +1537,43 @@ const updateProfitAnalysisChart = () => {
         }
       }
     }
+  })
+}
+
+// 根据时间区间筛选投资明细
+const filterInvestmentDetailsByTimeRange = () => {
+  if (profitTimeRange.value === 'all') {
+    return investmentDetails.value
+  }
+  
+  const now = new Date()
+  let startDate = null
+  
+  switch (profitTimeRange.value) {
+    case '1m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+      break
+    case '3m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())
+      break
+    case '6m':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate())
+      break
+    case '1y':
+      startDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+      break
+    case 'ytd':
+      startDate = new Date(now.getFullYear(), 0, 1) // 今年1月1日
+      break
+    default:
+      return investmentDetails.value
+  }
+  
+  // 过滤净值历史记录
+  return investmentDetails.value.filter(detail => {
+    if (!detail.lastUpdateDate) return true // 没有日期的显示
+    const updateDate = new Date(detail.lastUpdateDate)
+    return updateDate >= startDate
   })
 }
 
