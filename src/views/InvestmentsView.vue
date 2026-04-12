@@ -818,57 +818,47 @@ const fetchInvestmentInfo = async (code, userSelectedType = null) => {
     throw new Error('代码格式不正确，请输入6位数字代码')
   }
   
-  // 根据用户选择的类型或代码规则判断品种类型
-  // 优先级：用户选择 > 代码规则
-  let isFund = false
-  let isStock = false
+  // 基金代码前缀：5开头（场外基金）、15开头（上交所ETF）、1开头（货币/理财基金）
+  // 注意：0、2、4、8开头也可能是基金（如东吴基金005310）
+  // 股票代码前缀：6开头（上交所）、0/3开头（深交所）、8开头（北交所）
   
-  if (userSelectedType === '基金') {
-    isFund = true
-    isStock = false
-  } else if (userSelectedType === '股票') {
-    isFund = false
-    isStock = true
-  } else {
-    // 根据代码规则判断
-    // 基金代码规则：
-    // - 5开头：场外基金（大多数）
-    // - 15开头：上交所ETF
-    // - 1开头：货币基金、理财基金
-    // 注意：0开头的基金很少（如东吴基金005310），且和股票代码冲突
-    // 股票代码规则：
-    // - 6开头：上海证券交易所
-    // - 0开头：深圳证券交易所（包括主板、中小板）
-    // - 3开头：创业板
-    // - 8开头：北京证券交易所
-    isFund = code.startsWith('5') || code.startsWith('15') || code.startsWith('1')
-    isStock = code.startsWith('6') || code.startsWith('0') || code.startsWith('3') || code.startsWith('8')
-  }
+  const fundPrefixes = ['5', '15', '1', '0', '2', '4', '8']
+  const stockPrefixes = ['6', '0', '3', '8']
   
-  const isShanghaiStock = code.startsWith('6')
-  const isShenzhenStock = code.startsWith('0') || code.startsWith('3')
-  const isBeijingStock = code.startsWith('8')
+  // 判断是否为基金/股票代码前缀
+  const isPossibleFund = fundPrefixes.some(prefix => code.startsWith(prefix))
+  const isPossibleStock = stockPrefixes.some(prefix => code.startsWith(prefix))
   
-  // 并行调用多个API，根据代码类型选择合适的API
+  // 并行调用多个API
   const apiPromises = []
   
-  // 基金API - 优先使用实时估值
-  if (isFund) {
+  // 基金API - 如果可能是基金（5/15/1开头），或用户明确选择基金
+  if (isPossibleFund || userSelectedType === '基金') {
     apiPromises.push(fetchSingleAPI(`/api/js/${code}.js`, '天天基金实时估值', code))
   }
   
-  // 股票API - 腾讯财经
-  if (isShanghaiStock) {
-    apiPromises.push(fetchSingleAPI(`/stock/sh${code}`, '腾讯财经上海', code))
-    apiPromises.push(fetchSingleAPI(`/sina/sh${code}`, '新浪财经上海', code))
+  // 股票API - 如果可能是股票（6/0/3/8开头），或用户明确选择股票
+  // 注意：0开头需要特别处理，可能同时是基金和股票
+  if (isPossibleStock || userSelectedType === '股票') {
+    // 上海股票 (6开头)
+    if (code.startsWith('6')) {
+      apiPromises.push(fetchSingleAPI(`/stock/sh${code}`, '腾讯财经上海', code))
+      apiPromises.push(fetchSingleAPI(`/sina/sh${code}`, '新浪财经上海', code))
+    }
+    // 深圳股票 (0/3开头)
+    if (code.startsWith('0') || code.startsWith('3')) {
+      apiPromises.push(fetchSingleAPI(`/stock/sz${code}`, '腾讯财经深圳', code))
+      apiPromises.push(fetchSingleAPI(`/sina/sz${code}`, '新浪财经深圳', code))
+    }
+    // 北京股票 (8开头)
+    if (code.startsWith('8')) {
+      apiPromises.push(fetchSingleAPI(`/sina/bj${code}`, '新浪财经北京', code))
+    }
   }
-  if (isShenzhenStock) {
-    apiPromises.push(fetchSingleAPI(`/stock/sz${code}`, '腾讯财经深圳', code))
-    apiPromises.push(fetchSingleAPI(`/sina/sz${code}`, '新浪财经深圳', code))
-  }
-  if (isBeijingStock) {
-    apiPromises.push(fetchSingleAPI(`/stock/sz${code}`, '腾讯财经北京', code))
-    apiPromises.push(fetchSingleAPI(`/sina/bj${code}`, '新浪财经北京', code))
+  
+  // 0开头的特殊处理：可能是基金也可能是股票，同时调用两种API
+  if (code.startsWith('0') && !userSelectedType) {
+    apiPromises.push(fetchSingleAPI(`/api/js/${code}.js`, '天天基金实时估值', code))
   }
   
   // 等待所有API调用完成，使用 Promise.race 获取最快响应
