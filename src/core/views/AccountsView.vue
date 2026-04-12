@@ -74,7 +74,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import coreDataStore from '../services/core-data-store.js'
+import coreDataStore from '../../services/core-data-store.js'
 
 // 账户类别列表
 const accountCategories = [

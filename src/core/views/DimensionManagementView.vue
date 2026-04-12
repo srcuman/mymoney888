@@ -333,7 +333,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import coreDataStore from '../services/core-data-store.js'
+import coreDataStore from '../../services/core-data-store.js'
 
 // 活跃标签页
 const activeTab = ref('categories')
