@@ -923,8 +923,8 @@ const fetchInvestmentInfo = async (code, userSelectedType = null) => {
   // 所有API都失败，尝试备用API
   console.log('主API失败，尝试备用API...')
   
-  // 备用基金API
-  if (isFund) {
+  // 备用基金API - 只在可能是基金的情况下尝试
+  if (isPossibleFund || userSelectedType === '基金') {
     const backupResult = await fetchSingleAPI(`/fund/pingzhongdata/${code}.js`, '天天基金基本信息', code)
     const parsed = parseAPIResponse(backupResult, code)
     if (parsed) {
@@ -999,9 +999,9 @@ const fetchAndFillInvestmentInfo = async (code, mode) => {
   } catch (error) {
     addApiLog(`获取失败: ${error.message}`)
     console.error(`获取失败:`, error)
-    // 清空自动填充的字段，让用户手动输入
+    // 只清空自动填充的字段，保留用户已选择的类型
+    // type由用户手动选择，不自动清空，避免循环调用
     targetRef.value.name = ''
-    targetRef.value.type = ''
     targetRef.value.currentPrice = 0
   }
 }
