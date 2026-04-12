@@ -681,7 +681,7 @@ const openEditInvestmentDetailModal = (detail) => {
 }
 
 // 添加投资账户
-const addInvestmentAccount = () => {
+const addInvestmentAccount = async () => {
   const newAccount = {
     id: Date.now().toString(),
     name: newInvestmentAccount.value.name,
@@ -691,12 +691,12 @@ const addInvestmentAccount = () => {
     profitLoss: 0
   }
   investmentAccounts.value.push(newAccount)
-  saveInvestmentAccounts()
+  await saveInvestmentAccounts()
   showAddInvestmentAccountModal.value = false
 }
 
 // 更新投资账户
-const updateInvestmentAccount = () => {
+const updateInvestmentAccount = async () => {
   const index = investmentAccounts.value.findIndex(a => a.id === editInvestmentAccount.value.id)
   if (index !== -1) {
     investmentAccounts.value[index] = {
@@ -705,17 +705,17 @@ const updateInvestmentAccount = () => {
       type: editInvestmentAccount.value.type,
       description: editInvestmentAccount.value.description
     }
-    saveInvestmentAccounts()
+    await saveInvestmentAccounts()
     showEditInvestmentAccountModal.value = false
   }
 }
 
 // 删除投资账户
-const deleteInvestmentAccount = (id) => {
+const deleteInvestmentAccount = async (id) => {
   investmentAccounts.value = investmentAccounts.value.filter(a => a.id !== id)
   investmentDetails.value = investmentDetails.value.filter(d => d.accountId !== id)
-  saveInvestmentAccounts()
-  saveInvestmentDetails()
+  await saveInvestmentAccounts()
+  await saveInvestmentDetails()
 }
 
 // 格式化更新时间显示
@@ -1075,7 +1075,7 @@ const fetchAndFillInvestmentInfo = async (code, mode) => {
 }
 
 // 添加投资明细
-const addInvestmentDetail = () => {
+const addInvestmentDetail = async () => {
   const account = investmentAccounts.value.find(a => a.id === newInvestmentDetail.value.accountId)
   const today = new Date().toISOString().split('T')[0]
   const newDetail = {
@@ -1093,14 +1093,14 @@ const addInvestmentDetail = () => {
   }
   investmentDetails.value.push(newDetail)
   updateAccountAsset(newInvestmentDetail.value.accountId)
-  saveInvestmentDetails()
+  await saveInvestmentDetails()
   // 异步记录净值历史（不阻塞UI）
   recordNetValue(newDetail).catch(err => console.error('记录净值失败:', err))
   showAddInvestmentDetailModal.value = false
 }
 
 // 更新投资明细
-const updateInvestmentDetail = () => {
+const updateInvestmentDetail = async () => {
   const index = investmentDetails.value.findIndex(d => d.id === editInvestmentDetail.value.id)
   if (index !== -1) {
     const oldAccountId = investmentDetails.value[index].accountId
@@ -1119,23 +1119,23 @@ const updateInvestmentDetail = () => {
     }
     updateAccountAsset(oldAccountId)
     updateAccountAsset(editInvestmentDetail.value.accountId)
-    saveInvestmentDetails()
+    await saveInvestmentDetails()
     showEditInvestmentDetailModal.value = false
   }
 }
 
 // 删除投资明细
-const deleteInvestmentDetail = (id) => {
+const deleteInvestmentDetail = async (id) => {
   const detail = investmentDetails.value.find(d => d.id === id)
   if (detail) {
     investmentDetails.value = investmentDetails.value.filter(d => d.id !== id)
     updateAccountAsset(detail.accountId)
-    saveInvestmentDetails()
+    await saveInvestmentDetails()
   }
 }
 
 // 更新账户资产
-const updateAccountAsset = (accountId) => {
+const updateAccountAsset = async (accountId) => {
   const account = investmentAccounts.value.find(a => a.id === accountId)
   if (account) {
     const accountDetails = investmentDetails.value.filter(d => d.accountId === accountId)
@@ -1145,21 +1145,40 @@ const updateAccountAsset = (accountId) => {
     
     account.totalAsset = totalAsset
     account.profitLoss = profitLoss
-    saveInvestmentAccounts()
-    
-    // 通知其他组件账户已更新
-    window.dispatchEvent(new CustomEvent('investmentAccountsUpdated'))
+    await saveInvestmentAccounts()
   }
 }
 
-// 保存投资账户到本地存储
-const saveInvestmentAccounts = () => {
+// 保存投资账户到本地存储并同步数据库
+const saveInvestmentAccounts = async () => {
   localStorage.setItem('investmentAccounts', JSON.stringify(investmentAccounts.value))
+  // 同步到数据库
+  try {
+    const user = JSON.parse(localStorage.getItem('user'))
+    if (user && user.id && navigator.onLine) {
+      await syncService.syncOnDataChange('investmentAccounts')
+    }
+  } catch (error) {
+    console.error('同步投资账户到数据库失败:', error)
+  }
+  // 通知其他组件投资账户已更新
+  window.dispatchEvent(new CustomEvent('investmentAccountsUpdated'))
 }
 
-// 保存投资明细到本地存储
-const saveInvestmentDetails = () => {
+// 保存投资明细到本地存储并同步数据库
+const saveInvestmentDetails = async () => {
   localStorage.setItem('investmentDetails', JSON.stringify(investmentDetails.value))
+  // 同步到数据库
+  try {
+    const user = JSON.parse(localStorage.getItem('user'))
+    if (user && user.id && navigator.onLine) {
+      await syncService.syncOnDataChange('investmentDetails')
+    }
+  } catch (error) {
+    console.error('同步投资明细到数据库失败:', error)
+  }
+  // 通知其他组件投资账户已更新（因为明细变化会影响账户余额）
+  window.dispatchEvent(new CustomEvent('investmentAccountsUpdated'))
 }
 
 // 保存历史净值记录（本地+数据库）
@@ -1259,11 +1278,11 @@ const refreshAllNetValues = async () => {
   }
   
   for (const account of investmentAccounts.value) {
-    updateAccountAsset(account.id)
+    await updateAccountAsset(account.id)
   }
   
-  saveInvestmentDetails()
-  saveInvestmentAccounts()
+  await saveInvestmentDetails()
+  await saveInvestmentAccounts()
   
   addApiLog(`刷新完成: 成功${successCount}个, 失败${failCount}个`)
   isRefreshing.value = false
@@ -1556,12 +1575,12 @@ const scheduleNetValueUpdate = () => {
     
     // 更新账户资产
     for (const account of investmentAccounts.value) {
-      updateAccountAsset(account.id)
+      await updateAccountAsset(account.id)
     }
     
     // 保存数据
-    saveInvestmentDetails()
-    saveInvestmentAccounts()
+    await saveInvestmentDetails()
+    await saveInvestmentAccounts()
     
     console.log('Net value update completed')
   }

@@ -322,6 +322,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import syncService from '../services/sync-service.js'
 
 // 获取账套特定的存储键
 const getStorageKey = (key) => {
@@ -513,7 +514,7 @@ const transaction = ref({
 })
 
 // 添加交易
-const addTransaction = () => {
+const addTransaction = async () => {
   const newTransaction = {
     id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
     type: transactionType.value,
@@ -529,6 +530,12 @@ const addTransaction = () => {
     date: new Date().toISOString().split('T')[0]
   }
   transactions.value.unshift(newTransaction)
+  
+  // 检查是否是信用卡账户的交易，并更新信用卡额度
+  const account = accounts.value.find(a => a.id === newTransaction.account)
+  if (account && account.category === 'credit_card') {
+    await updateCreditCardBalance(account.name, newTransaction.type === 'expense' ? newTransaction.amount : -newTransaction.amount)
+  }
   
   // 更新账户余额
   if (transactionType.value === 'transfer') {
@@ -554,6 +561,12 @@ const addTransaction = () => {
   // 保存到本地存储
   saveLedgerData()
   
+  // 同步交易到数据库
+  await syncService.syncOnDataChange('transactions')
+  
+  // 通知其他组件账户已更新
+  window.dispatchEvent(new CustomEvent('accountsUpdated'))
+  
   // 重置表单
   transaction.value = {
     amount: '',
@@ -569,8 +582,30 @@ const addTransaction = () => {
   transactionType.value = 'expense'
 }
 
+// 更新信用卡额度
+const updateCreditCardBalance = async (cardName, amountChange) => {
+  try {
+    const savedCards = localStorage.getItem('creditCards')
+    if (savedCards) {
+      const creditCards = JSON.parse(savedCards)
+      const cardIndex = creditCards.findIndex(c => c.name === cardName)
+      if (cardIndex !== -1) {
+        // amountChange 为正表示增加欠款（消费），为负表示减少欠款（还款）
+        creditCards[cardIndex].availableCredit -= amountChange
+        localStorage.setItem('creditCards', JSON.stringify(creditCards))
+        // 同步到数据库
+        await syncService.syncOnDataChange('creditCards')
+        // 通知信用卡数据已更新
+        window.dispatchEvent(new CustomEvent('creditCardsUpdated'))
+      }
+    }
+  } catch (error) {
+    console.error('更新信用卡额度失败:', error)
+  }
+}
+
 // 编辑交易
-const editTransaction = (editTransaction) => {
+const editTransaction = async (editTransaction) => {
   transactionType.value = editTransaction.type
   transaction.value = {
     amount: editTransaction.amount,
@@ -583,6 +618,15 @@ const editTransaction = (editTransaction) => {
     merchant: editTransaction.merchant || '',
     tag: editTransaction.tag || ''
   }
+  
+  // 获取账户信息检查是否是信用卡
+  const account = accounts.value.find(a => a.id === editTransaction.account)
+  if (account && account.category === 'credit_card') {
+    // 编辑交易的反向操作：如果是支出（增加欠款），现在要减少欠款
+    const reverseAmount = editTransaction.type === 'expense' ? -editTransaction.amount : editTransaction.amount
+    await updateCreditCardBalance(account.name, reverseAmount)
+  }
+  
   // 从列表中删除该交易
   transactions.value = transactions.value.filter(t => t.id !== editTransaction.id)
   // 更新账户余额
@@ -605,6 +649,10 @@ const editTransaction = (editTransaction) => {
   }
   // 保存到本地存储
   saveLedgerData()
+  // 同步交易到数据库
+  await syncService.syncOnDataChange('transactions')
+  // 通知其他组件账户已更新
+  window.dispatchEvent(new CustomEvent('accountsUpdated'))
 }
 
 // 复制交易
@@ -649,10 +697,18 @@ const calculateAmount = () => {
 }
 
 // 删除交易
-const deleteTransaction = (transactionId) => {
+const deleteTransaction = async (transactionId) => {
   if (confirm('确定要删除这条交易记录吗？')) {
     const transactionToDelete = transactions.value.find(t => t.id === transactionId)
     if (transactionToDelete) {
+      // 检查是否是信用卡账户的交易
+      const account = accounts.value.find(a => a.id === transactionToDelete.account)
+      if (account && account.category === 'credit_card') {
+        // 删除的反向操作：如果是支出（增加欠款），现在要减少欠款
+        const reverseAmount = transactionToDelete.type === 'expense' ? -transactionToDelete.amount : transactionToDelete.amount
+        await updateCreditCardBalance(account.name, reverseAmount)
+      }
+      
       // 更新账户余额
       if (transactionToDelete.type === 'transfer') {
         const fromAccountIndex = accounts.value.findIndex(a => a.id === transactionToDelete.account)
@@ -675,6 +731,10 @@ const deleteTransaction = (transactionId) => {
       transactions.value = transactions.value.filter(t => t.id !== transactionId)
       // 保存到本地存储
       saveLedgerData()
+      // 同步交易到数据库
+      await syncService.syncOnDataChange('transactions')
+      // 通知其他组件账户已更新
+      window.dispatchEvent(new CustomEvent('accountsUpdated'))
     }
   }
 }

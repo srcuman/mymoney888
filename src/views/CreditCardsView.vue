@@ -295,12 +295,23 @@ const payBill = async (bill) => {
       creditCardBills.value[index].remainingAmount = 0
       creditCardBills.value[index].status = 'paid'
     }
+    
+    // 更新信用卡可用额度（还款后可用额度增加）
+    const cardIndex = creditCards.value.findIndex(c => c.name === bill.cardName)
+    if (cardIndex !== -1) {
+      creditCards.value[cardIndex].availableCredit += bill.remainingAmount
+      localStorage.setItem('creditCards', JSON.stringify(creditCards.value))
+    }
+    
     // 保存到本地存储
     localStorage.setItem('creditCardBills', JSON.stringify(creditCardBills.value))
     // 同步到数据库
     await syncService.syncOnDataChange('creditCardBills')
+    await syncService.syncOnDataChange('creditCards')
     // 通知其他组件信用卡数据已更新
     window.dispatchEvent(new CustomEvent('creditCardsUpdated'))
+    // 触发账户更新事件
+    window.dispatchEvent(new CustomEvent('accountsUpdated'))
   }
 }
 
@@ -335,13 +346,7 @@ const getInstallmentCount = (billId) => {
 
 // 查看账单交易详情
 const viewBillTransactions = (bill) => {
-  // 跳转到交易流水并筛选该账单的交易
-  // 通过URL参数传递账单ID
-  window.dispatchEvent(new CustomEvent('navigateToTransactions', {
-    detail: { billId: bill.id }
-  }))
-  
-  // 同时触发事件让HomeView打开账单详情
+  // 派发事件让HomeView打开账单详情模态框
   window.dispatchEvent(new CustomEvent('showBillDetail', {
     detail: { billId: bill.id }
   }))
