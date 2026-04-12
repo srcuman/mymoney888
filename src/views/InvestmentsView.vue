@@ -1146,6 +1146,9 @@ const updateAccountAsset = (accountId) => {
     account.totalAsset = totalAsset
     account.profitLoss = profitLoss
     saveInvestmentAccounts()
+    
+    // 通知其他组件账户已更新
+    window.dispatchEvent(new CustomEvent('investmentAccountsUpdated'))
   }
 }
 

@@ -43,6 +43,32 @@
         </div>
       </div>
       
+      <!-- 账户筛选 -->
+      <div class="mb-6">
+        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">账户筛选</h3>
+        <div class="relative">
+          <button @click="toggleDropdown('accounts')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white text-sm flex justify-between items-center">
+            <span>{{ selectedAccountsCount > 0 ? `已选择 ${selectedAccountsCount} 个账户` : '选择账户（支持投资/信用卡/贷款）' }}</span>
+            <span>{{ dropdowns.accounts ? '▼' : '▶' }}</span>
+          </button>
+          <div v-if="dropdowns.accounts" class="absolute z-10 w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto bg-white dark:bg-gray-700 mt-1">
+            <div v-if="accounts.length > 0" class="p-2 border-b border-gray-200 dark:border-gray-700">
+              <button @click="selectAllAccounts()" class="text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 w-full text-left px-2 py-1 rounded">全选</button>
+            </div>
+            <div v-for="account in accounts" :key="account.id" class="p-2">
+              <div class="flex items-center">
+                <input type="checkbox" :checked="filters.account.includes(account.id)" @change="selectAccount(account.id)" class="mr-2">
+                <label class="text-sm text-gray-700 dark:text-gray-300">{{ account.name }}</label>
+                <span v-if="account.type === 'investment'" class="ml-2 text-xs text-blue-500">投资</span>
+                <span v-if="account.type === 'credit'" class="ml-2 text-xs text-red-500">信用</span>
+                <span v-if="account.type === 'loan'" class="ml-2 text-xs text-orange-500">贷款</span>
+              </div>
+            </div>
+            <div v-if="accounts.length === 0" class="p-2 text-sm text-gray-500 dark:text-gray-400">无账户数据</div>
+          </div>
+        </div>
+      </div>
+      
       <!-- 分类筛选 -->
       <div class="mb-6">
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">分类筛选</h3>
@@ -422,8 +448,15 @@ const filters = ref({
   merchant: [],
   tag: [],
   paymentChannel: [],
-  category: []
+  category: [],
+  account: []  // 账户筛选
 })
+
+// 账户列表（包含所有类型）
+const accounts = ref([])
+
+// 已选账户数量
+const selectedAccountsCount = computed(() => filters.value.account.length)
 
 // 成员列表
 const members = ref([])
@@ -466,6 +499,7 @@ const expandedCategories = ref([])
 
 // 下拉框显示状态
 const dropdowns = ref({
+  accounts: false,
   incomeCategories: false,
   expenseCategories: false,
   members: false,
@@ -702,6 +736,17 @@ const filteredTransactions = computed(() => {
     result = result.filter(t => filters.value.category.includes(t.category))
   }
   
+  // 账户过滤（多选）
+  if (filters.value.account.length > 0) {
+    result = result.filter(t => {
+      // 账户ID可能是普通ID或带前缀的ID(inv_, cc_, loan_)
+      return filters.value.account.includes(t.account) || 
+             filters.value.account.includes(`inv_${t.account}`) ||
+             filters.value.account.includes(`cc_${t.account}`) ||
+             filters.value.account.includes(`loan_${t.account}`)
+    })
+  }
+  
   return result
 })
 
@@ -712,7 +757,8 @@ const resetFilters = () => {
     merchant: [],
     tag: [],
     paymentChannel: [],
-    category: []
+    category: [],
+    account: []
   }
 }
 
@@ -989,9 +1035,96 @@ onMounted(() => {
     expenseCategoryList.value = dimensions.expenseCategories || []
   }
   
+  // 加载所有账户类型
+  loadAllAccounts()
+  
   // 初始化时间范围为本月
   setTimeRange('thisMonth')
 })
+
+// 加载所有账户类型
+const loadAllAccounts = () => {
+  accounts.value = []
+  
+  // 加载普通账户
+  try {
+    const savedAccounts = localStorage.getItem('accounts')
+    if (savedAccounts) {
+      const accts = JSON.parse(savedAccounts)
+      accts.forEach(acc => {
+        accounts.value.push({
+          id: acc.id,
+          name: acc.name,
+          type: 'account',
+          balance: acc.balance || 0
+        })
+      })
+    }
+  } catch (e) { console.error('加载账户失败:', e) }
+  
+  // 加载投资账户
+  try {
+    const savedInvestments = localStorage.getItem('investmentAccounts')
+    if (savedInvestments) {
+      const invAccts = JSON.parse(savedInvestments)
+      invAccts.forEach(acc => {
+        accounts.value.push({
+          id: `inv_${acc.id}`,
+          name: `[投资]${acc.name}`,
+          type: 'investment',
+          balance: acc.totalAsset || 0
+        })
+      })
+    }
+  } catch (e) { console.error('加载投资账户失败:', e) }
+  
+  // 加载信用卡
+  try {
+    const savedCards = localStorage.getItem('creditCards')
+    if (savedCards) {
+      const cards = JSON.parse(savedCards)
+      cards.forEach(card => {
+        accounts.value.push({
+          id: `cc_${card.id}`,
+          name: `[信用卡]${card.name}`,
+          type: 'credit',
+          balance: card.currentBalance || 0
+        })
+      })
+    }
+  } catch (e) { console.error('加载信用卡失败:', e) }
+  
+  // 加载贷款
+  try {
+    const savedLoans = localStorage.getItem('loans')
+    if (savedLoans) {
+      const loans = JSON.parse(savedLoans)
+      loans.forEach(loan => {
+        accounts.value.push({
+          id: `loan_${loan.id}`,
+          name: `[贷款]${loan.name}`,
+          type: 'loan',
+          balance: loan.remainingAmount || 0
+        })
+      })
+    }
+  } catch (e) { console.error('加载贷款失败:', e) }
+}
+
+// 选择/取消选择账户
+const selectAccount = (accountId) => {
+  const index = filters.value.account.indexOf(accountId)
+  if (index === -1) {
+    filters.value.account.push(accountId)
+  } else {
+    filters.value.account.splice(index, 1)
+  }
+}
+
+// 全选账户
+const selectAllAccounts = () => {
+  filters.value.account = accounts.value.map(a => a.id)
+}
 </script>
 
 <style scoped>

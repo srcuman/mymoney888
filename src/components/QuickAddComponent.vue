@@ -117,6 +117,73 @@ import { ref, onMounted, computed } from 'vue'
 
 const emit = defineEmits(['close'])
 
+// 加载投资账户
+const loadInvestmentAccounts = () => {
+  try {
+    const saved = localStorage.getItem('investmentAccounts')
+    if (saved) {
+      const investmentAccounts = JSON.parse(saved)
+      // 转换为统一格式添加到账户列表
+      investmentAccounts.forEach(acc => {
+        if (!accounts.value.find(a => a.id === `inv_${acc.id}`)) {
+          accounts.value.push({
+            id: `inv_${acc.id}`,
+            name: `[投资]${acc.name}`,
+            balance: acc.totalAsset || 0,
+            type: 'investment'
+          })
+        }
+      })
+    }
+  } catch (e) {
+    console.error('加载投资账户失败:', e)
+  }
+}
+
+// 加载信用卡
+const loadCreditCards = () => {
+  try {
+    const saved = localStorage.getItem('creditCards')
+    if (saved) {
+      const cards = JSON.parse(saved)
+      cards.forEach(card => {
+        if (!accounts.value.find(a => a.id === `cc_${card.id}`)) {
+          accounts.value.push({
+            id: `cc_${card.id}`,
+            name: `[信用卡]${card.name}`,
+            balance: -(card.creditLimit - card.currentBalance) || 0,
+            type: 'credit'
+          })
+        }
+      })
+    }
+  } catch (e) {
+    console.error('加载信用卡失败:', e)
+  }
+}
+
+// 加载贷款
+const loadLoans = () => {
+  try {
+    const saved = localStorage.getItem('loans')
+    if (saved) {
+      const loans = JSON.parse(saved)
+      loans.forEach(loan => {
+        if (!accounts.value.find(a => a.id === `loan_${loan.id}`)) {
+          accounts.value.push({
+            id: `loan_${loan.id}`,
+            name: `[贷款]${loan.name}`,
+            balance: -loan.remainingAmount || 0,
+            type: 'loan'
+          })
+        }
+      })
+    }
+  } catch (e) {
+    console.error('加载贷款失败:', e)
+  }
+}
+
 // 获取账套特定的存储键
 const getStorageKey = (key) => {
   const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
@@ -345,7 +412,17 @@ const handleLedgerChange = () => {
 
 onMounted(() => {
   loadLedgerData()
+  // 加载其他账户类型
+  loadInvestmentAccounts()
+  loadCreditCards()
+  loadLoans()
   // 监听账套切换事件
   window.addEventListener('ledgerChanged', handleLedgerChange)
+  // 监听账户更新事件
+  window.addEventListener('accountsUpdated', () => {
+    loadInvestmentAccounts()
+    loadCreditCards()
+    loadLoans()
+  })
 })
 </script>
