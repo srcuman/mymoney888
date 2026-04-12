@@ -146,7 +146,8 @@ if ! table_exists "investment_details"; then
         shares DECIMAL(15, 4) DEFAULT 0.0000 COMMENT '持有份额',
         cost_price DECIMAL(15, 4) DEFAULT 0.00 COMMENT '成本价',
         current_price DECIMAL(15, 4) DEFAULT 0.00 COMMENT '当前价格',
-        update_date DATE COMMENT '净值更新日期',
+        update_date DATE COMMENT '更新时间',
+        net_value_date DATE COMMENT '净值更新日期',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -160,12 +161,24 @@ else
     echo "  ✓ investment_details 已存在"
 fi
 
-# 投资明细表 - 检查并添加 net_value_date 字段
-if table_exists "investment_details" && ! column_exists "investment_details" "net_value_date"; then
-    echo "添加字段: investment_details.net_value_date"
-    mysql_cmd "ALTER TABLE investment_details ADD COLUMN net_value_date DATE COMMENT '净值更新日期' AFTER update_date;"
-    echo "  ✓ net_value_date 字段添加成功"
-fi
+# ========== 字段检查：投资明细表 ==========
+# 检查并添加缺失的字段
+DETAIL_COLUMNS=(
+    "update_date:DATE:AFTER current_price:更新时间"
+    "net_value_date:DATE:AFTER update_date:净值更新日期"
+)
+
+for col_def in "${DETAIL_COLUMNS[@]}"; do
+    IFS=':' read -r col_name col_type after_col comment <<< "$col_def"
+    if ! column_exists "investment_details" "$col_name"; then
+        echo "添加字段: investment_details.$col_name"
+        mysql_cmd "ALTER TABLE investment_details ADD COLUMN $col_name $col_type COMMENT '$comment' AFTER $after_col;" 2>/dev/null || \
+        mysql_cmd "ALTER TABLE investment_details ADD COLUMN $col_name $col_type COMMENT '$comment';" 
+        echo "  ✓ $col_name 字段添加成功"
+    else
+        echo "  ✓ investment_details.$col_name 已存在"
+    fi
+done
 
 # 净值历史记录表
 if ! table_exists "net_value_history"; then
@@ -187,6 +200,23 @@ if ! table_exists "net_value_history"; then
     echo "  ✓ net_value_history 创建成功"
 else
     echo "  ✓ net_value_history 已存在"
+fi
+
+# ========== 字段检查：净值历史表 ==========
+if table_exists "net_value_history"; then
+    NVH_COLUMNS=(
+        "update_time:TIMESTAMP:更新时间"
+    )
+    for col_def in "${NVH_COLUMNS[@]}"; do
+        IFS=':' read -r col_name col_type comment <<< "$col_def"
+        if ! column_exists "net_value_history" "$col_name"; then
+            echo "添加字段: net_value_history.$col_name"
+            mysql_cmd "ALTER TABLE net_value_history ADD COLUMN $col_name $col_type DEFAULT CURRENT_TIMESTAMP COMMENT '$comment';" 2>/dev/null || true
+            echo "  ✓ $col_name 字段添加成功"
+        else
+            echo "  ✓ net_value_history.$col_name 已存在"
+        fi
+    done
 fi
 
 # 其他可能缺失的表（检查并创建）

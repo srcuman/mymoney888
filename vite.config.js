@@ -16,7 +16,7 @@ export default defineConfig({
       '/fund': {
         target: 'https://fundgz.1234567.com.cn',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/fund/, '/js')
+        rewrite: (path) => path.replace(/^\/fund\//, '/js/')
       }
     }
   }

@@ -369,7 +369,8 @@ CREATE TABLE IF NOT EXISTS investment_details (
     shares DECIMAL(15, 4) DEFAULT 0.0000 COMMENT '持有份额',
     cost_price DECIMAL(15, 4) DEFAULT 0.00 COMMENT '成本价',
     current_price DECIMAL(15, 4) DEFAULT 0.00 COMMENT '当前价格',
-    update_date DATE COMMENT '净值更新日期',
+    update_date DATE COMMENT '更新时间',
+    net_value_date DATE COMMENT '净值更新日期',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -378,6 +379,21 @@ CREATE TABLE IF NOT EXISTS investment_details (
     INDEX idx_account_id (account_id),
     INDEX idx_code (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投资明细表';
+
+-- 净值历史记录表
+CREATE TABLE IF NOT EXISTS net_value_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL COMMENT '用户ID',
+    code VARCHAR(20) NOT NULL COMMENT '投资品种代码',
+    name VARCHAR(100) NOT NULL COMMENT '投资品种名称',
+    date DATE NOT NULL COMMENT '净值日期',
+    price DECIMAL(15, 4) NOT NULL COMMENT '净值/价格',
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_date (user_id, date),
+    INDEX idx_code_date (code, date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='净值历史记录表';
 
 -- 维度配置表（包含成员、商家、标签、支付渠道等）
 CREATE TABLE IF NOT EXISTS dimensions (
