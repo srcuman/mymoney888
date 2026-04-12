@@ -809,60 +809,76 @@ const parseAPIResponse = (response, code) => {
   return null
 }
 
-// 根据代码获取投资品种信息 - 优化并行调用
+// 根据代码获取投资品种信息
 const fetchInvestmentInfo = async (code, userSelectedType = null) => {
-  console.log('Fetching investment info for code:', code)
+  console.log('Fetching investment info for code:', code, 'userSelectedType:', userSelectedType)
   
   // 检查代码格式
   if (!code || code.length !== 6 || !/^\d+$/.test(code)) {
     throw new Error('代码格式不正确，请输入6位数字代码')
   }
   
-  // 基金代码前缀：5开头（场外基金）、15开头（上交所ETF）、1开头（货币/理财基金）
-  // 注意：0、2、4、8开头也可能是基金（如东吴基金005310）
-  // 股票代码前缀：6开头（上交所）、0/3开头（深交所）、8开头（北交所）
+  // 构建API调用列表
+  const apiCalls = []
   
-  const fundPrefixes = ['5', '15', '1', '0', '2', '4', '8']
-  const stockPrefixes = ['6', '0', '3', '8']
+  // 基金API - 天天基金实时估值
+  // 基金代码: 5开头(场外基金)、15开头(ETF)、1开头(货币/理财)
+  // 也支持: 0、2、4、8开头可能是基金
+  const isPossibleFundCode = code.startsWith('5') || code.startsWith('15') || 
+                             code.startsWith('1') || code.startsWith('0') || 
+                             code.startsWith('2') || code.startsWith('4') || 
+                             code.startsWith('8')
   
-  // 判断是否为基金/股票代码前缀
-  const isPossibleFund = fundPrefixes.some(prefix => code.startsWith(prefix))
-  const isPossibleStock = stockPrefixes.some(prefix => code.startsWith(prefix))
+  // 股票API - 腾讯/新浪财经
+  // 股票代码: 6开头(沪市)、0/3开头(深市)、8开头(北交所)
+  const isPossibleStockCode = code.startsWith('6') || code.startsWith('0') || 
+                              code.startsWith('3') || code.startsWith('8')
   
-  // 并行调用多个API
-  const apiPromises = []
+  console.log('isPossibleFund:', isPossibleFundCode, 'isPossibleStock:', isPossibleStockCode)
   
-  // 基金API - 如果可能是基金（5/15/1开头），或用户明确选择基金
-  if (isPossibleFund || userSelectedType === '基金') {
-    apiPromises.push(fetchSingleAPI(`/api/js/${code}.js`, '天天基金实时估值', code))
+  // 根据用户选择或代码前缀决定调用哪些API
+  const callFundAPI = userSelectedType === '基金' || (isPossibleFundCode && !userSelectedType)
+  const callStockAPI = userSelectedType === '股票' || (isPossibleStockCode && !userSelectedType)
+  
+  // 基金API
+  if (callFundAPI) {
+    console.log('添加基金API调用')
+    apiCalls.push({ url: `/api/js/${code}.js`, source: '天天基金实时估值' })
   }
   
-  // 股票API - 如果可能是股票（6/0/3/8开头），或用户明确选择股票
-  // 注意：0开头需要特别处理，可能同时是基金和股票
-  if (isPossibleStock || userSelectedType === '股票') {
-    // 上海股票 (6开头)
+  // 股票API
+  if (callStockAPI) {
     if (code.startsWith('6')) {
-      apiPromises.push(fetchSingleAPI(`/stock/sh${code}`, '腾讯财经上海', code))
-      apiPromises.push(fetchSingleAPI(`/sina/sh${code}`, '新浪财经上海', code))
+      console.log('添加沪市股票API调用')
+      apiCalls.push({ url: `/stock/sh${code}`, source: '腾讯财经上海' })
+      apiCalls.push({ url: `/sina/sh${code}`, source: '新浪财经上海' })
     }
-    // 深圳股票 (0/3开头)
     if (code.startsWith('0') || code.startsWith('3')) {
-      apiPromises.push(fetchSingleAPI(`/stock/sz${code}`, '腾讯财经深圳', code))
-      apiPromises.push(fetchSingleAPI(`/sina/sz${code}`, '新浪财经深圳', code))
+      console.log('添加深市股票API调用')
+      apiCalls.push({ url: `/stock/sz${code}`, source: '腾讯财经深圳' })
+      apiCalls.push({ url: `/sina/sz${code}`, source: '新浪财经深圳' })
     }
-    // 北京股票 (8开头)
     if (code.startsWith('8')) {
-      apiPromises.push(fetchSingleAPI(`/sina/bj${code}`, '新浪财经北京', code))
+      console.log('添加北交所股票API调用')
+      apiCalls.push({ url: `/sina/bj${code}`, source: '新浪财经北京' })
     }
   }
   
-  // 0开头的特殊处理：可能是基金也可能是股票，同时调用两种API
-  if (code.startsWith('0') && !userSelectedType) {
-    apiPromises.push(fetchSingleAPI(`/api/js/${code}.js`, '天天基金实时估值', code))
+  console.log('API调用列表:', apiCalls)
+  
+  if (apiCalls.length === 0) {
+    console.error('没有可用的API调用')
+    throw new Error('无法识别代码类型，请手动选择品种类型')
   }
   
-  // 等待所有API调用完成，使用 Promise.race 获取最快响应
+  // 并行调用所有API
+  const apiPromises = apiCalls.map(call => fetchSingleAPI(call.url, call.source, code))
   const responses = await Promise.all(apiPromises)
+  
+  console.log('API响应数量:', responses.length)
+  responses.forEach((r, i) => {
+    console.log(`响应${i}: source=${r.source}, hasData=${!!r.data}, data=${r.data?.substring?.(0, 100)}`)
+  })
   
   // 解析所有API响应
   const apiResults = responses
