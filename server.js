@@ -1,5 +1,6 @@
 // MyMoney888 数据同步服务器
-// 版本: 3.8.0
+// 版本: 3.9.0
+// 架构: 数据为核心，标签化存储，无损迭代
 // 支持本地数据与MySQL数据库的双向同步
 // 支持本地文件备份（双重持久化）
 
@@ -235,7 +236,7 @@ app.get('/api/health', (req, res) => {
 
 // 版本信息
 app.get('/api/version', (req, res) => {
-  res.json({ version: '3.8.2', name: 'MyMoney888' })
+  res.json({ version: '3.9.0', name: 'MyMoney888', arch: 'data-centric, tagged-storage' })
 })
 
 // 数据目录信息

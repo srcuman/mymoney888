@@ -1005,6 +1005,138 @@ class CoreDataStore {
     return this.calculateInvestmentValue(accountId)
   }
 
+  /**
+   * 删除投资账户
+   */
+  async deleteInvestmentAccount(id) {
+    // 删除关联的投资明细
+    const details = this.filter('investment_details', d => String(d.accountId) === String(id))
+    for (const detail of details) {
+      await this.remove('investment_details', detail.id)
+    }
+    
+    // 删除关联的净值历史
+    const history = this.filter('net_value_history', h => String(h.accountId) === String(id))
+    for (const record of history) {
+      await this.remove('net_value_history', record.id)
+    }
+    
+    // 删除关联账户
+    const account = this.find('investment_accounts', id)
+    if (account && account.linkedAccountId) {
+      await this.remove('accounts', account.linkedAccountId)
+    }
+    
+    // 删除投资账户
+    await this.remove('investment_accounts', id)
+    
+    console.log('[CoreDataStore] 删除投资账户:', id)
+    return true
+  }
+
+  // =========================================================================
+  // 信用卡管理（扩展方法）
+  // =========================================================================
+
+  /**
+   * 删除信用卡
+   */
+  async deleteCreditCard(id) {
+    // 删除关联的信用卡账单
+    const bills = this.filter('credit_card_bills', b => String(b.creditCardId) === String(id))
+    for (const bill of bills) {
+      await this.remove('credit_card_bills', bill.id)
+    }
+    
+    // 删除关联账户
+    const card = this.find('credit_cards', id)
+    if (card && card.linkedAccountId) {
+      await this.remove('accounts', card.linkedAccountId)
+    }
+    
+    // 删除信用卡
+    await this.remove('credit_cards', id)
+    
+    console.log('[CoreDataStore] 删除信用卡:', id)
+    return true
+  }
+
+  /**
+   * 计算信用卡已用额度（从交易中计算）
+   */
+  calculateCreditCardUsed(cardId) {
+    const transactions = this._data.value.transactions || []
+    let used = 0
+    
+    for (const t of transactions) {
+      // 信用卡消费（支出）增加已用额度
+      if (t.type === 'expense' && String(t.creditCard) === String(cardId)) {
+        used += t.amount || 0
+      }
+      // 信用卡还款（收入）减少已用额度
+      if (t.type === 'income' && t.isRepayment && String(t.creditCard) === String(cardId)) {
+        used -= t.amount || 0
+      }
+    }
+    
+    return Math.max(0, used)
+  }
+
+  /**
+   * 计算信用卡可用额度
+   */
+  getCreditCardAvailable(cardId) {
+    const card = this.find('credit_cards', cardId)
+    if (!card) return 0
+    
+    const used = this.calculateCreditCardUsed(cardId)
+    const limit = card.creditLimit || 0
+    
+    return Math.max(0, limit - used)
+  }
+
+  // =========================================================================
+  // 贷款管理（扩展方法）
+  // =========================================================================
+
+  /**
+   * 删除贷款
+   */
+  async deleteLoan(id) {
+    // 删除关联的还款记录
+    const payments = this.filter('loan_payments', p => String(p.loanId) === String(id))
+    for (const payment of payments) {
+      await this.remove('loan_payments', payment.id)
+    }
+    
+    // 删除贷款
+    await this.remove('loans', id)
+    
+    console.log('[CoreDataStore] 删除贷款:', id)
+    return true
+  }
+
+  /**
+   * 计算贷款剩余金额（改进版）
+   */
+  calculateLoanRemainingAmount(loanId) {
+    const loan = this.find('loans', loanId)
+    if (!loan) return 0
+    
+    const payments = this.filter('loan_payments', p => String(p.loanId) === String(loanId) && p.status === 'paid')
+    const totalPaid = payments.reduce((sum, p) => sum + (p.principal || p.amount || 0), 0)
+    
+    return Math.max(0, (loan.totalAmount || loan.total_amount || 0) - totalPaid)
+  }
+
+  /**
+   * 计算贷款已还期数
+   */
+  calculateLoanPaidPeriods(loanId) {
+    const payments = this.filter('loan_payments', p => String(p.loanId) === String(loanId) && p.status === 'paid')
+    return payments.length
+  }
+
   // =========================================================================
   // 分类管理
   // =========================================================================

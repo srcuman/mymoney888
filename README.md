@@ -1,7 +1,8 @@
 # MyMoney888 - 家庭记账管理系统
 
-[![版本](https://img.shields.io/badge/version-3.8.2-blue.svg)](https://github.com/srcuman/mymoney888)
+[![版本](https://img.shields.io/badge/version-3.9.0-blue.svg)](https://github.com/srcuman/mymoney888)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![架构](https://img.shields.io/badge/arch-data--centric--tagged--storage-green.svg)](#核心理念)
 
 ---
 
@@ -83,8 +84,13 @@ mymoney888/
 │   └── main.js
 │
 ├── docs/                          # 文档
-│   ├── BRANCH_STRATEGY.md         # 分支策略
 │   ├── DATA_STORAGE_ARCHITECTURE.md # 数据存储架构
+│   ├── MODULE_CREDIT_CARDS.md      # 信用卡模块
+│   ├── MODULE_LOANS.md             # 贷款模块
+│   ├── MODULE_INVESTMENTS.md       # 投资模块
+│   ├── MODULE_STATISTICS.md       # 统计模块
+│   ├── MODULE_ANNUAL_REVIEW.md     # 年度回顾模块
+│   ├── DEFAULT_DATA_GUIDE.md       # 预置数据指南
 │   └── ...
 │
 ├── server.js                      # Node.js 后端服务
@@ -334,7 +340,57 @@ DATA_DIR/
 - **图表库**: Chart.js
 - **后端**: Node.js + Express
 - **数据库**: MySQL
-- **数据持久化**: DataStore (localStorage) + MySQL
+- **数据持久化**: 本地文件 + MySQL 双重备份
+
+---
+
+## 🚀 快速开始
+
+### 1. 安装依赖
+
+```bash
+npm install
+```
+
+### 2. 初始化数据库
+
+```bash
+# 创建数据库和表结构
+mysql -u root -p < database/init-db.sql
+
+# 初始化预置数据（账户、分类、成员等）
+mysql -u root -p mymoney888 < database/init-default-data.sql
+```
+
+### 3. 配置环境变量
+
+```bash
+# 创建 .env 文件
+cp .env.example .env
+
+# 编辑配置
+MYSQL_HOST=localhost
+MYSQL_USER=root
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=mymoney888
+```
+
+### 4. 启动服务
+
+```bash
+# 开发模式
+npm run dev
+
+# 生产模式
+npm run build
+npm start
+```
+
+### 5. 访问应用
+
+打开浏览器访问 http://localhost:8888
+
+> 💡 首次使用，系统会自动加载预置账套数据，包括常用账户、收支分类、成员、商家等，开箱即用。
 
 ---
 
@@ -408,13 +464,26 @@ const status = mysqlSyncService.getStatus()
 
 ## 📚 文档
 
+### 核心文档
+
 | 文档 | 说明 |
 |------|------|
 | [README.md](README.md) | 项目概述 |
 | [DATABASE_DESIGN.md](DATABASE_DESIGN.md) | 数据库设计 |
 | [DATA_STORAGE_ARCHITECTURE.md](docs/DATA_STORAGE_ARCHITECTURE.md) | 数据存储架构 |
+| [DEFAULT_DATA_GUIDE.md](docs/DEFAULT_DATA_GUIDE.md) | 预置数据指南 |
 | [BRANCH_STRATEGY.md](docs/BRANCH_STRATEGY.md) | 分支策略 |
 | [DEPLOY.md](DEPLOY.md) | 部署指南 |
+
+### 功能模块文档
+
+| 文档 | 说明 |
+|------|------|
+| [MODULE_CREDIT_CARDS.md](docs/MODULE_CREDIT_CARDS.md) | 信用卡模块 - 账单、还款、消费分析 |
+| [MODULE_LOANS.md](docs/MODULE_LOANS.md) | 贷款模块 - 还款计划、利息计算 |
+| [MODULE_INVESTMENTS.md](docs/MODULE_INVESTMENTS.md) | 投资模块 - 持仓、净值、盈亏 |
+| [MODULE_STATISTICS.md](docs/MODULE_STATISTICS.md) | 统计模块 - 收支分析、趋势图表 |
+| [MODULE_ANNUAL_REVIEW.md](docs/MODULE_ANNUAL_REVIEW.md) | 年度回顾 - 全年财务总结 |
 
 ---
 

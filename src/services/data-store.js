@@ -1,518 +1,705 @@
 /**
- * 中央数据存储层 (DataStore)
+ * 数据存储服务 (DataStore)
  * 
- * 设计原则：
- * 1. 单一数据源：每种数据只存储一份
- * 2. 计算派生：衍生数据（如余额）通过计算得出
- * 3. 三重持久化：localStorage + 服务器MySQL + 服务器文件备份
- * 4. 事件通知：数据变更通知所有监听者
+ * =============================================================================
+ * 设计理念：★★★ 数据为核心，标签化存储，无损迭代 ★★★
+ * =============================================================================
  * 
- * 数据关系：
+ * 【核心原则】
  * 
- * transactions (交易记录) ──────┬──► accounts.balance (计算得出)
- *                              │
- *                              ├──► creditCards.availableCredit (计算得出)
- *                              │
- *                              ├──► loans.paidAmount (计算得出)
- *                              │
- *                              └──► investmentAccounts.totalAsset (计算得出)
+ * 1. 数据唯一化
+ *    - 核心数据只有一份，不冗余存储
+ *    - transactions（交易）是唯一的事实来源
+ *    - 所有其他数据都是对核心数据的"标签"
  * 
- * 持久化策略：
- * - localStorage: 前端即时缓存
- * - MySQL: 服务器端关系型存储
- * - 文件备份: 服务器端JSON文件（Docker卷挂载可持久化）
+ * 2. 标签化存储
+ *    - 独立模块通过标签关联到交易
+ *    - 不存储冗余的派生数据
+ * 
+ * 3. API 持久化
+ *    - 数据通过 CoreDataStore 统一管理
+ *    - 存储到 DATA_DIR/ledgers/{ledgerId}/*.json
+ *    - 同时同步到 MySQL 备份
+ * 
+ * 4. 衍生数据计算
+ *    - 账户余额 = SUM(交易)
+ *    - 信用卡已用额度 = SUM(交易)
+ *    - 所有衍生数据不长期存储，仅在使用时计算
+ * 
+ * =============================================================================
+ * 版本: 3.9.0
+ * =============================================================================
  */
 
-import { ref, computed } from 'vue'
+import { ref, computed, shallowRef } from 'vue'
 
+/**
+ * 获取 API 基础 URL
+ */
+function getApiBaseUrl() {
+  return window.__API_URL__ || `${window.location.protocol}//${window.location.host}`
+}
+
+/**
+ * API 请求封装
+ */
+async function apiRequest(url, options = {}) {
+  const baseUrl = getApiBaseUrl()
+  try {
+    const response = await fetch(`${baseUrl}${url}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    })
+    
+    const data = await response.json()
+    if (!response.ok && !data.success) {
+      throw new Error(data.error || 'API 请求失败')
+    }
+    return data
+  } catch (error) {
+    console.error(`[API] ${url} 请求失败:`, error)
+    throw error
+  }
+}
+
+/**
+ * 数据存储类
+ * 
+ * 统一管理所有模块数据：
+ * - 信用卡：credit_cards, credit_card_bills
+ * - 贷款：loans, loan_payments
+ * - 投资：investment_accounts, investment_details, net_value_history
+ * 
+ * 所有数据都通过 CoreDataStore 存储到 API
+ */
 class DataStore {
   constructor() {
+    // 当前账套ID
+    this.currentLedgerId = ref(sessionStorage.getItem('currentLedgerId') || 'default')
+    
+    // 当前用户ID
+    this.currentUserId = ref(sessionStorage.getItem('userId') || null)
+    
     // 内部数据存储
-    this._data = {
-      accounts: ref([]),
-      transactions: ref([]),
-      creditCards: ref([]),
-      creditCardBills: ref([]),
-      loans: ref([]),
-      repaymentPlans: ref([]),
-      investmentAccounts: ref([]),
-      investmentDetails: ref([])
-    }
+    this._data = shallowRef({})
     
-    // 数据版本号，用于检测变更
-    this._versions = {}
+    // 同步状态
+    this._syncStatus = ref('idle')
+    this._lastSyncTime = ref(null)
     
-    // 是否使用服务器同步
-    this._serverSyncEnabled = true
+    // 在线状态
+    this._isOnline = navigator.onLine
     
     // 初始化
     this._init()
   }
-  
-  // 初始化：从 localStorage 加载数据
+
+  // =========================================================================
+  // 初始化
+  // =========================================================================
+
   async _init() {
-    // 加载所有数据
-    for (const key of Object.keys(this._data)) {
-      const saved = localStorage.getItem(key)
-      if (saved) {
-        try {
-          this._data[key].value = JSON.parse(saved)
-        } catch (e) {
-          console.error(`加载 ${key} 失败:`, e)
-          this._data[key].value = []
-        }
-      }
-    }
-    
-    // 尝试从服务器拉取最新数据（覆盖本地）
-    if (navigator.onLine) {
-      await this._pullFromServer()
-    }
-    
-    // 初始化版本号
-    for (const key of Object.keys(this._data)) {
-      this._versions[key] = 1
-    }
-    
-    console.log('DataStore 初始化完成')
-  }
-  
-  // 从服务器拉取数据并合并
-  async _pullFromServer() {
-    console.log('[DataStore] 尝试从服务器同步数据...')
-    const user = JSON.parse(localStorage.getItem('user'))
-    if (!user || !user.id) {
-      console.log('[DataStore] 未登录，跳过服务器同步')
-      return
-    }
-    
-    for (const key of Object.keys(this._data)) {
-      const data = await this._fetchFromServer(key)
-      if (data && Array.isArray(data) && data.length > 0) {
-        // 使用服务器数据覆盖本地数据
-        this._data[key].value = data
-        localStorage.setItem(key, JSON.stringify(data))
-        console.log(`[DataStore] ${key} 从服务器更新 (${data.length}条)`)
-      }
-    }
-  }
-  
-  // 获取数据（响应式）
-  get(key) {
-    return this._data[key]
-  }
-  
-  // 获取原始数据（非响应式，用于计算）
-  getRaw(key) {
-    return this._data[key].value
-  }
-  
-  // 设置数据（自动保存和三重持久化）
-  async set(key, value, options = {}) {
-    const { skipSync = false, skipNotify = false } = options
-    
-    this._data[key].value = value
-    this._versions[key]++
-    
-    // 1. 保存到 localStorage
-    localStorage.setItem(key, JSON.stringify(value))
-    
-    // 2. 同步到服务器MySQL数据库
-    if (!skipSync && navigator.onLine && this._serverSyncEnabled) {
-      await this._syncToServer(key)
-    }
-    
-    // 通知变更
-    if (!skipNotify) {
-      this._notifyChange(key)
-    }
-  }
-  
-  // 添加数据项
-  async add(key, item, options = {}) {
-    const data = this.getRaw(key)
-    const newData = [...data, item]
-    await this.set(key, newData, options)
-  }
-  
-  // 更新数据项
-  async update(key, id, updates, options = {}) {
-    const data = this.getRaw(key)
-    const index = data.findIndex(item => item.id === id)
-    if (index !== -1) {
-      const newData = [...data]
-      newData[index] = { ...newData[index], ...updates }
-      await this.set(key, newData, options)
-    }
-  }
-  
-  // 删除数据项
-  async remove(key, id, options = {}) {
-    const data = this.getRaw(key)
-    const newData = data.filter(item => item.id !== id)
-    await this.set(key, newData, options)
-  }
-  
-  // ============================================
-  // 计算属性：根据交易记录计算各模块的余额
-  // ============================================
-  
-  /**
-   * 计算账户余额
-   * 普通账户余额 = 初始余额 + 收入 - 支出
-   */
-  computedAccountBalance(accountId) {
-    const account = this.getRaw('accounts').find(a => a.id === accountId)
-    if (!account) return 0
-    
-    // 如果是信用卡账户，使用信用卡的计算逻辑
-    if (account.category === 'credit_card') {
-      return this.computedCreditCardBalance(account.name)
-    }
-    
-    // 如果是投资账户，使用投资账户的计算逻辑
-    if (account.category === 'investment') {
-      return this.computedInvestmentAccountBalance(accountId)
-    }
-    
-    // 普通账户：从交易记录计算
-    const initialBalance = account.initialBalance || account.balance || 0
-    const transactions = this.getRaw('transactions')
-    
-    // 筛选该账户的交易
-    const accountTransactions = transactions.filter(t => 
-      t.account == accountId || t.account === accountId
-    )
-    
-    let balance = initialBalance
-    for (const t of accountTransactions) {
-      if (t.type === 'income') {
-        balance += parseFloat(t.amount)
-      } else if (t.type === 'expense') {
-        balance -= parseFloat(t.amount)
-      } else if (t.type === 'transfer' && t.toAccount) {
-        if (t.account == accountId || t.account === accountId) {
-          balance -= parseFloat(t.amount) // 转出
-        }
-        if (t.toAccount == accountId || t.toAccount === accountId) {
-          balance += parseFloat(t.amount) // 转入
-        }
-      }
-    }
-    
-    return balance
-  }
-  
-  /**
-   * 计算所有账户余额
-   */
-  computedAllAccountBalances() {
-    const balances = {}
-    const accounts = this.getRaw('accounts')
-    
-    for (const account of accounts) {
-      balances[account.id] = this.computedAccountBalance(account.id)
-    }
-    
-    return balances
-  }
-  
-  /**
-   * 计算信用卡可用额度
-   * 可用额度 = 总额度 - 已用额度
-   * 已用额度 = 所有未还交易金额
-   */
-  computedCreditCardBalance(cardName) {
-    const card = this.getRaw('credit_cards').find(c => c.name === cardName)
-    if (!card) return 0
-    
-    const totalCredit = card.totalCredit || card.creditLimit || 0
-    
-    // 计算已用额度：从交易记录中找出该卡的消费
-    const transactions = this.getRaw('transactions')
-    const cardTransactions = transactions.filter(t => {
-      const account = this.getRaw('accounts').find(a => a.id == t.account || a.id === t.account)
-      return account && account.name === cardName && account.category === 'credit_card'
+    // 监听账套切换
+    window.addEventListener('ledgerChanged', (e) => {
+      this.switchLedger(e.detail?.ledgerId || 'default')
     })
-    
-    // 计算未还金额
-    let usedAmount = 0
-    for (const t of cardTransactions) {
-      if (t.type === 'expense') {
-        usedAmount += parseFloat(t.amount)
-      } else if (t.type === 'income') {
-        // 信用卡还款（收入）减少已用额度
-        usedAmount -= parseFloat(t.amount)
-      }
-    }
-    
-    // 从账单中获取未还金额
-    const bills = this.getRaw('credit_card_bills')
-    const cardBills = bills.filter(b => b.cardName === cardName)
-    for (const bill of cardBills) {
-      if (bill.status !== 'paid') {
-        usedAmount += parseFloat(bill.remainingAmount || 0)
-      }
-    }
-    
-    const availableCredit = totalCredit - Math.max(0, usedAmount)
-    return availableCredit
+
+    // 监听用户切换
+    window.addEventListener('userChanged', (e) => {
+      this.currentUserId.value = e.detail?.userId || null
+      this.loadAllData()
+    })
+
+    // 监听在线状态
+    window.addEventListener('online', () => {
+      this._isOnline = true
+    })
+    window.addEventListener('offline', () => {
+      this._isOnline = false
+    })
+
+    // 监听数据变更事件
+    window.addEventListener('dataChanged', (e) => {
+      this._handleDataChange(e.detail)
+    })
+
+    console.log('[DataStore] v3.9.0 初始化完成')
   }
-  
+
+  // =========================================================================
+  // 账套管理
+  // =========================================================================
+
   /**
-   * 计算所有信用卡额度
+   * 切换账套
    */
-  computedAllCreditCardBalances() {
-    const balances = {}
-    const cards = this.getRaw('credit_cards')
+  switchLedger(ledgerId) {
+    if (this.currentLedgerId.value === ledgerId) return
     
-    for (const card of cards) {
-      balances[card.name] = this.computedCreditCardBalance(card.name)
-    }
+    this.currentLedgerId.value = ledgerId
+    sessionStorage.setItem('currentLedgerId', ledgerId)
     
-    return balances
+    // 触发事件让其他组件响应
+    window.dispatchEvent(new CustomEvent('ledgerChanged', {
+      detail: { ledgerId }
+    }))
   }
-  
+
+  // =========================================================================
+  // 数据加载与保存（通过 API）
+  // =========================================================================
+
   /**
-   * 计算贷款已还金额
-   * 已还金额 = 所有还款记录金额
+   * 加载所有模块数据
    */
-  computedLoanPaidAmount(loanId) {
-    const transactions = this.getRaw('transactions')
-    const loans = this.getRaw('loans')
-    const loan = loans.find(l => l.id === loanId)
-    if (!loan) return 0
+  async loadAllData() {
+    const ledgerId = this.currentLedgerId.value
     
-    // 从交易记录中计算还款金额
-    let paidAmount = 0
-    for (const t of transactions) {
-      if (t.type === 'income' && t.description && t.description.includes(loan.name)) {
-        paidAmount += parseFloat(t.amount)
-      }
-    }
-    
-    // 从还款计划中计算
-    const repaymentPlans = this.getRaw('loan_payments')
-    const loanPlans = repaymentPlans.filter(p => p.loanId === loanId)
-    for (const plan of loanPlans) {
-      if (plan.status === 'paid' || plan.isPaid) {
-        paidAmount += parseFloat(plan.amount || 0)
-      }
-    }
-    
-    return paidAmount
-  }
-  
-  /**
-   * 计算所有贷款已还金额
-   */
-  computedAllLoanPaidAmounts() {
-    const paidAmounts = {}
-    const loans = this.getRaw('loans')
-    
-    for (const loan of loans) {
-      paidAmounts[loan.id] = this.computedLoanPaidAmount(loan.id)
-    }
-    
-    return paidAmounts
-  }
-  
-  /**
-   * 计算投资账户总资产
-   * 总资产 = Σ(份额 × 当前价格)
-   */
-  computedInvestmentAccountBalance(accountId) {
-    const details = this.getRaw('investmentDetails')
-    const accountDetails = details.filter(d => d.accountId === accountId)
-    
-    let totalAsset = 0
-    for (const detail of accountDetails) {
-      totalAsset += parseFloat(detail.shares || 0) * parseFloat(detail.currentPrice || 0)
-    }
-    
-    return totalAsset
-  }
-  
-  /**
-   * 计算所有投资账户余额
-   */
-  computedAllInvestmentAccountBalances() {
-    const balances = {}
-    const accounts = this.getRaw('investment_accounts')
-    
-    for (const account of accounts) {
-      balances[account.id] = this.computedInvestmentAccountBalance(account.id)
-    }
-    
-    return balances
-  }
-  
-  // ============================================
-  // 数据同步
-  // ============================================
-  
-  async _syncToServer(tableName) {
     try {
-      const user = JSON.parse(localStorage.getItem('user'))
-      if (!user || !user.id) return
+      const response = await apiRequest(`/api/datastore/load?ledgerId=${encodeURIComponent(ledgerId)}`)
       
-      // 映射本地表名到数据库表名
-      const tableNameMap = {
-        'creditCards': 'credit_cards',
-        'creditCardBills': 'credit_card_bills',
-        'investmentAccounts': 'investment_accounts',
-        'investmentDetails': 'investment_details'
+      if (response.success && response.data) {
+        this._data.value = response.data
+        console.log(`[DataStore] 加载账套: ${ledgerId}`)
+      } else {
+        // 初始化空数据结构
+        this._data.value = this._getEmptyDataStructure()
+        console.log(`[DataStore] 账套 ${ledgerId} 初始化空数据`)
       }
-      const dbTableName = tableNameMap[tableName] || tableName
       
-      const apiUrl = import.meta.env.VITE_API_URL || '/api'
-      const data = this.getRaw(tableName)
+    } catch (error) {
+      console.error('[DataStore] 加载数据失败:', error)
+      this._data.value = this._getEmptyDataStructure()
+    }
+  }
+
+  /**
+   * 获取空数据结构
+   */
+  _getEmptyDataStructure() {
+    return {
+      // 信用卡数据
+      credit_cards: [],
+      credit_card_bills: [],
       
-      const response = await fetch(`${apiUrl}/sync`, {
+      // 贷款数据
+      loans: [],
+      loan_payments: [],
+      
+      // 投资数据
+      investment_accounts: [],
+      investment_details: [],
+      net_value_history: [],
+      investment_profit_records: [],
+      
+      // 分期数据
+      installment_templates: [],
+      installments: []
+    }
+  }
+
+  /**
+   * 保存数据到 API
+   */
+  async _save(key) {
+    try {
+      await apiRequest('/api/datastore/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user.id,
-          table: dbTableName,
-          data: data
+          ledgerId: this.currentLedgerId.value,
+          data: {
+            [key]: this._data.value[key] || []
+          }
         })
       })
       
-      if (!response.ok) {
-        throw new Error(`服务器响应错误: ${response.status}`)
-      }
+      // 同步到 MySQL
+      this._scheduleSync(key)
       
-      const result = await response.json()
-      if (result.success) {
-        console.log(`[DataStore] ${tableName} -> ${dbTableName} 已同步到服务器 (${result.successCount}条)`)
-      } else {
-        console.warn(`[DataStore] ${tableName} 同步部分失败:`, result.error)
-      }
     } catch (error) {
-      console.error(`[DataStore] 同步 ${tableName} 失败:`, error)
+      console.error(`[DataStore] 保存 ${key} 失败:`, error)
+      throw error
     }
   }
-  
-  // 从服务器拉取数据
-  async _fetchFromServer(tableName) {
+
+  /**
+   * 安排同步到 MySQL
+   */
+  _scheduleSync(key) {
+    if (this._syncTimer) {
+      clearTimeout(this._syncTimer)
+    }
+    
+    this._syncTimer = setTimeout(() => {
+      this.syncToServer()
+    }, 2000)
+  }
+
+  /**
+   * 同步到 MySQL
+   */
+  async syncToServer() {
+    if (!this._isOnline) return
+    
+    const userId = this.currentUserId.value || 'default'
+    
     try {
-      const user = JSON.parse(localStorage.getItem('user'))
-      if (!user || !user.id) return null
+      this._syncStatus.value = 'syncing'
       
-      // 映射本地表名到数据库表名
-      const tableNameMap = {
-        'creditCards': 'credit_cards',
-        'creditCardBills': 'credit_card_bills',
-        'investmentAccounts': 'investment_accounts',
-        'investmentDetails': 'investment_details'
-      }
-      const dbTableName = tableNameMap[tableName] || tableName
-      
-      const apiUrl = import.meta.env.VITE_API_URL || '/api'
-      const lastSyncTime = localStorage.getItem(`lastSync_${tableName}`)
-      
-      const params = new URLSearchParams({
-        userId: user.id,
-        table: dbTableName
+      await apiRequest('/api/sync', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId,
+          ledgerId: this.currentLedgerId.value,
+          data: this._data.value
+        })
       })
-      if (lastSyncTime) {
-        params.append('lastSyncTime', lastSyncTime)
-      }
       
-      const response = await fetch(`${apiUrl}/sync?${params}`)
+      this._syncStatus.value = 'synced'
+      this._lastSyncTime.value = new Date().toISOString()
       
-      if (!response.ok) {
-        throw new Error(`服务器响应错误: ${response.status}`)
-      }
-      
-      const result = await response.json()
-      if (result.success) {
-        // 更新同步时间
-        localStorage.setItem(`lastSync_${tableName}`, new Date().toISOString())
-        console.log(`[DataStore] 从服务器获取 ${tableName} (${result.count}条)`)
-        return result.data
-      }
-      return null
     } catch (error) {
-      console.error(`[DataStore] 获取 ${tableName} 失败:`, error)
-      return null
+      console.error('[DataStore] 同步失败:', error)
+      this._syncStatus.value = 'error'
     }
   }
-  
-  // 同步所有数据
-  async syncAll() {
-    console.log('[DataStore] 开始同步所有数据...')
-    const tables = Object.keys(this._data)
-    const results = {}
+
+  /**
+   * 处理数据变更事件
+   */
+  _handleDataChange(detail) {
+    const { type, action, id } = detail
+    console.log(`[DataStore] 数据变更: ${type} - ${action}`, id)
+  }
+
+  // =========================================================================
+  // 通用数据操作
+  // =========================================================================
+
+  /**
+   * 获取原始数据
+   */
+  getRaw(key) {
+    return this._data.value[key] || []
+  }
+
+  /**
+   * 获取响应式数据
+   */
+  getData(key) {
+    return computed(() => this._data.value[key] || [])
+  }
+
+  /**
+   * 生成唯一ID
+   */
+  _generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2, 9)
+  }
+
+  /**
+   * 添加数据
+   */
+  async add(key, item) {
+    const data = this._data.value[key] || []
     
-    for (const table of tables) {
-      const data = this.getRaw(table)
-      if (data && data.length > 0) {
-        await this._syncToServer(table)
-        results[table] = 'synced'
-      }
+    // 确保ID存在
+    if (!item.id) {
+      item.id = this._generateId()
     }
     
-    console.log('[DataStore] 数据同步完成', results)
-    return results
-  }
-  
-  // ============================================
-  // 事件通知
-  // ============================================
-  
-  _notifyChange(key) {
-    // 派发通用变更事件
-    window.dispatchEvent(new CustomEvent('dataStoreChanged', {
-      detail: { key, version: this._versions[key] }
-    }))
+    item.createdAt = item.createdAt || new Date().toISOString()
+    item.updatedAt = new Date().toISOString()
     
-    // 派发特定类型的变更事件
-    const eventMap = {
-      'transactions': 'transactionsUpdated',
-      'accounts': 'accountsUpdated',
-      'creditCards': 'creditCardsUpdated',
-      'creditCardBills': 'creditCardBillsUpdated',
-      'loans': 'loanAccountsUpdated',
-      'repaymentPlans': 'loanAccountsUpdated',
-      'investmentAccounts': 'investmentAccountsUpdated',
-      'investmentDetails': 'investmentAccountsUpdated'
+    data.push(item)
+    this._data.value[key] = data
+    
+    // 保存到 API
+    await this._save(key)
+
+    return item
+  }
+
+  /**
+   * 更新数据
+   */
+  async update(key, id, updates) {
+    const data = this._data.value[key] || []
+    const index = data.findIndex(item => String(item.id) === String(id))
+    
+    if (index === -1) return null
+    
+    updates.updatedAt = new Date().toISOString()
+    data[index] = { ...data[index], ...updates }
+    this._data.value[key] = [...data]
+    
+    // 保存到 API
+    await this._save(key)
+
+    return data[index]
+  }
+
+  /**
+   * 删除数据
+   */
+  async remove(key, id) {
+    const data = this._data.value[key] || []
+    const index = data.findIndex(item => String(item.id) === String(id))
+    
+    if (index === -1) return false
+    
+    data.splice(index, 1)
+    this._data.value[key] = [...data]
+    
+    // 保存到 API
+    await this._save(key)
+
+    return true
+  }
+
+  /**
+   * 查找数据
+   */
+  find(key, predicate) {
+    const data = this._data.value[key] || []
+    if (typeof predicate === 'function') {
+      return data.find(predicate)
+    }
+    return data.find(item => String(item.id) === String(predicate))
+  }
+
+  /**
+   * 过滤数据
+   */
+  filter(key, predicate) {
+    const data = this._data.value[key] || []
+    if (typeof predicate === 'function') {
+      return data.filter(predicate)
+    }
+    return data
+  }
+
+  // =========================================================================
+  // 信用卡管理
+  // =========================================================================
+
+  /**
+   * 添加信用卡
+   */
+  async addCreditCard(card) {
+    if (!card.id) {
+      card.id = 'cc_' + this._generateId()
+    }
+    card.createdAt = new Date().toISOString()
+    
+    await this.add('credit_cards', card)
+    
+    console.log('[DataStore] 添加信用卡:', card.name)
+    return card
+  }
+
+  /**
+   * 获取信用卡列表
+   */
+  getCreditCards() {
+    return this.getRaw('credit_cards')
+  }
+
+  /**
+   * 添加信用卡账单
+   */
+  async addCreditCardBill(bill) {
+    if (!bill.id) {
+      bill.id = 'ccb_' + this._generateId()
+    }
+    bill.createdAt = new Date().toISOString()
+    
+    await this.add('credit_card_bills', bill)
+    
+    return bill
+  }
+
+  /**
+   * 获取信用卡账单
+   */
+  getCreditCardBills(cardId = null) {
+    const bills = this.getRaw('credit_card_bills')
+    if (cardId) {
+      return bills.filter(b => String(b.credit_card_id) === String(cardId))
+    }
+    return bills
+  }
+
+  // =========================================================================
+  // 贷款管理
+  // =========================================================================
+
+  /**
+   * 添加贷款
+   */
+  async addLoan(loan) {
+    if (!loan.id) {
+      loan.id = 'loan_' + this._generateId()
+    }
+    loan.createdAt = new Date().toISOString()
+    
+    await this.add('loans', loan)
+    
+    console.log('[DataStore] 添加贷款:', loan.name)
+    return loan
+  }
+
+  /**
+   * 获取贷款列表
+   */
+  getLoans() {
+    return this.getRaw('loans')
+  }
+
+  /**
+   * 添加贷款还款记录
+   */
+  async addLoanPayment(payment) {
+    if (!payment.id) {
+      payment.id = 'lp_' + this._generateId()
+    }
+    payment.createdAt = new Date().toISOString()
+    
+    await this.add('loan_payments', payment)
+    
+    return payment
+  }
+
+  /**
+   * 获取贷款还款记录
+   */
+  getLoanPayments(loanId) {
+    return this.getRaw('loan_payments').filter(p => String(p.loan_id) === String(loanId))
+  }
+
+  /**
+   * 计算贷款剩余金额（由还款记录计算）
+   */
+  calculateLoanRemaining(loanId) {
+    const loan = this.find('loans', loanId)
+    if (!loan) return 0
+    
+    const payments = this.getLoanPayments(loanId)
+    const totalPaid = payments
+      .filter(p => p.status === 'paid')
+      .reduce((sum, p) => sum + (p.principal || p.amount || 0), 0)
+    
+    return Math.max(0, (loan.total_amount || 0) - totalPaid)
+  }
+
+  /**
+   * 计算贷款已还期数
+   */
+  calculateLoanPaidPeriods(loanId) {
+    const payments = this.getLoanPayments(loanId)
+    return payments.filter(p => p.status === 'paid').length
+  }
+
+  // =========================================================================
+  // 投资管理
+  // =========================================================================
+
+  /**
+   * 添加投资账户
+   */
+  async addInvestmentAccount(account) {
+    if (!account.id) {
+      account.id = 'inv_' + this._generateId()
+    }
+    account.createdAt = new Date().toISOString()
+    
+    await this.add('investment_accounts', account)
+    
+    console.log('[DataStore] 添加投资账户:', account.name)
+    return account
+  }
+
+  /**
+   * 获取投资账户列表
+   */
+  getInvestmentAccounts() {
+    return this.getRaw('investment_accounts')
+  }
+
+  /**
+   * 添加投资明细
+   */
+  async addInvestmentDetail(detail) {
+    if (!detail.id) {
+      detail.id = 'invd_' + this._generateId()
+    }
+    detail.createdAt = new Date().toISOString()
+    
+    await this.add('investment_details', detail)
+    
+    return detail
+  }
+
+  /**
+   * 获取投资明细
+   */
+  getInvestmentDetails(accountId = null) {
+    const details = this.getRaw('investment_details')
+    if (accountId) {
+      return details.filter(d => String(d.account_id) === String(accountId))
+    }
+    return details
+  }
+
+  /**
+   * 添加净值历史记录
+   */
+  async addNetValueRecord(record) {
+    if (!record.id) {
+      record.id = 'nvh_' + this._generateId()
+    }
+    record.createdAt = new Date().toISOString()
+    
+    await this.add('net_value_history', record)
+    
+    return record
+  }
+
+  /**
+   * 获取净值历史记录
+   */
+  getNetValueHistory(accountId = null) {
+    let history = this.getRaw('net_value_history')
+    if (accountId) {
+      history = history.filter(h => String(h.account_id) === String(accountId))
+    }
+    // 按日期降序排序
+    return history.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+  }
+
+  /**
+   * 获取投资账户最新净值
+   */
+  getLatestNetValue(accountId) {
+    const history = this.getNetValueHistory(accountId)
+    return history[0] || null
+  }
+
+  /**
+   * 添加投资损益记录
+   */
+  async addInvestmentProfitRecord(record) {
+    if (!record.id) {
+      record.id = 'ipr_' + this._generateId()
+    }
+    record.createdAt = new Date().toISOString()
+    
+    await this.add('investment_profit_records', record)
+    
+    return record
+  }
+
+  /**
+   * 获取投资损益记录
+   */
+  getInvestmentProfitRecords(accountId = null, cycle = null) {
+    let records = this.getRaw('investment_profit_records')
+    
+    if (accountId) {
+      records = records.filter(r => String(r.account_id) === String(accountId))
+    }
+    if (cycle) {
+      records = records.filter(r => r.cycle === cycle)
     }
     
-    if (eventMap[key]) {
-      window.dispatchEvent(new CustomEvent(eventMap[key]))
-    }
+    return records
   }
-  
-  // 手动刷新数据（从 localStorage 重新加载）
-  async refresh(key) {
-    const saved = localStorage.getItem(key)
-    if (saved) {
-      try {
-        this._data[key].value = JSON.parse(saved)
-        this._versions[key]++
-        this._notifyChange(key)
-      } catch (e) {
-        console.error(`刷新 ${key} 失败:`, e)
-      }
+
+  // =========================================================================
+  // 分期管理
+  // =========================================================================
+
+  /**
+   * 添加分期模板
+   */
+  async addInstallmentTemplate(template) {
+    if (!template.id) {
+      template.id = 'it_' + this._generateId()
     }
+    template.createdAt = new Date().toISOString()
+    
+    await this.add('installment_templates', template)
+    
+    return template
   }
-  
-  // 刷新所有数据
-  async refreshAll() {
-    for (const key of Object.keys(this._data)) {
-      await this.refresh(key)
+
+  /**
+   * 获取分期模板
+   */
+  getInstallmentTemplates() {
+    return this.getRaw('installment_templates')
+  }
+
+  /**
+   * 添加分期记录
+   */
+  async addInstallment(installment) {
+    if (!installment.id) {
+      installment.id = 'ins_' + this._generateId()
     }
+    installment.createdAt = new Date().toISOString()
+    
+    await this.add('installments', installment)
+    
+    return installment
   }
-  
-  // 获取数据版本
-  getVersion(key) {
-    return this._versions[key] || 0
+
+  /**
+   * 获取分期记录
+   */
+  getInstallments(templateId = null) {
+    const installments = this.getRaw('installments')
+    if (templateId) {
+      return installments.filter(i => String(i.template_id) === String(templateId))
+    }
+    return installments
+  }
+
+  /**
+   * 获取分期组记录
+   */
+  getInstallmentGroup(groupId) {
+    return this.getRaw('installments').filter(i => i.installment_group_id === groupId)
+  }
+
+  // =========================================================================
+  // 统计计算
+  // =========================================================================
+
+  /**
+   * 计算信用卡已用额度
+   */
+  calculateCreditCardUsed(cardId) {
+    // 注意：这个计算依赖 transactions 数据
+    // 需要从 CoreDataStore 获取交易数据
+    // 这里返回 0，实际计算在获取时进行
+    return 0
+  }
+
+  /**
+   * 计算投资账户总价值
+   */
+  calculateInvestmentValue(accountId) {
+    const history = this.getNetValueHistory(accountId)
+    if (history.length === 0) return 0
+    return history[0].total_value || 0
   }
 }
 
-// 创建单例
+// 导出单例
 const dataStore = new DataStore()
-
 export default dataStore
 export { DataStore }

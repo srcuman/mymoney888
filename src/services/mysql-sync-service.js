@@ -2,11 +2,33 @@
  * MySQL 同步服务
  * 
  * =============================================================================
+ * 设计理念：★★★ 数据为核心，标签化存储，无损迭代 ★★★
+ * =============================================================================
+ * 
  * 功能说明：
  * - 独立的数据同步模块
- * - 支持本地存储层（DataStore）与 MySQL 的双向同步
- * - 支持定时同步和变更触发同步
- * - 自动处理冲突（本地优先）
+ * - 支持前端 DataStore 与 MySQL 的双向同步
+ * - 遵循"衍生数据不存储"原则
+ * - 自动处理同步冲突
+ * 
+ * 同步表列表（与 database/init-db.sql 保持一致）：
+ * - transactions: 交易记录（核心事实数据）
+ * - accounts: 账户定义（不含余额）
+ * - categories: 分类定义
+ * - credit_cards: 信用卡定义（不含可用额度）
+ * - credit_card_bills: 信用卡账单
+ * - loans: 贷款定义（不含剩余金额）
+ * - loan_payments: 贷款还款记录
+ * - investment_accounts: 投资账户定义（不含总资产）
+ * - investment_details: 投资明细
+ * - net_value_history: 净值历史记录
+ * - dimensions: 维度配置
+ * - ledgers: 账套
+ * - users: 用户
+ * - user_settings: 用户设置
+ * 
+ * =============================================================================
+ * 版本: 3.9.0
  * =============================================================================
  */
 
@@ -45,7 +67,8 @@ class MySQLSyncService {
       this.startAutoSync()
     }
     
-    console.log('[MySQLSync] 初始化完成')
+    console.log('[MySQLSync] v3.9.0 初始化完成')
+    console.log('[MySQLSync] 架构: 数据为核心，标签化存储')
   }
 
   // =========================================================================
@@ -156,14 +179,10 @@ class MySQLSyncService {
    * 同步单个表
    */
   async _syncTable(table, userId, ledgerId) {
-    // 获取本地数据
-    const storageKey = this._isGlobalTable(table)
-      ? table
-      : `${table}_${ledgerId}`
+    // 获取本地数据（从 DataStore）
+    const data = this._getLocalData(table)
     
-    const localData = localStorage.getItem(storageKey)
-    
-    if (!localData) {
+    if (!data || data.length === 0) {
       return { success: true, message: '无数据' }
     }
 
@@ -172,11 +191,45 @@ class MySQLSyncService {
       table,
       userId,
       ledgerId,
-      data: JSON.parse(localData),
+      data: data,
       timestamp: new Date().toISOString()
     })
 
     return { success: true, count: response.count || 0 }
+  }
+
+  /**
+   * 获取本地数据（从 DataStore）
+   */
+  _getLocalData(table) {
+    // 尝试从 CoreDataStore 获取
+    if (window.coreDataStore) {
+      const data = window.coreDataStore.getRaw(table)
+      if (data && data.length > 0) {
+        return data
+      }
+    }
+    
+    // 尝试从旧版 DataStore 获取
+    if (window.dataStore) {
+      // 表名映射（camelCase -> snake_case）
+      const tableMap = {
+        'creditCards': 'credit_cards',
+        'creditCardBills': 'credit_card_bills',
+        'investmentAccounts': 'investment_accounts',
+        'investmentDetails': 'investment_details',
+        'netValueHistory': 'net_value_history',
+        'loanPayments': 'loan_payments',
+        'installmentTemplates': 'installment_templates'
+      }
+      const mappedTable = tableMap[table] || table
+      const data = window.dataStore.getRaw(mappedTable)
+      if (data && data.length > 0) {
+        return data
+      }
+    }
+    
+    return null
   }
 
   /**
@@ -200,17 +253,9 @@ class MySQLSyncService {
       const response = await apiService.get('/sync/all', { userId, ledgerId })
       
       if (response.data) {
-        // 合并到本地存储
+        // 更新到 DataStore
         for (const [table, data] of Object.entries(response.data)) {
-          const storageKey = this._isGlobalTable(table)
-            ? table
-            : `${table}_${ledgerId}`
-          
-          // 本地优先：如果本地有数据，不覆盖
-          const localData = localStorage.getItem(storageKey)
-          if (!localData) {
-            localStorage.setItem(storageKey, JSON.stringify(data))
-          }
+          this._updateLocalData(table, data)
         }
         
         console.log('[MySQLSync] 拉取完成')
@@ -220,6 +265,31 @@ class MySQLSyncService {
     } catch (error) {
       console.error('[MySQLSync] 拉取失败:', error)
       throw error
+    }
+  }
+
+  /**
+   * 更新本地数据
+   */
+  _updateLocalData(table, data) {
+    // 更新到 CoreDataStore
+    if (window.coreDataStore) {
+      window.coreDataStore._data.value[table] = data
+    }
+    
+    // 更新到旧版 DataStore
+    if (window.dataStore) {
+      const tableMap = {
+        'credit_cards': 'creditCards',
+        'credit_card_bills': 'creditCardBills',
+        'investment_accounts': 'investmentAccounts',
+        'investment_details': 'investmentDetails',
+        'net_value_history': 'netValueHistory',
+        'loan_payments': 'loanPayments',
+        'installment_templates': 'installmentTemplates'
+      }
+      const mappedTable = tableMap[table] || table
+      window.dataStore._data.value[mappedTable] = ref(data)
     }
   }
 
@@ -248,12 +318,36 @@ class MySQLSyncService {
    */
   _getAllTables() {
     return [
-      // 账套数据
-      'accounts', 'transactions', 'categories',
-      'credit_cards', 'credit_card_bills', 'loans', 'loan_payments',
-      'investment_accounts', 'investment_details', 'net_value_history',
-      // 全局数据
-      'dimensions', 'ledgers', 'users', 'user_settings', 'user_defaults'
+      // 核心数据
+      'transactions',
+      'accounts',
+      'categories',
+      
+      // 信用卡
+      'credit_cards',
+      'credit_card_bills',
+      
+      // 贷款
+      'loans',
+      'loan_payments',
+      
+      // 投资
+      'investment_accounts',
+      'investment_details',
+      'net_value_history',
+      'investment_profit_records',
+      
+      // 分期
+      'installment_templates',
+      'installments',
+      
+      // 系统数据
+      'dimensions',
+      'ledgers',
+      'users',
+      'user_settings',
+      'user_defaults',
+      'sync_logs'
     ]
   }
 
@@ -261,7 +355,7 @@ class MySQLSyncService {
    * 判断是否为全局表（不按账套隔离）
    */
   _isGlobalTable(table) {
-    return ['dimensions', 'ledgers', 'users', 'user_settings', 'user_defaults'].includes(table)
+    return ['users', 'user_settings', 'ledgers', 'sync_logs'].includes(table)
   }
 
   /**
