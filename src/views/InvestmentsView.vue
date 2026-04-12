@@ -757,23 +757,31 @@ const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
 // 使用JSONP方式获取天天基金数据（解决CORS和代理问题）
 const fetchTianTianFundJSONP = (code) => {
   return new Promise((resolve, reject) => {
-    const callbackName = `jsonpgz_${Date.now()}`
-    const url = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}&callback=${callbackName}`
-    
+    const url = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}`
     const script = document.createElement('script')
     script.src = url
     
-    window[callbackName] = (data) => {
-      delete window[callbackName]
+    // 天天基金API固定返回 jsonpgz({...}) 格式
+    window.jsonpgz = (data) => {
       if (script.parentNode) script.parentNode.removeChild(script)
+      delete window.jsonpgz
       resolve(data)
     }
     
     script.onerror = () => {
-      delete window[callbackName]
       if (script.parentNode) script.parentNode.removeChild(script)
+      delete window.jsonpgz
       reject(new Error('网络错误'))
     }
+    
+    // 超时处理
+    setTimeout(() => {
+      if (window.jsonpgz) {
+        if (script.parentNode) script.parentNode.removeChild(script)
+        delete window.jsonpgz
+        reject(new Error('请求超时'))
+      }
+    }, 10000)
     
     document.head.appendChild(script)
   })
