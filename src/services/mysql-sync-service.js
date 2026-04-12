@@ -244,16 +244,16 @@ class MySQLSyncService {
   // =========================================================================
 
   /**
-   * 获取所有表名
+   * 获取所有表名（snake_case）
    */
   _getAllTables() {
     return [
       // 账套数据
       'accounts', 'transactions', 'categories',
-      'creditCards', 'creditCardBills', 'loans', 'repaymentPlans',
-      'investmentAccounts', 'investmentDetails', 'netValueHistory', 'investmentProfitRecords',
+      'credit_cards', 'credit_card_bills', 'loans', 'loan_payments',
+      'investment_accounts', 'investment_details', 'net_value_history',
       // 全局数据
-      'dimensions', 'ledgers', 'users', 'settings', 'defaults'
+      'dimensions', 'ledgers', 'users', 'user_settings', 'user_defaults'
     ]
   }
 
@@ -261,7 +261,7 @@ class MySQLSyncService {
    * 判断是否为全局表（不按账套隔离）
    */
   _isGlobalTable(table) {
-    return ['dimensions', 'ledgers', 'users', 'settings', 'defaults'].includes(table)
+    return ['dimensions', 'ledgers', 'users', 'user_settings', 'user_defaults'].includes(table)
   }
 
   /**

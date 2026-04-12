@@ -1,8 +1,9 @@
 -- 个人记账系统数据库初始化脚本
--- 版本: 3.6.0
+-- 版本: 3.8.0
 -- 创建时间: 2026-04-12
 -- 说明: 此版本不依赖数据库全局权限，仅需普通数据库用户权限即可运行
 --       触发器、存储过程、事件等功能已移除，需在应用层实现
+--       配合 DataStore + MySQL 双份存储架构
 
 -- 创建数据库
 CREATE DATABASE IF NOT EXISTS mymoney888 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -102,6 +103,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE TABLE IF NOT EXISTS sync_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL COMMENT '用户ID',
+    ledger_id VARCHAR(50) DEFAULT 'default' COMMENT '账套ID',
     sync_type ENUM('local_to_db', 'db_to_local', 'bidirectional') NOT NULL COMMENT '同步类型',
     table_name VARCHAR(50) NOT NULL COMMENT '同步的表名',
     record_count INT DEFAULT 0 COMMENT '同步记录数',
@@ -112,6 +114,7 @@ CREATE TABLE IF NOT EXISTS sync_logs (
     completed_at TIMESTAMP NULL COMMENT '完成时间',
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_user_id (user_id),
+    INDEX idx_ledger_id (ledger_id),
     INDEX idx_sync_type (sync_type),
     INDEX idx_status (status),
     INDEX idx_started_at (started_at)
@@ -384,16 +387,38 @@ CREATE TABLE IF NOT EXISTS investment_details (
 CREATE TABLE IF NOT EXISTS net_value_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL COMMENT '用户ID',
-    code VARCHAR(20) NOT NULL COMMENT '投资品种代码',
-    name VARCHAR(100) NOT NULL COMMENT '投资品种名称',
+    account_id VARCHAR(50) COMMENT '投资账户ID',
+    code VARCHAR(20) COMMENT '投资品种代码',
+    name VARCHAR(100) COMMENT '投资品种名称',
+    value DECIMAL(15, 2) COMMENT '资产总值',
     date DATE NOT NULL COMMENT '净值日期',
-    price DECIMAL(15, 4) NOT NULL COMMENT '净值/价格',
+    profit DECIMAL(15, 2) DEFAULT 0.00 COMMENT '盈亏金额',
     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_user_date (user_id, date),
-    INDEX idx_code_date (code, date)
+    INDEX idx_account_id (account_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='净值历史记录表';
+
+-- 投资损益记录表
+CREATE TABLE IF NOT EXISTS investment_profit_records (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL COMMENT '用户ID',
+    account_id VARCHAR(50) NOT NULL COMMENT '投资账户ID',
+    transaction_id VARCHAR(50) COMMENT '关联交易ID',
+    cycle ENUM('monthly', 'quarterly', 'yearly') NOT NULL COMMENT '结算周期',
+    period VARCHAR(20) NOT NULL COMMENT '周期标识（如 2026-01, 2026-Q1）',
+    start_value DECIMAL(15, 2) DEFAULT 0.00 COMMENT '期初价值',
+    end_value DECIMAL(15, 2) DEFAULT 0.00 COMMENT '期末价值',
+    profit DECIMAL(15, 2) DEFAULT 0.00 COMMENT '损益金额',
+    date DATE COMMENT '记录日期',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_account_id (account_id),
+    INDEX idx_cycle_period (cycle, period)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投资损益记录表';
 
 -- 维度配置表（包含成员、商家、标签、支付渠道等）
 CREATE TABLE IF NOT EXISTS dimensions (
@@ -551,5 +576,5 @@ INSERT INTO categories (user_id, name, type, icon, color, is_default, sort_order
 
 -- 完成提示
 SELECT '数据库初始化完成！' as message;
-SELECT '版本: 3.6.0' as version;
-SELECT '说明: 此版本不依赖全局权限，普通数据库用户权限即可运行' as note;
+SELECT '版本: 3.8.0' as version;
+SELECT '说明: 此版本支持 DataStore + MySQL 双份存储架构' as note;

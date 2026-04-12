@@ -37,23 +37,23 @@
 import { ref, computed, shallowRef } from 'vue'
 
 /**
- * 数据类型分类
+ * 数据类型分类（snake_case 与 MySQL 对应）
  */
 const DATA_TYPES = {
   // 核心数据（记账必须依赖）
   CORE: ['transactions', 'accounts', 'categories'],
   
   // 辅助数据（服务记账）
-  AUXILIARY: ['creditCards', 'creditCardBills', 'loans', 'repaymentPlans'],
-  
+  AUXILIARY: ['credit_cards', 'credit_card_bills', 'loans', 'loan_payments'],
+
   // 扩展数据（记账的补充）
-  EXTENSION: ['investmentAccounts', 'investmentDetails', 'netValueHistory', 'investmentProfitRecords'],
+  EXTENSION: ['investment_accounts', 'investment_details', 'net_value_history', 'investment_profit_records'],
   
   // 维度数据（交易标签）
-  DIMENSION: ['members', 'merchants', 'tags', 'paymentChannels'],
+  DIMENSION: ['members', 'merchants', 'tags', 'payment_channels'],
   
   // 系统数据
-  SYSTEM: ['ledgers', 'users', 'settings', 'defaults']
+  SYSTEM: ['ledgers', 'users', 'user_settings', 'user_defaults']
 }
 
 /**
@@ -154,15 +154,15 @@ class CoreDataStore {
   loadAllData() {
     const data = {}
     
-    // 按账套隔离的数据
+    // 按账套隔离的数据（snake_case）
     const ledgerKeys = [
       'accounts', 'transactions', 'categories',
-      'creditCards', 'creditCardBills', 'loans', 'repaymentPlans',
-      'investmentAccounts', 'investmentDetails', 'netValueHistory', 'investmentProfitRecords'
+      'credit_cards', 'credit_card_bills', 'loans', 'loan_payments',
+      'investment_accounts', 'investment_details', 'net_value_history', 'investment_profit_records'
     ]
 
     // 全局数据（不按账套隔离）
-    const globalKeys = ['dimensions', 'ledgers', 'users', 'settings', 'defaults']
+    const globalKeys = ['dimensions', 'ledgers', 'users', 'user_settings', 'user_defaults']
 
     // 加载账套数据
     for (const key of ledgerKeys) {
@@ -406,9 +406,11 @@ class CoreDataStore {
 
   /**
    * 保存到 localStorage
+   * 注意：全局数据使用原始 key，账套数据使用 ledgerId 前缀
    */
   _save(key) {
-    const storageKey = key.includes('_') || ['dimensions', 'ledgers', 'users', 'settings', 'defaults'].includes(key)
+    const globalTables = ['dimensions', 'ledgers', 'users', 'user_settings', 'user_defaults']
+    const storageKey = globalTables.includes(key)
       ? key 
       : this._getStorageKey(key)
     
@@ -579,7 +581,7 @@ class CoreDataStore {
 
     // 联动1：同步投资账户余额
     if (oldAccount.category === 'investment' && updates.balance !== undefined) {
-      const linkedAccount = this.find('investmentAccounts', 
+      const linkedAccount = this.find('investment_accounts', 
         inv => String(inv.linkedAccountId) === String(accountId))
       if (linkedAccount) {
         await this.updateInvestmentAccount(linkedAccount.id, { totalValue: updates.balance })
@@ -588,7 +590,7 @@ class CoreDataStore {
 
     // 联动2：同步信用卡额度
     if (oldAccount.category === 'credit' && updates.creditLimit !== undefined) {
-      const linkedCard = this.find('creditCards',
+      const linkedCard = this.find('credit_cards',
         card => String(card.linkedAccountId) === String(accountId))
       if (linkedCard) {
         await this.updateCreditCard(linkedCard.id, { creditLimit: updates.creditLimit })
@@ -612,14 +614,14 @@ class CoreDataStore {
 
     // 联动：清理关联数据
     if (account.category === 'investment') {
-      const linkedInv = this.find('investmentAccounts',
+      const linkedInv = this.find('investment_accounts',
         inv => String(inv.linkedAccountId) === String(accountId))
       if (linkedInv) {
         await this.deleteInvestmentAccount(linkedInv.id)
       }
     }
     if (account.category === 'credit') {
-      const linkedCard = this.find('creditCards',
+      const linkedCard = this.find('credit_cards',
         card => String(card.linkedAccountId) === String(accountId))
       if (linkedCard) {
         await this.deleteCreditCard(linkedCard.id)
@@ -694,7 +696,7 @@ class CoreDataStore {
     card.availableCredit = card.creditLimit
     card.usedCredit = 0
     
-    await this.add('creditCards', card)
+    await this.add('credit_cards', card)
     
     console.log('[CoreDataStore] 添加信用卡:', card.id)
     return card
@@ -704,7 +706,7 @@ class CoreDataStore {
    * 更新信用卡
    */
   async updateCreditCard(cardId, updates) {
-    const card = await this.update('creditCards', cardId, updates)
+    const card = await this.update('credit_cards', cardId, updates)
     
     // 联动：同步关联账户的额度
     if (card && (updates.creditLimit !== undefined || updates.usedCredit !== undefined)) {
@@ -724,24 +726,24 @@ class CoreDataStore {
    * 删除信用卡
    */
   async deleteCreditCard(cardId) {
-    const card = this.find('creditCards', cardId)
+    const card = this.find('credit_cards', cardId)
     if (card?.linkedAccountId) {
       await this.remove('accounts', card.linkedAccountId)
     }
-    await this.remove('creditCards', cardId)
+    await this.remove('credit_cards', cardId)
   }
 
   /**
    * 更新信用卡额度
    */
   async _updateCreditCardBalance(transaction, mode) {
-    const card = this.find('creditCards', c => String(c.linkedAccountId) === String(transaction.creditCardAccount))
+    const card = this.find('credit_cards', c => String(c.linkedAccountId) === String(transaction.creditCardAccount))
     if (!card) return
 
     const multiplier = mode === 'add' ? 1 : -1
     const usedAmount = transaction.amount * multiplier
 
-    await this.update('creditCards', card.id, {
+    await this.update('credit_cards', card.id, {
       usedCredit: card.usedCredit + usedAmount,
       availableCredit: card.creditLimit - (card.usedCredit + usedAmount)
     })
@@ -751,7 +753,7 @@ class CoreDataStore {
    * 信用卡还款（生成转账交易）
    */
   async repayCreditCard(fromAccountId, cardId, amount, date) {
-    const card = this.find('creditCards', cardId)
+    const card = this.find('credit_cards', cardId)
     if (!card) throw new Error('信用卡不存在')
 
     // 生成还款转账交易
@@ -798,7 +800,7 @@ class CoreDataStore {
       account.linkedAccountId = linkedAccount.id
     }
 
-    await this.add('investmentAccounts', account)
+    await this.add('investment_accounts', account)
     
     console.log('[CoreDataStore] 添加投资账户:', account.id)
     return account
@@ -808,11 +810,11 @@ class CoreDataStore {
    * 更新投资账户
    */
   async updateInvestmentAccount(accountId, updates) {
-    const oldAccount = this.find('investmentAccounts', accountId)
+    const oldAccount = this.find('investment_accounts', accountId)
     if (!oldAccount) return null
 
     const updated = { ...oldAccount, ...updates }
-    await this.update('investmentAccounts', accountId, updates)
+    await this.update('investment_accounts', accountId, updates)
 
     // 联动：同步账户余额
     if (updates.totalValue !== undefined) {
@@ -834,37 +836,37 @@ class CoreDataStore {
    * 删除投资账户
    */
   async deleteInvestmentAccount(accountId) {
-    const account = this.find('investmentAccounts', accountId)
+    const account = this.find('investment_accounts', accountId)
     if (account?.linkedAccountId) {
       await this.remove('accounts', account.linkedAccountId)
     }
     
     // 清理关联的投资明细和净值历史
-    const details = this.filter('investmentDetails', d => String(d.accountId) === String(accountId))
+    const details = this.filter('investment_details', d => String(d.accountId) === String(accountId))
     for (const detail of details) {
-      await this.remove('investmentDetails', detail.id)
+      await this.remove('investment_details', detail.id)
     }
     
-    const history = this.filter('netValueHistory', h => String(h.accountId) === String(accountId))
+    const history = this.filter('net_value_history', h => String(h.accountId) === String(accountId))
     for (const record of history) {
-      await this.remove('netValueHistory', record.id)
+      await this.remove('net_value_history', record.id)
     }
 
-    await this.remove('investmentAccounts', accountId)
+    await this.remove('investment_accounts', accountId)
   }
 
   /**
    * 更新净值并生成损益交易
    */
   async updateNetValue(accountId, newValue, date) {
-    const account = this.find('investmentAccounts', accountId)
+    const account = this.find('investment_accounts', accountId)
     if (!account) return
 
     const oldValue = account.totalValue || 0
     const profit = newValue - oldValue
 
     // 添加净值历史
-    await this.add('netValueHistory', {
+    await this.add('net_value_history', {
       accountId: accountId,
       value: newValue,
       date: date || new Date().toISOString().split('T')[0],
@@ -895,7 +897,7 @@ class CoreDataStore {
     if (!shouldGenerate) return
 
     // 检查是否已生成本周期损益
-    const existingProfit = this.filter('investmentProfitRecords', r => 
+    const existingProfit = this.filter('investment_profit_records', r => 
       String(r.accountId) === String(account.id) &&
       r.cycle === account.profitCycle &&
       r.period === this._getCurrentPeriod(account.profitCycle)
@@ -925,7 +927,7 @@ class CoreDataStore {
       })
 
       // 记录损益记录
-      await this.add('investmentProfitRecords', {
+      await this.add('investment_profit_records', {
         accountId: account.id,
         transactionId: transaction.id,
         cycle: account.profitCycle,
@@ -1051,7 +1053,7 @@ class CoreDataStore {
 
     // 保存还款计划
     for (const payment of payments) {
-      await this.add('repaymentPlans', payment)
+      await this.add('loan_payments', payment)
     }
   }
 
@@ -1077,7 +1079,7 @@ class CoreDataStore {
 
     // 更新还款计划状态
     if (paymentId) {
-      await this.update('repaymentPlans', paymentId, {
+      await this.update('loan_payments', paymentId, {
         status: 'paid',
         paidDate: date || new Date().toISOString().split('T')[0],
         actualAmount: amount
