@@ -746,37 +746,7 @@ onMounted(() => {
   // 监听账套切换
   window.addEventListener('ledgerChanged', handleLedgerChange)
 })
-  
-  // 确保默认数据存在
-  if (expenseCategories.value.length === 0) {
-    expenseCategories.value = [
-      { id: '1', name: '餐饮', type: 'expense', children: [
-        { id: '1-1', name: '早餐', type: 'expense' },
-        { id: '1-2', name: '午餐', type: 'expense' },
-        { id: '1-3', name: '晚餐', type: 'expense' },
-        { id: '1-4', name: '外卖', type: 'expense' },
-        { id: '1-5', name: '零食', type: 'expense' },
-        { id: '1-6', name: '水果', type: 'expense' },
-        { id: '1-7', name: '饮料', type: 'expense' },
-        { id: '1-8', name: '聚餐', type: 'expense' }
-      ]},
-      { id: '2', name: '交通', type: 'expense', children: [
-        { id: '2-1', name: '公交', type: 'expense' },
-        { id: '2-2', name: '地铁', type: 'expense' },
-        { id: '2-3', name: '打车', type: 'expense' },
-        { id: '2-4', name: '加油', type: 'expense' },
-        { id: '2-5', name: '停车', type: 'expense' },
-        { id: '2-6', name: '路桥费', type: 'expense' },
-        { id: '2-7', name: '保养', type: 'expense' },
-        { id: '2-8', name: '维修', type: 'expense' }
-      ]},
-      { id: '3', name: '购物', type: 'expense', children: [
-        { id: '3-1', name: '服饰', type: 'expense' },
-        { id: '3-2', name: '电子产品', type: 'expense' },
-        { id: '3-3', name: '家居用品', type: 'expense' },
-        { id: '3-4', name: '化妆品', type: 'expense' },
-        { id: '3-5', name: '护肤品', type: 'expense' },
-        { id: '3-6', name: '日用品', type: 'expense' },
+</script>
         { id: '3-7', name: '礼品', type: 'expense' },
         { id: '3-8', name: '其他购物', type: 'expense' }
       ]},
