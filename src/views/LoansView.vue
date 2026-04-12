@@ -141,6 +141,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import syncService from '../services/sync-service.js'
 
 // 贷款列表
 const loans = ref([
@@ -226,7 +227,7 @@ const editLoan = (loan) => {
 }
 
 // 保存贷款
-const saveLoan = () => {
+const saveLoan = async () => {
   if (showEditLoanModal.value) {
     // 更新现有贷款
     const index = loans.value.findIndex(l => l.id === formData.value.id)
@@ -262,13 +263,19 @@ const saveLoan = () => {
     const existingAccounts = JSON.parse(localStorage.getItem('accounts') || '[]')
     existingAccounts.push(linkedAccount)
     localStorage.setItem('accounts', JSON.stringify(existingAccounts))
-    
-    // 触发账户更新事件
-    window.dispatchEvent(new CustomEvent('accountsUpdated'))
   }
   
   // 保存到本地存储
   localStorage.setItem('loans', JSON.stringify(loans.value))
+  
+  // 同步到数据库
+  await syncService.syncOnDataChange('loans')
+  
+  // 通知其他组件贷款数据已更新
+  window.dispatchEvent(new CustomEvent('loanAccountsUpdated'))
+  
+  // 触发账户更新事件
+  window.dispatchEvent(new CustomEvent('accountsUpdated'))
   
   // 关闭模态框并重置表单
   showAddLoanModal.value = false
@@ -277,16 +284,22 @@ const saveLoan = () => {
 }
 
 // 删除贷款
-const deleteLoan = (loanId) => {
+const deleteLoan = async (loanId) => {
   if (confirm('确定要删除此贷款吗？')) {
     loans.value = loans.value.filter(l => l.id !== loanId)
     // 保存到本地存储
     localStorage.setItem('loans', JSON.stringify(loans.value))
+    // 同步到数据库
+    await syncService.syncOnDataChange('loans')
+    // 通知其他组件贷款数据已更新
+    window.dispatchEvent(new CustomEvent('loanAccountsUpdated'))
+    // 触发账户更新事件
+    window.dispatchEvent(new CustomEvent('accountsUpdated'))
   }
 }
 
 // 还款
-const payRepayment = (plan) => {
+const payRepayment = async (plan) => {
   if (confirm(`确定要偿还 ${plan.loanName} 的还款吗？金额：¥${plan.remainingAmount.toFixed(2)}`)) {
     const index = repaymentPlans.value.findIndex(p => p.id === plan.id)
     if (index !== -1) {
@@ -296,6 +309,10 @@ const payRepayment = (plan) => {
     }
     // 保存到本地存储
     localStorage.setItem('repaymentPlans', JSON.stringify(repaymentPlans.value))
+    // 同步到数据库
+    await syncService.syncOnDataChange('repaymentPlans')
+    // 通知其他组件贷款数据已更新
+    window.dispatchEvent(new CustomEvent('loanAccountsUpdated'))
   }
 }
 

@@ -148,6 +148,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import syncService from '../services/sync-service.js'
 
 // 信用卡列表
 const creditCards = ref([])
@@ -214,7 +215,7 @@ const editCard = (card) => {
 }
 
 // 保存信用卡
-const saveCard = () => {
+const saveCard = async () => {
   if (showEditCardModal.value) {
     // 更新现有信用卡
     const index = creditCards.value.findIndex(c => c.id === formData.value.id)
@@ -250,13 +251,19 @@ const saveCard = () => {
     const existingAccounts = JSON.parse(localStorage.getItem('accounts') || '[]')
     existingAccounts.push(linkedAccount)
     localStorage.setItem('accounts', JSON.stringify(existingAccounts))
-    
-    // 触发账户更新事件
-    window.dispatchEvent(new CustomEvent('accountsUpdated'))
   }
   
   // 保存到本地存储
   localStorage.setItem('creditCards', JSON.stringify(creditCards.value))
+  
+  // 同步到数据库
+  await syncService.syncOnDataChange('creditCards')
+  
+  // 通知其他组件信用卡数据已更新
+  window.dispatchEvent(new CustomEvent('creditCardsUpdated'))
+  
+  // 触发账户更新事件
+  window.dispatchEvent(new CustomEvent('accountsUpdated'))
   
   // 关闭模态框并重置表单
   showAddCardModal.value = false
@@ -265,16 +272,22 @@ const saveCard = () => {
 }
 
 // 删除信用卡
-const deleteCard = (cardId) => {
+const deleteCard = async (cardId) => {
   if (confirm('确定要删除此信用卡吗？')) {
     creditCards.value = creditCards.value.filter(c => c.id !== cardId)
     // 保存到本地存储
     localStorage.setItem('creditCards', JSON.stringify(creditCards.value))
+    // 同步到数据库
+    await syncService.syncOnDataChange('creditCards')
+    // 通知其他组件信用卡数据已更新
+    window.dispatchEvent(new CustomEvent('creditCardsUpdated'))
+    // 触发账户更新事件
+    window.dispatchEvent(new CustomEvent('accountsUpdated'))
   }
 }
 
 // 还款
-const payBill = (bill) => {
+const payBill = async (bill) => {
   if (confirm(`确定要偿还 ${bill.cardName} 的账单吗？金额：¥${bill.remainingAmount.toFixed(2)}`)) {
     const index = creditCardBills.value.findIndex(b => b.id === bill.id)
     if (index !== -1) {
@@ -284,6 +297,10 @@ const payBill = (bill) => {
     }
     // 保存到本地存储
     localStorage.setItem('creditCardBills', JSON.stringify(creditCardBills.value))
+    // 同步到数据库
+    await syncService.syncOnDataChange('creditCardBills')
+    // 通知其他组件信用卡数据已更新
+    window.dispatchEvent(new CustomEvent('creditCardsUpdated'))
   }
 }
 

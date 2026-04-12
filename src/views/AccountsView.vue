@@ -248,5 +248,95 @@ onMounted(() => {
     
     // 保存到本地存储
     localStorage.setItem('accounts', JSON.stringify(accounts.value))
+    
+    // 监听投资账户更新事件
+    window.addEventListener('investmentAccountsUpdated', refreshInvestmentAccounts)
+    
+    // 监听信用卡更新事件
+    window.addEventListener('creditCardsUpdated', refreshCreditCards)
+    
+    // 监听贷款更新事件
+    window.addEventListener('loanAccountsUpdated', refreshLoans)
   })
+
+// 刷新投资账户余额
+const refreshInvestmentAccounts = () => {
+  const savedInvestmentAccounts = localStorage.getItem('investmentAccounts')
+  if (savedInvestmentAccounts) {
+    try {
+      const investmentAccounts = JSON.parse(savedInvestmentAccounts)
+      investmentAccounts.forEach(account => {
+        const existingAccount = accounts.value.find(a => a.name === account.name && a.category === 'investment')
+        if (existingAccount) {
+          existingAccount.balance = account.totalAsset || 0
+        } else {
+          accounts.value.push({
+            id: generateId(),
+            name: account.name,
+            balance: account.totalAsset || 0,
+            category: 'investment'
+          })
+        }
+      })
+      // 保存更新后的数据
+      localStorage.setItem('accounts', JSON.stringify(accounts.value))
+    } catch (error) {
+      console.error('刷新投资账户数据失败:', error)
+    }
+  }
+}
+
+// 刷新信用卡余额
+const refreshCreditCards = () => {
+  const savedCreditCards = localStorage.getItem('creditCards')
+  if (savedCreditCards) {
+    try {
+      const creditCards = JSON.parse(savedCreditCards)
+      creditCards.forEach(card => {
+        const existingAccount = accounts.value.find(a => a.name === card.name && a.category === 'credit_card')
+        if (existingAccount) {
+          existingAccount.balance = card.creditLimit - card.availableCredit
+        } else {
+          accounts.value.push({
+            id: generateId(),
+            name: card.name,
+            balance: card.creditLimit - card.availableCredit,
+            category: 'credit_card'
+          })
+        }
+      })
+      // 保存更新后的数据
+      localStorage.setItem('accounts', JSON.stringify(accounts.value))
+    } catch (error) {
+      console.error('刷新信用卡数据失败:', error)
+    }
+  }
+}
+
+// 刷新贷款余额
+const refreshLoans = () => {
+  const savedLoans = localStorage.getItem('loans')
+  if (savedLoans) {
+    try {
+      const loans = JSON.parse(savedLoans)
+      loans.forEach(loan => {
+        const existingAccount = accounts.value.find(a => a.name === loan.name && a.category === 'loan')
+        if (existingAccount) {
+          existingAccount.balance = -loan.remainingAmount
+        } else {
+          accounts.value.push({
+            id: generateId(),
+            name: loan.name,
+            balance: -loan.remainingAmount,
+            category: 'loan'
+          })
+        }
+      })
+      // 保存更新后的数据
+      localStorage.setItem('accounts', JSON.stringify(accounts.value))
+    } catch (error) {
+      console.error('刷新贷款数据失败:', error)
+    }
+  }
+}
 </script>
