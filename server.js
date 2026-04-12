@@ -30,11 +30,27 @@ const DATA_DIR = process.env.DATA_DIR
 const AUTO_BACKUP_INTERVAL = parseInt(process.env.AUTO_BACKUP_INTERVAL || '30') // 分钟
 const AUTO_BACKUP_ON_CHANGE = process.env.AUTO_BACKUP_ON_CHANGE !== 'false'
 
-// 确保数据目录存在
+// 确保数据目录存在且可写
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
-    console.log(`📁 创建数据目录: ${DATA_DIR}`)
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o777 })
+      console.log(`✅ 创建数据目录: ${DATA_DIR}`)
+    } catch (error) {
+      console.error(`❌ 创建数据目录失败: ${DATA_DIR}`, error.message)
+    }
+  }
+  
+  // 检查目录是否可写
+  if (fs.existsSync(DATA_DIR)) {
+    try {
+      const testFile = path.join(DATA_DIR, '.write_test')
+      fs.writeFileSync(testFile, 'test')
+      fs.unlinkSync(testFile)
+      console.log(`✅ 数据目录可写: ${DATA_DIR}`)
+    } catch (error) {
+      console.error(`❌ 数据目录不可写: ${DATA_DIR}`, error.message)
+    }
   }
 }
 
@@ -51,6 +67,7 @@ async function backupToFile(tableName, data) {
       data: data
     }
     fs.writeFileSync(filePath, JSON.stringify(backup, null, 2), 'utf8')
+    console.log(`💾 备份成功: ${tableName}.json (${data.length}条)`)
     return true
   } catch (error) {
     console.error(`❌ 备份 ${tableName} 到文件失败:`, error.message)

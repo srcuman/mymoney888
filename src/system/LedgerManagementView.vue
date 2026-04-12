@@ -139,7 +139,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { ledgerTemplates, createLedgerFromTemplate } from '../utils/ledger-templates.js'
+import { ledgerTemplates, createLedgerFromTemplate, getLedgerCategories, getLedgerDimensions } from '../utils/ledger-templates.js'
 
 // 账套列表
 const ledgers = ref([])
@@ -238,6 +238,16 @@ const saveLedger = () => {
       formData.value.description
     )
     ledgers.value.push(newLedger)
+    
+    // 如果启用了 coreDataStore，同步分类数据
+    if (window.coreDataStore) {
+      const categories = getLedgerCategories(newLedger.id)
+      const dimensions = getLedgerDimensions(newLedger.id)
+      window.coreDataStore._data.value.categories = categories
+      window.coreDataStore._data.value.dimensions = dimensions
+      window.coreDataStore._save('categories')
+      window.coreDataStore._save('dimensions')
+    }
   }
   
   // 保存到本地存储
@@ -264,6 +274,14 @@ const deleteLedger = (ledgerId) => {
     
     // 清理账套相关的本地存储数据
     localStorage.removeItem(`dimensions_${ledgerId}`)
+    localStorage.removeItem(`categories_${ledgerId}`)
+    // 清理其他账套特定数据
+    const ledgerKeys = ['accounts', 'transactions', 'categories', 'credit_cards', 'credit_card_bills', 
+                        'loans', 'loan_payments', 'investment_accounts', 'investment_details', 
+                        'net_value_history', 'investment_profit_records']
+    for (const key of ledgerKeys) {
+      localStorage.removeItem(`${key}_${ledgerId}`)
+    }
     
     // 如果删除的是当前账套，切换到第一个账套
     if (currentLedgerId.value === ledgerId && ledgers.value.length > 0) {

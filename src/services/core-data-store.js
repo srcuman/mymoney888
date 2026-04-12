@@ -163,7 +163,7 @@ class CoreDataStore {
     ]
 
     // 全局数据（不按账套隔离）
-    const globalKeys = ['dimensions', 'ledgers', 'users', 'user_settings', 'user_defaults']
+    const globalKeys = ['ledgers', 'users', 'user_settings', 'user_defaults']
 
     // 加载账套数据
     for (const key of ledgerKeys) {
@@ -172,10 +172,19 @@ class CoreDataStore {
       data[key] = saved ? this._parseJSON(saved) : []
     }
 
+    // 加载维度数据（按账套隔离，使用 ledgerId 前缀）
+    const dimsKey = this._getStorageKey('dimensions')
+    const dimsSaved = localStorage.getItem(dimsKey)
+    if (dimsSaved) {
+      data.dimensions = this._parseJSON(dimsSaved)
+    } else {
+      data.dimensions = this._getDefaultDimensions()
+    }
+
     // 加载全局数据
     for (const key of globalKeys) {
       const saved = localStorage.getItem(key)
-      data[key] = saved ? this._parseJSON(saved) : key === 'dimensions' ? this._getDefaultDimensions() : []
+      data[key] = saved ? this._parseJSON(saved) : []
     }
 
     this._data.value = data
@@ -243,10 +252,12 @@ class CoreDataStore {
     for (const t of transactions) {
       if (t.member) usages.members.add(t.member)
       if (t.merchant) usages.merchants.add(t.merchant)
-      if (t.tag) usages.tag = usages.tag || new Set()
+      // tags 处理（t.tags 是数组）
       if (t.tags) {
         for (const tag of t.tags) usages.tags.add(tag)
       }
+      // t.tag 可能是单个标签字符串（旧格式兼容）
+      if (t.tag) usages.tags.add(t.tag)
       if (t.paymentChannel) usages.paymentChannels.add(t.paymentChannel)
     }
 
@@ -410,7 +421,8 @@ class CoreDataStore {
    * 注意：全局数据使用原始 key，账套数据使用 ledgerId 前缀
    */
   _save(key) {
-    const globalTables = ['dimensions', 'ledgers', 'users', 'user_settings', 'user_defaults']
+    // dimensions 也按账套隔离
+    const globalTables = ['ledgers', 'users', 'user_settings', 'user_defaults']
     const storageKey = globalTables.includes(key)
       ? key 
       : this._getStorageKey(key)
@@ -1119,6 +1131,7 @@ class CoreDataStore {
   getDimensionItems(type) {
     const dimensions = this._data.value.dimensions || this._getDefaultDimensions()
     const items = dimensions[type] || []
+    
     // 如果是字符串数组，转换为对象数组
     if (items.length > 0 && typeof items[0] === 'string') {
       return items.map((name, index) => ({
@@ -1126,6 +1139,7 @@ class CoreDataStore {
         name: name
       }))
     }
+    
     // 如果已经是对象数组，直接返回
     return items.map((item, index) => ({
       id: item.id || `dim_${type}_${index}`,

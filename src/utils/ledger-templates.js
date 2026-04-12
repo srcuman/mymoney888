@@ -736,22 +736,39 @@ export const createLedgerFromTemplate = (templateId, name, description = '') => 
     templateId: template.id
   }
 
-  // 如果不是空白模板，保存维度数据
+  // 如果不是空白模板，保存数据到 localStorage
   if (template.type !== 'blank' && template.data) {
+    // 分类数据：合并支出和收入分类
+    const categories = [
+      ...(template.data.expenseCategories || []),
+      ...(template.data.incomeCategories || [])
+    ]
+    localStorage.setItem(`categories_${ledgerId}`, JSON.stringify(categories))
+    
+    // 维度数据：支付渠道、成员、标签、商家
     const dimensions = {
-      expenseCategories: template.data.expenseCategories || [],
-      incomeCategories: template.data.incomeCategories || [],
       paymentChannels: template.data.paymentChannels || [],
       members: template.data.members || [],
       tags: template.data.tags || [],
       merchants: template.data.merchants || []
     }
-    
-    // 为每个账套存储独立的维度数据，使用账套ID作为后缀
     localStorage.setItem(`dimensions_${ledgerId}`, JSON.stringify(dimensions))
   }
 
   return ledger
+}
+
+// 获取账套的分类数据
+export const getLedgerCategories = (ledgerId) => {
+  const data = localStorage.getItem(`categories_${ledgerId}`)
+  if (data) {
+    return JSON.parse(data)
+  }
+  // 返回默认模板分类
+  return [
+    ...defaultExpenseCategories,
+    ...defaultIncomeCategories
+  ]
 }
 
 // 获取账套的维度数据
@@ -764,13 +781,16 @@ export const getLedgerDimensions = (ledgerId) => {
   const template = ledgerTemplates.find(t => t.type !== 'blank')
   if (template && template.data) {
     return {
-      expenseCategories: template.data.expenseCategories || [],
-      incomeCategories: template.data.incomeCategories || [],
       paymentChannels: template.data.paymentChannels || [],
       members: template.data.members || [],
       tags: template.data.tags || [],
       merchants: template.data.merchants || []
     }
   }
-  return null
+  return {
+    members: [],
+    merchants: [],
+    tags: [],
+    paymentChannels: []
+  }
 }

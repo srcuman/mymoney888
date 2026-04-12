@@ -1118,7 +1118,7 @@ const addInvestmentDetail = async () => {
   const today = new Date().toISOString().split('T')[0]
   const account = investmentAccounts.value.find(a => String(a.id) === String(newInvestmentDetail.value.accountId))
   
-  await coreDataStore.add('investmentDetails', {
+  await coreDataStore.add('investment_details', {
     accountId: newInvestmentDetail.value.accountId,
     accountName: account ? account.name : '',
     type: newInvestmentDetail.value.type,

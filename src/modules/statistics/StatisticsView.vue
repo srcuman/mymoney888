@@ -1018,23 +1018,19 @@ const totalTransactions = computed(() => {
 })
 
 onMounted(() => {
-  // 从本地存储加载数据
-  const savedTransactions = JSON.stringify(coreDataStore.getRaw('transactions'))
-  const savedDimensions = JSON.stringify(coreDataStore.getDimensions())
+  // 从 coreDataStore 加载数据
+  const allCategories = coreDataStore.getRaw('categories') || []
+  incomeCategoryList.value = allCategories.filter(c => c.type === 'income')
+  expenseCategoryList.value = allCategories.filter(c => c.type === 'expense')
   
-  if (savedTransactions) {
-    transactions.value = JSON.parse(savedTransactions)
-  }
+  const dimensions = coreDataStore.getDimensions()
+  members.value = dimensions.members || []
+  merchants.value = dimensions.merchants || []
+  tags.value = dimensions.tags || []
+  paymentChannels.value = dimensions.paymentChannels || []
   
-  if (savedDimensions) {
-    const dimensions = JSON.parse(savedDimensions)
-    members.value = dimensions.members || []
-    merchants.value = dimensions.merchants || []
-    tags.value = dimensions.tags || []
-    paymentChannels.value = dimensions.paymentChannels || []
-    incomeCategoryList.value = dimensions.incomeCategories || []
-    expenseCategoryList.value = dimensions.expenseCategories || []
-  }
+  // 加载交易数据
+  transactions.value = coreDataStore.getRaw('transactions') || []
   
   // 加载所有账户类型
   loadAllAccounts()

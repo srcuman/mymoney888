@@ -324,11 +324,11 @@
 import { ref, computed, onMounted } from 'vue'
 import coreDataStore from '../../services/core-data-store.js'
 
-// 支出分类列表（从维度管理获取）
-const expenseCategories = computed(() => coreDataStore.get('dimensions').value?.expenseCategories || [])
+// 支出分类列表（从 categories 表获取）
+const expenseCategories = computed(() => coreDataStore.getRaw('categories')?.filter(c => c.type === 'expense') || [])
 
-// 收入分类列表（从维度管理获取）
-const incomeCategories = computed(() => coreDataStore.get('dimensions').value?.incomeCategories || [])
+// 收入分类列表（从 categories 表获取）
+const incomeCategories = computed(() => coreDataStore.getRaw('categories')?.filter(c => c.type === 'income') || [])
 
 // 账户列表
 const accounts = computed(() => coreDataStore.get('accounts').value || [])

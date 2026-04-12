@@ -386,12 +386,10 @@ const paymentChannelForm = ref({ id: null, name: '' })
 
 // 加载数据
 const loadDimensions = () => {
-  // 获取维度数据
-  const dims = coreDataStore.getDimensions() || {}
-  
-  // 收支分类
-  expenseCategories.value = dims.expenseCategories || []
-  incomeCategories.value = dims.incomeCategories || []
+  // 收支分类从 categories 表获取（按账套隔离）
+  const allCategories = coreDataStore.getRaw('categories') || []
+  expenseCategories.value = allCategories.filter(c => c.type === 'expense')
+  incomeCategories.value = allCategories.filter(c => c.type === 'income')
   
   // 成员/商家/标签/支付渠道（使用兼容方法获取对象数组格式）
   members.value = coreDataStore.getDimensionItems('members')
@@ -400,12 +398,11 @@ const loadDimensions = () => {
   paymentChannels.value = coreDataStore.getDimensionItems('paymentChannels')
 }
 
-// 保存维度数据
+// 保存维度数据（members, merchants, tags, paymentChannels）
 const saveDimensions = () => {
+  // 分类数据通过 coreDataStore.categories API 保存，不需要在这里处理
+  // 其他维度数据保存到 dimensions
   const dims = coreDataStore.getDimensions() || {}
-  dims.expenseCategories = expenseCategories.value
-  dims.incomeCategories = incomeCategories.value
-  // 保存回 dimensions
   coreDataStore._data.value.dimensions = dims
   coreDataStore._save('dimensions')
 }
@@ -446,23 +443,25 @@ const saveCategory = async () => {
   }
   
   if (showEditCategoryModal.value) {
-    // 编辑模式
-    const categories = categoryForm.value.type === 'expense' ? expenseCategories.value : incomeCategories.value
-    const index = categories.findIndex(c => c.id === categoryForm.value.id)
-    if (index !== -1) {
-      categories[index] = { ...categoryForm.value }
-    }
+    // 编辑模式：更新分类
+    await coreDataStore.update('categories', categoryForm.value.id, {
+      name: categoryForm.value.name
+    })
   } else if (categoryForm.value.parentId) {
     // 添加子分类
-    const categories = categoryForm.value.type === 'expense' ? expenseCategories.value : incomeCategories.value
-    const parent = categories.find(c => c.id === categoryForm.value.parentId)
+    const parent = expenseCategories.value.find(c => c.id === categoryForm.value.parentId) 
+                || incomeCategories.value.find(c => c.id === categoryForm.value.parentId)
     if (parent) {
       if (!parent.children) parent.children = []
-      parent.children.push({
+      const newSubCategory = {
         id: Date.now().toString(),
         name: categoryForm.value.name,
         type: categoryForm.value.type,
         parentId: categoryForm.value.parentId
+      }
+      // 更新父分类
+      await coreDataStore.update('categories', categoryForm.value.parentId, {
+        children: [...(parent.children || []), newSubCategory]
       })
     }
   } else {
@@ -472,50 +471,29 @@ const saveCategory = async () => {
       name: categoryForm.value.name,
       type: categoryForm.value.type
     }
-    if (categoryForm.value.type === 'expense') {
-      expenseCategories.value.push(newCategory)
-    } else {
-      incomeCategories.value.push(newCategory)
-    }
+    await coreDataStore.add('categories', newCategory)
   }
   
-  await saveDimensions()
+  loadDimensions()
   showAddCategoryModal.value = false
   showEditCategoryModal.value = false
   categoryForm.value = { id: null, name: '', type: 'expense', parentId: null }
+  
+  // 触发数据变更事件
+  window.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: 'categories' } }))
 }
 
 // 删除分类（不检查使用情况，分类可以删除）
 const deleteCategory = async (categoryId) => {
   if (!confirm('确定要删除此分类吗？')) return
   
-  // 从支出分类中删除
-  let index = expenseCategories.value.findIndex(c => c.id === categoryId)
-  if (index !== -1) {
-    expenseCategories.value.splice(index, 1)
-    await saveDimensions()
-    return
-  }
+  // 使用 coreDataStore 删除分类
+  await coreDataStore.remove('categories', categoryId)
   
-  // 从收入分类中删除
-  index = incomeCategories.value.findIndex(c => c.id === categoryId)
-  if (index !== -1) {
-    incomeCategories.value.splice(index, 1)
-    await saveDimensions()
-    return
-  }
+  loadDimensions()
   
-  // 从子分类中删除
-  for (const parent of [...expenseCategories.value, ...incomeCategories.value]) {
-    if (parent.children) {
-      index = parent.children.findIndex(c => c.id === categoryId)
-      if (index !== -1) {
-        parent.children.splice(index, 1)
-        await saveDimensions()
-        return
-      }
-    }
-  }
+  // 触发数据变更事件
+  window.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: 'categories' } }))
 }
 
 // 打开添加成员模态框
