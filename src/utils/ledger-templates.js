@@ -396,9 +396,8 @@ export const defaultPaymentChannels = [
   { id: generateId(), name: '信用卡' },
   { id: generateId(), name: '花呗' },
   { id: generateId(), name: '京东白条' },
-  { id: generateId(), name: '其他'
+  { id: generateId(), name: '其他' }
 ]
-}
 
 // 成员模板
 export const defaultMembers = [
