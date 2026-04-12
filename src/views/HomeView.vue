@@ -322,54 +322,19 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import syncService from '../services/sync-service.js'
-
-// 获取账套特定的存储键
-const getStorageKey = (key) => {
-  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
-  return `${key}_${currentLedgerId}`
-}
-
-// 保存账套特定数据
-const saveLedgerData = () => {
-  localStorage.setItem(getStorageKey('accounts'), JSON.stringify(accounts.value))
-  localStorage.setItem(getStorageKey('transactions'), JSON.stringify(transactions.value))
-}
+import unifiedDataStore from '../services/unified-data-store.js'
 
 // 支出分类列表（从维度管理获取）
-const expenseCategories = ref([])
+const expenseCategories = computed(() => unifiedDataStore.get('dimensions').value?.expenseCategories || [])
 
 // 收入分类列表（从维度管理获取）
-const incomeCategories = ref([])
+const incomeCategories = computed(() => unifiedDataStore.get('dimensions').value?.incomeCategories || [])
 
 // 账户列表
-const accounts = ref([
-  { id: 1, name: '现金', balance: 1000 },
-  { id: 2, name: '银行卡', balance: 5000 },
-  { id: 3, name: '支付宝', balance: 2000 },
-  { id: 4, name: '微信', balance: 1500 }
-])
-
-// 支付渠道列表
-const paymentChannels = ref([])
-
-// 成员列表
-const members = ref([])
-
-// 商家列表
-const merchants = ref([])
-
-// 标签列表
-const tags = ref([])
+const accounts = computed(() => unifiedDataStore.get('accounts').value || [])
 
 // 交易记录
-const transactions = ref([
-  { id: 1, type: 'expense', amount: 50, category: '餐饮', account: 1, description: '午餐', date: '2026-03-01' },
-  { id: 2, type: 'income', amount: 5000, category: '工资', account: 2, description: '月薪', date: '2026-03-01' },
-  { id: 3, type: 'expense', amount: 200, category: '购物', account: 3, description: '超市购物', date: '2026-02-29' },
-  { id: 4, type: 'expense', amount: 30, category: '交通', account: 4, description: '打车', date: '2026-02-29' },
-  { id: 5, type: 'transfer', amount: 500, account: 2, toAccount: 3, description: '转账到支付宝', date: '2026-02-28' }
-])
+const transactions = computed(() => unifiedDataStore.get('transactions').value || [])
 
 // 筛选条件
 const filters = ref({
@@ -529,6 +494,14 @@ const addTransaction = async () => {
   const accountId = transaction.value.account?.toString() || ''
   const toAccountId = transactionType.value === 'transfer' ? (transaction.value.toAccount?.toString() || '') : null
   
+  // 如果是编辑模式，先还原旧交易的影响
+  if (editingTransactionId.value) {
+    const oldTransaction = transactions.value.find(t => String(t.id) === String(editingTransactionId.value))
+    if (oldTransaction) {
+      await reverseTransactionEffect(oldTransaction)
+    }
+  }
+  
   const transactionData = {
     id: editingTransactionId.value || (Date.now().toString() + Math.random().toString(36).substr(2, 9)),
     type: transactionType.value,
@@ -544,40 +517,16 @@ const addTransaction = async () => {
     date: new Date().toISOString().split('T')[0]
   }
   
-  // 如果是编辑模式，先删除原交易
-  if (editingTransactionId.value) {
-    const oldTransaction = transactions.value.find(t => t.id === editingTransactionId.value)
-    if (oldTransaction) {
-      // 还原旧交易影响的账户余额
-      await reverseTransactionEffect(oldTransaction)
-    }
-  }
-  
-  // 添加新交易或更新
-  if (editingTransactionId.value) {
-    // 编辑模式：在原位置插入更新后的交易
-    const index = transactions.value.findIndex(t => t.id === editingTransactionId.value)
-    if (index !== -1) {
-      transactions.value[index] = transactionData
-    } else {
-      transactions.value.unshift(transactionData)
-    }
-  } else {
-    // 添加模式
-    transactions.value.unshift(transactionData)
-  }
-  
-  // 应用新交易的影响
+  // 应用新交易的影响（更新账户余额等）
   await applyTransactionEffect(transactionData)
   
-  // 保存到本地存储
-  saveLedgerData()
-  
-  // 同步交易到数据库
-  await syncService.syncOnDataChange('transactions')
-  
-  // 通知其他组件账户已更新
-  window.dispatchEvent(new CustomEvent('accountsUpdated'))
+  // 如果是编辑模式，先更新数据
+  if (editingTransactionId.value) {
+    await unifiedDataStore.update('transactions', editingTransactionId.value, transactionData)
+  } else {
+    // 添加新交易
+    await unifiedDataStore.add('transactions', transactionData)
+  }
   
   // 重置表单
   resetTransactionForm()
@@ -585,8 +534,10 @@ const addTransaction = async () => {
 
 // 应用交易的影响（更新信用卡额度、账户余额）
 const applyTransactionEffect = async (trans) => {
+  const allAccounts = unifiedDataStore.getRaw('accounts')
+  
   // 检查是否是信用卡账户的交易，并更新信用卡额度
-  const account = accounts.value.find(a => String(a.id) === String(trans.account))
+  const account = allAccounts.find(a => String(a.id) === String(trans.account))
   if (account && account.category === 'credit_card') {
     await updateCreditCardBalance(account.name, trans.type === 'expense' ? trans.amount : -trans.amount)
   }
@@ -594,49 +545,69 @@ const applyTransactionEffect = async (trans) => {
   // 更新账户余额
   if (trans.type === 'transfer') {
     // 转账：减少转出账户余额，增加转入账户余额
-    const fromAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
-    const toAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.toAccount))
-    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
-      accounts.value[fromAccountIndex].balance -= trans.amount
-      accounts.value[toAccountIndex].balance += trans.amount
+    const fromAccount = allAccounts.find(a => String(a.id) === String(trans.account))
+    const toAccount = allAccounts.find(a => String(a.id) === String(trans.toAccount))
+    
+    if (fromAccount && toAccount) {
+      await unifiedDataStore.update('accounts', fromAccount.id, {
+        balance: fromAccount.balance - trans.amount
+      })
+      await unifiedDataStore.update('accounts', toAccount.id, {
+        balance: toAccount.balance + trans.amount
+      })
     }
   } else {
     // 收入/支出：更新单个账户余额
-    const accountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
-    if (accountIndex !== -1) {
+    const targetAccount = allAccounts.find(a => String(a.id) === String(trans.account))
+    if (targetAccount) {
+      let newBalance
       if (trans.type === 'income') {
-        accounts.value[accountIndex].balance += trans.amount
+        newBalance = (targetAccount.balance || 0) + trans.amount
       } else {
-        accounts.value[accountIndex].balance -= trans.amount
+        newBalance = (targetAccount.balance || 0) - trans.amount
       }
+      await unifiedDataStore.update('accounts', targetAccount.id, {
+        balance: newBalance
+      })
     }
   }
 }
 
 // 还原交易的影响（用于编辑前或删除时）
 const reverseTransactionEffect = async (trans) => {
+  const allAccounts = unifiedDataStore.getRaw('accounts')
+  
   // 还原信用卡额度
-  const account = accounts.value.find(a => String(a.id) === String(trans.account))
+  const account = allAccounts.find(a => String(a.id) === String(trans.account))
   if (account && account.category === 'credit_card') {
     await updateCreditCardBalance(account.name, trans.type === 'expense' ? -trans.amount : trans.amount)
   }
   
   // 还原账户余额
   if (trans.type === 'transfer') {
-    const fromAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
-    const toAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.toAccount))
-    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
-      accounts.value[fromAccountIndex].balance += trans.amount
-      accounts.value[toAccountIndex].balance -= trans.amount
+    const fromAccount = allAccounts.find(a => String(a.id) === String(trans.account))
+    const toAccount = allAccounts.find(a => String(a.id) === String(trans.toAccount))
+    
+    if (fromAccount && toAccount) {
+      await unifiedDataStore.update('accounts', fromAccount.id, {
+        balance: fromAccount.balance + trans.amount
+      })
+      await unifiedDataStore.update('accounts', toAccount.id, {
+        balance: toAccount.balance - trans.amount
+      })
     }
   } else {
-    const accountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
-    if (accountIndex !== -1) {
+    const targetAccount = allAccounts.find(a => String(a.id) === String(trans.account))
+    if (targetAccount) {
+      let newBalance
       if (trans.type === 'income') {
-        accounts.value[accountIndex].balance -= trans.amount
+        newBalance = (targetAccount.balance || 0) - trans.amount
       } else {
-        accounts.value[accountIndex].balance += trans.amount
+        newBalance = (targetAccount.balance || 0) + trans.amount
       }
+      await unifiedDataStore.update('accounts', targetAccount.id, {
+        balance: newBalance
+      })
     }
   }
 }
@@ -661,19 +632,14 @@ const resetTransactionForm = () => {
 // 更新信用卡额度
 const updateCreditCardBalance = async (cardName, amountChange) => {
   try {
-    const savedCards = localStorage.getItem('creditCards')
-    if (savedCards) {
-      const creditCards = JSON.parse(savedCards)
-      const cardIndex = creditCards.findIndex(c => c.name === cardName)
-      if (cardIndex !== -1) {
-        // amountChange 为正表示增加欠款（消费），为负表示减少欠款（还款）
-        creditCards[cardIndex].availableCredit -= amountChange
-        localStorage.setItem('creditCards', JSON.stringify(creditCards))
-        // 同步到数据库
-        await syncService.syncOnDataChange('creditCards')
-        // 通知信用卡数据已更新
-        window.dispatchEvent(new CustomEvent('creditCardsUpdated'))
-      }
+    const allCards = unifiedDataStore.getRaw('creditCards')
+    const card = allCards.find(c => c.name === cardName)
+    if (card) {
+      // amountChange 为正表示增加欠款（消费），为负表示减少欠款（还款）
+      const newAvailableCredit = (card.availableCredit || 0) - amountChange
+      await unifiedDataStore.update('creditCards', card.id, {
+        availableCredit: newAvailableCredit
+      })
     }
   } catch (error) {
     console.error('更新信用卡额度失败:', error)
@@ -741,98 +707,43 @@ const calculateAmount = () => {
 // 删除交易
 const deleteTransaction = async (transactionId) => {
   if (confirm('确定要删除这条交易记录吗？')) {
-    const transactionToDelete = transactions.value.find(t => t.id === transactionId)
+    const transactionToDelete = transactions.value.find(t => String(t.id) === String(transactionId))
     if (transactionToDelete) {
       // 还原交易的影响
       await reverseTransactionEffect(transactionToDelete)
       
-      // 如果正在编辑这个交易，重置表单
-      if (editingTransactionId.value === transactionId) {
-        resetTransactionForm()
-      }
-      
-      // 从列表中删除
-      transactions.value = transactions.value.filter(t => t.id !== transactionId)
-      
-      // 保存到本地存储
-      saveLedgerData()
-      // 同步交易到数据库
-      await syncService.syncOnDataChange('transactions')
-      // 通知其他组件账户已更新
-      window.dispatchEvent(new CustomEvent('accountsUpdated'))
-    }
-  }
-}
-
-// 加载账套特定数据
-const loadLedgerData = () => {
-  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
-  
-  // 加载账套特定的维度数据
-  const savedDimensions = localStorage.getItem(`dimensions_${currentLedgerId}`)
-  if (savedDimensions) {
-    const dimensions = JSON.parse(savedDimensions)
-    paymentChannels.value = dimensions.paymentChannels || []
-    members.value = dimensions.members || []
-    merchants.value = dimensions.merchants || []
-    tags.value = dimensions.tags || []
-    expenseCategories.value = dimensions.expenseCategories || []
-    incomeCategories.value = dimensions.incomeCategories || []
-  }
-  
-  // 加载账套特定的账户和交易数据
-  const savedAccounts = localStorage.getItem(`accounts_${currentLedgerId}`)
-  if (savedAccounts) {
-    accounts.value = JSON.parse(savedAccounts)
-  } else {
-    // 兼容旧数据
-    const oldAccounts = localStorage.getItem('accounts')
-    if (oldAccounts) {
-      accounts.value = JSON.parse(oldAccounts)
-    }
-  }
-  
-  const savedTransactions = localStorage.getItem(`transactions_${currentLedgerId}`)
-  if (savedTransactions) {
-    transactions.value = JSON.parse(savedTransactions)
-  } else {
-    // 兼容旧数据
-    const oldTransactions = localStorage.getItem('transactions')
-    if (oldTransactions) {
-      transactions.value = JSON.parse(oldTransactions)
+      // 从 DataStore 中删除（会自动保存和同步）
+      await unifiedDataStore.remove('transactions', transactionId)
     }
   }
 }
 
 // 监听账套切换
 const handleLedgerChange = () => {
-  loadLedgerData()
+  // DataStore 会自动处理账套切换
+}
+
+// 监听交易数据更新事件（来自 DataStore）
+const handleDataChanged = (e) => {
+  // 触发 Vue 响应式更新
+  unifiedDataStore.refresh(e.detail?.key)
 }
 
 onMounted(() => {
-  loadLedgerData()
   // 监听账套切换事件
   window.addEventListener('ledgerChanged', handleLedgerChange)
+  
+  // 监听 DataStore 数据变更事件
+  window.addEventListener('dataChanged', handleDataChanged)
+  
   // 监听从信用卡管理跳转过来的事件
   window.addEventListener('showBillDetail', (e) => {
     if (e.detail && e.detail.billId) {
-      const bills = loadCreditCardBills()
+      const allBills = unifiedDataStore.get('creditCardBills').value || []
       // 使用 String() 转换进行类型安全比较
-      const bill = bills.find(b => String(b.id) === String(e.detail.billId))
+      const bill = allBills.find(b => String(b.id) === String(e.detail.billId))
       if (bill) {
-        // 获取账套特定的交易数据
-        const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
-        let allTransactions = []
-        const savedTransactions = localStorage.getItem(`transactions_${currentLedgerId}`)
-        if (savedTransactions) {
-          allTransactions = JSON.parse(savedTransactions)
-        } else {
-          const oldTransactions = localStorage.getItem('transactions')
-          if (oldTransactions) {
-            allTransactions = JSON.parse(oldTransactions)
-          }
-        }
-        
+        const allTransactions = unifiedDataStore.get('transactions').value || []
         // 使用 String() 转换进行类型安全比较
         const billTransactions = allTransactions.filter(t => String(t.creditCardBillId) === String(e.detail.billId))
         billDetail.value = { ...bill, transactions: billTransactions }
@@ -841,11 +752,6 @@ onMounted(() => {
         console.warn('未找到账单:', e.detail.billId)
       }
     }
-  })
-  
-  // 监听交易数据更新事件，刷新数据
-  window.addEventListener('transactionsUpdated', () => {
-    loadLedgerData()
   })
 })
 
@@ -859,15 +765,9 @@ const installmentDetail = ref(null)
 const showBillModal = ref(false)
 const billDetail = ref(null)
 
-// 加载信用卡账单数据
+// 获取信用卡账单数据
 const loadCreditCardBills = () => {
-  try {
-    const saved = localStorage.getItem('creditCardBills')
-    return saved ? JSON.parse(saved) : []
-  } catch (e) {
-    console.error('加载账单失败:', e)
-    return []
-  }
+  return unifiedDataStore.get('creditCardBills').value || []
 }
 
 // 显示分期详情
@@ -892,10 +792,10 @@ const showInstallmentDetail = (transaction) => {
 const showBillDetail = (transaction) => {
   if (!transaction.creditCardBillId) return
   
-  const bills = loadCreditCardBills()
+  const allBills = loadCreditCardBills()
   // 使用 String() 转换进行类型安全比较
-  const bill = bills.find(b => String(b.id) === String(transaction.creditCardBillId))
-  
+  const bill = allBills.find(b => String(b.id) === String(transaction.creditCardBillId))
+
   if (bill) {
     // 查找该账单下的所有交易
     const billTransactions = transactions.value.filter(t => String(t.creditCardBillId) === String(transaction.creditCardBillId))
