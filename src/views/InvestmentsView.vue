@@ -67,9 +67,14 @@
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-bold text-gray-900 dark:text-white">投资明细</h2>
-        <button @click="openAddInvestmentDetailModal" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-700 text-sm font-medium">
-          添加投资明细
-        </button>
+        <div class="flex gap-2">
+          <button @click="refreshAllNetValues" :disabled="isRefreshing" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium disabled:opacity-50">
+            {{ isRefreshing ? '更新中...' : '刷新净值' }}
+          </button>
+          <button @click="openAddInvestmentDetailModal" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-700 text-sm font-medium">
+            添加投资明细
+          </button>
+        </div>
       </div>
       
       <!-- 投资明细列表 -->
@@ -97,6 +102,9 @@
               </th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                 现价
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                净值日期
               </th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                 市值
@@ -131,6 +139,9 @@
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm text-gray-900 dark:text-white">{{ detail.currentPrice.toFixed(2) }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-500 dark:text-gray-400">{{ detail.netValueDate || '-' }}</div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm text-gray-900 dark:text-white">{{ (detail.shares * detail.currentPrice).toFixed(2) }}</div>
@@ -494,6 +505,59 @@
         </div>
       </div>
     </div>
+
+    <!-- 历史净值记录 -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white">净值历史记录</h2>
+        <span class="text-sm text-gray-500 dark:text-gray-400">共 {{ netValueHistory.length }} 条记录</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead class="bg-gray-50 dark:bg-gray-800">
+            <tr>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                日期
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                品种
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                名称
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                净值
+              </th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                更新时间
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tr v-for="(record, index) in netValueHistory.slice().reverse().slice(0, 50)" :key="index">
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-900 dark:text-white">{{ record.date }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-500 dark:text-gray-400">{{ record.code }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-900 dark:text-white">{{ record.name }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-900 dark:text-white">{{ record.price.toFixed(4) }}</div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-500 dark:text-gray-400">{{ formatUpdateTime(record.updateTime) }}</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-if="netValueHistory.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
+        暂无净值历史记录
+      </div>
+    </div>
   </div>
 </template>
 
@@ -506,6 +570,9 @@ const investmentAccounts = ref([])
 
 // 投资明细列表
 const investmentDetails = ref([])
+
+// 历史净值记录 (用于收益分析)
+const netValueHistory = ref([])
 
 // 图表引用
 const typeDistributionChart = ref(null)
@@ -572,6 +639,9 @@ const apiLogs = ref([])
 
 // API响应时间
 const apiResponseTime = ref(0)
+
+// 刷新状态
+const isRefreshing = ref(false)
 
 // 打开添加投资账户模态框
 const openAddInvestmentAccountModal = () => {
@@ -647,6 +717,13 @@ const deleteInvestmentAccount = (id) => {
   saveInvestmentDetails()
 }
 
+// 格式化更新时间显示
+const formatUpdateTime = (isoTime) => {
+  if (!isoTime) return '-'
+  const date = new Date(isoTime)
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
 // 记录API日志
 const addApiLog = (message) => {
   const now = new Date()
@@ -666,8 +743,7 @@ const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
   try {
     const response = await fetch(url, {
       ...options,
-      signal: controller.signal,
-      mode: 'cors'
+      signal: controller.signal
     })
     clearTimeout(timeoutId)
     return response
@@ -937,6 +1013,7 @@ const fetchAndFillInvestmentInfo = async (code, mode) => {
     targetRef.value.name = info.name
     targetRef.value.type = info.type
     targetRef.value.currentPrice = info.currentPrice
+    targetRef.value.netValueDate = info.updateDate || new Date().toISOString().split('T')[0]
     
     addApiLog(`获取成功: ${info.name} (${info.type}) 现价: ${info.currentPrice}，耗时: ${apiResponseTime.value}ms`)
     console.log(`获取成功:`, info)
@@ -953,6 +1030,7 @@ const fetchAndFillInvestmentInfo = async (code, mode) => {
 // 添加投资明细
 const addInvestmentDetail = () => {
   const account = investmentAccounts.value.find(a => a.id === newInvestmentDetail.value.accountId)
+  const today = new Date().toISOString().split('T')[0]
   const newDetail = {
     id: Date.now().toString(),
     accountId: newInvestmentDetail.value.accountId,
@@ -963,11 +1041,13 @@ const addInvestmentDetail = () => {
     shares: newInvestmentDetail.value.shares,
     costPrice: newInvestmentDetail.value.costPrice,
     currentPrice: newInvestmentDetail.value.currentPrice,
-    updateDate: new Date().toISOString().split('T')[0]
+    netValueDate: today,
+    updateDate: today
   }
   investmentDetails.value.push(newDetail)
   updateAccountAsset(newInvestmentDetail.value.accountId)
   saveInvestmentDetails()
+  recordNetValue(newDetail)
   showAddInvestmentDetailModal.value = false
 }
 
@@ -976,6 +1056,7 @@ const updateInvestmentDetail = () => {
   const index = investmentDetails.value.findIndex(d => d.id === editInvestmentDetail.value.id)
   if (index !== -1) {
     const oldAccountId = investmentDetails.value[index].accountId
+    const today = new Date().toISOString().split('T')[0]
     investmentDetails.value[index] = {
       ...investmentDetails.value[index],
       accountId: editInvestmentDetail.value.accountId,
@@ -986,7 +1067,7 @@ const updateInvestmentDetail = () => {
       shares: editInvestmentDetail.value.shares,
       costPrice: editInvestmentDetail.value.costPrice,
       currentPrice: editInvestmentDetail.value.currentPrice,
-      updateDate: new Date().toISOString().split('T')[0]
+      updateDate: today
     }
     updateAccountAsset(oldAccountId)
     updateAccountAsset(editInvestmentDetail.value.accountId)
@@ -1028,6 +1109,78 @@ const saveInvestmentAccounts = () => {
 // 保存投资明细到本地存储
 const saveInvestmentDetails = () => {
   localStorage.setItem('investmentDetails', JSON.stringify(investmentDetails.value))
+}
+
+// 保存历史净值记录
+const saveNetValueHistory = () => {
+  localStorage.setItem('netValueHistory', JSON.stringify(netValueHistory.value))
+}
+
+// 加载历史净值记录
+const loadNetValueHistory = () => {
+  const saved = localStorage.getItem('netValueHistory')
+  if (saved) {
+    netValueHistory.value = JSON.parse(saved)
+  }
+}
+
+// 记录净值到历史
+const recordNetValue = (detail) => {
+  const today = new Date().toISOString().split('T')[0]
+  const existing = netValueHistory.value.find(
+    h => h.code === detail.code && h.date === today
+  )
+  
+  if (existing) {
+    existing.price = detail.currentPrice
+    existing.updateTime = new Date().toISOString()
+  } else {
+    netValueHistory.value.push({
+      code: detail.code,
+      name: detail.name,
+      date: today,
+      price: detail.currentPrice,
+      updateTime: new Date().toISOString()
+    })
+  }
+  saveNetValueHistory()
+}
+
+// 刷新所有净值
+const refreshAllNetValues = async () => {
+  if (isRefreshing.value || investmentDetails.value.length === 0) return
+  
+  isRefreshing.value = true
+  addApiLog('开始刷新所有净值...')
+  
+  let successCount = 0
+  let failCount = 0
+  
+  for (const detail of investmentDetails.value) {
+    try {
+      const info = await fetchInvestmentInfo(detail.code, detail.type)
+      if (info.currentPrice) {
+        detail.currentPrice = info.currentPrice
+        detail.netValueDate = info.updateDate || new Date().toISOString().split('T')[0]
+        recordNetValue(detail)
+        successCount++
+        addApiLog(`${detail.name}: ${info.currentPrice}`)
+      }
+    } catch (error) {
+      failCount++
+      console.error(`刷新 ${detail.code} 失败:`, error)
+    }
+  }
+  
+  for (const account of investmentAccounts.value) {
+    updateAccountAsset(account.id)
+  }
+  
+  saveInvestmentDetails()
+  saveInvestmentAccounts()
+  
+  addApiLog(`刷新完成: 成功${successCount}个, 失败${failCount}个`)
+  isRefreshing.value = false
 }
 
 // 计算总投资资产
@@ -1263,6 +1416,8 @@ const loadData = () => {
   if (savedDetails) {
     investmentDetails.value = JSON.parse(savedDetails)
   }
+  
+  loadNetValueHistory()
 }
 
 // 定时更新持仓产品净值
@@ -1304,7 +1459,9 @@ const scheduleNetValueUpdate = () => {
         const info = await fetchInvestmentInfo(detail.code)
         if (info.currentPrice) {
           detail.currentPrice = info.currentPrice
-          detail.updateDate = info.updateDate || new Date().toISOString().split('T')[0]
+          detail.netValueDate = info.updateDate || new Date().toISOString().split('T')[0]
+          detail.updateDate = new Date().toISOString().split('T')[0]
+          recordNetValue(detail)
         }
       } catch (error) {
         console.error(`Failed to update net value for ${detail.code}:`, error)
