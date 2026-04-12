@@ -153,7 +153,12 @@ BEGIN
             'members', v_db_members,
             'transaction_merchants', v_db_transaction_merchants,
             'transaction_projects', v_db_transaction_projects,
-            'transaction_members', v_db_transaction_members
+            'transaction_members', v_db_transaction_members,
+            'investment_accounts', v_db_investment_accounts,
+            'investment_details', v_db_investment_details,
+            'dimensions', v_db_dimensions,
+            'ledgers', v_db_ledgers,
+            'user_defaults', v_db_user_defaults
         )
     );
 END//

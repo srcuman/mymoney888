@@ -370,6 +370,88 @@ CREATE TABLE IF NOT EXISTS transaction_members (
     INDEX idx_member_id (member_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='交易成员关联表';
 
+-- 投资账户表
+CREATE TABLE IF NOT EXISTS investment_accounts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL COMMENT '用户ID',
+    name VARCHAR(100) NOT NULL COMMENT '投资账户名称',
+    type ENUM('fund', 'stock', 'bond', 'other') DEFAULT 'other' COMMENT '账户类型',
+    description TEXT COMMENT '账户描述',
+    total_asset DECIMAL(15, 2) DEFAULT 0.00 COMMENT '总资产',
+    profit_loss DECIMAL(15, 2) DEFAULT 0.00 COMMENT '盈亏',
+    is_active TINYINT(1) DEFAULT 1 COMMENT '是否激活',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_type (type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投资账户表';
+
+-- 投资明细表
+CREATE TABLE IF NOT EXISTS investment_details (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL COMMENT '用户ID',
+    account_id INT NOT NULL COMMENT '投资账户ID',
+    type ENUM('fund', 'stock', 'bond', 'other') NOT NULL COMMENT '投资品种类型',
+    code VARCHAR(20) NOT NULL COMMENT '投资品种代码',
+    name VARCHAR(100) NOT NULL COMMENT '投资品种名称',
+    shares DECIMAL(15, 4) DEFAULT 0.0000 COMMENT '持有份额',
+    cost_price DECIMAL(15, 4) DEFAULT 0.00 COMMENT '成本价',
+    current_price DECIMAL(15, 4) DEFAULT 0.00 COMMENT '当前价格',
+    update_date DATE COMMENT '净值更新日期',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (account_id) REFERENCES investment_accounts(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_account_id (account_id),
+    INDEX idx_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投资明细表';
+
+-- 维度配置表（包含成员、商家、标签、支付渠道等）
+CREATE TABLE IF NOT EXISTS dimensions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL COMMENT '用户ID',
+    type ENUM('members', 'merchants', 'tags', 'payment_channels') NOT NULL COMMENT '维度类型',
+    name VARCHAR(100) NOT NULL COMMENT '维度名称',
+    extra_data JSON COMMENT '额外数据',
+    is_active TINYINT(1) DEFAULT 1 COMMENT '是否激活',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_type (type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='维度配置表';
+
+-- 账套表
+CREATE TABLE IF NOT EXISTS ledgers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL COMMENT '用户ID',
+    name VARCHAR(100) NOT NULL COMMENT '账套名称',
+    description TEXT COMMENT '账套描述',
+    is_active TINYINT(1) DEFAULT 1 COMMENT '是否激活',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账套表';
+
+-- 用户设置默认值表
+CREATE TABLE IF NOT EXISTS user_defaults (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL COMMENT '用户ID',
+    expense_category VARCHAR(100) COMMENT '默认支出分类',
+    income_category VARCHAR(100) COMMENT '默认收入分类',
+    member VARCHAR(100) COMMENT '默认成员',
+    merchant VARCHAR(100) COMMENT '默认商家',
+    tag VARCHAR(100) COMMENT '默认标签',
+    payment_channel VARCHAR(100) COMMENT '默认支付渠道',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_user_defaults (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户设置默认值表';
+
 -- 修改交易记录表，添加关联字段
 ALTER TABLE transactions ADD COLUMN merchant_id INT COMMENT '商家ID', ADD FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE SET NULL, ADD INDEX idx_merchant_id (merchant_id);
 ALTER TABLE transactions ADD COLUMN project_id INT COMMENT '项目ID', ADD FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL, ADD INDEX idx_project_id (project_id);
