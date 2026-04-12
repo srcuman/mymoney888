@@ -323,7 +323,16 @@ class DataStore {
       const user = JSON.parse(localStorage.getItem('user'))
       if (!user || !user.id) return
       
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+      // 映射本地表名到数据库表名
+      const tableNameMap = {
+        'creditCards': 'credit_cards',
+        'creditCardBills': 'credit_card_bills',
+        'investmentAccounts': 'investment_accounts',
+        'investmentDetails': 'investment_details'
+      }
+      const dbTableName = tableNameMap[tableName] || tableName
+      
+      const apiUrl = import.meta.env.VITE_API_URL || '/api'
       const data = this.getRaw(tableName)
       
       const response = await fetch(`${apiUrl}/sync`, {
@@ -331,7 +340,7 @@ class DataStore {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.id,
-          table: tableName,
+          table: dbTableName,
           data: data
         })
       })
@@ -340,10 +349,79 @@ class DataStore {
         throw new Error(`服务器响应错误: ${response.status}`)
       }
       
-      console.log(`[DataStore] ${tableName} 已同步到服务器`)
+      const result = await response.json()
+      if (result.success) {
+        console.log(`[DataStore] ${tableName} -> ${dbTableName} 已同步到服务器 (${result.successCount}条)`)
+      } else {
+        console.warn(`[DataStore] ${tableName} 同步部分失败:`, result.error)
+      }
     } catch (error) {
       console.error(`[DataStore] 同步 ${tableName} 失败:`, error)
     }
+  }
+  
+  // 从服务器拉取数据
+  async _fetchFromServer(tableName) {
+    try {
+      const user = JSON.parse(localStorage.getItem('user'))
+      if (!user || !user.id) return null
+      
+      // 映射本地表名到数据库表名
+      const tableNameMap = {
+        'creditCards': 'credit_cards',
+        'creditCardBills': 'credit_card_bills',
+        'investmentAccounts': 'investment_accounts',
+        'investmentDetails': 'investment_details'
+      }
+      const dbTableName = tableNameMap[tableName] || tableName
+      
+      const apiUrl = import.meta.env.VITE_API_URL || '/api'
+      const lastSyncTime = localStorage.getItem(`lastSync_${tableName}`)
+      
+      const params = new URLSearchParams({
+        userId: user.id,
+        table: dbTableName
+      })
+      if (lastSyncTime) {
+        params.append('lastSyncTime', lastSyncTime)
+      }
+      
+      const response = await fetch(`${apiUrl}/sync?${params}`)
+      
+      if (!response.ok) {
+        throw new Error(`服务器响应错误: ${response.status}`)
+      }
+      
+      const result = await response.json()
+      if (result.success) {
+        // 更新同步时间
+        localStorage.setItem(`lastSync_${tableName}`, new Date().toISOString())
+        console.log(`[DataStore] 从服务器获取 ${tableName} (${result.count}条)`)
+        return result.data
+      }
+      return null
+    } catch (error) {
+      console.error(`[DataStore] 获取 ${tableName} 失败:`, error)
+      return null
+    }
+  }
+  
+  // 同步所有数据
+  async syncAll() {
+    console.log('[DataStore] 开始同步所有数据...')
+    const tables = Object.keys(this._data)
+    const results = {}
+    
+    for (const table of tables) {
+      const data = this.getRaw(table)
+      if (data && data.length > 0) {
+        await this._syncToServer(table)
+        results[table] = 'synced'
+      }
+    }
+    
+    console.log('[DataStore] 数据同步完成', results)
+    return results
   }
   
   // ============================================

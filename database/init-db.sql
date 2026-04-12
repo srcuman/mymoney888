@@ -1,5 +1,5 @@
 -- 个人记账系统数据库初始化脚本
--- 版本: 3.5.9
+-- 版本: 3.6.0
 -- 创建时间: 2026-04-12
 -- 说明: 此版本不依赖数据库全局权限，仅需普通数据库用户权限即可运行
 --       触发器、存储过程、事件等功能已移除，需在应用层实现
@@ -551,5 +551,5 @@ INSERT INTO categories (user_id, name, type, icon, color, is_default, sort_order
 
 -- 完成提示
 SELECT '数据库初始化完成！' as message;
-SELECT '版本: 3.5.9' as version;
+SELECT '版本: 3.6.0' as version;
 SELECT '说明: 此版本不依赖全局权限，普通数据库用户权限即可运行' as note;
