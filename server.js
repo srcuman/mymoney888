@@ -235,7 +235,7 @@ app.get('/api/health', (req, res) => {
 
 // 版本信息
 app.get('/api/version', (req, res) => {
-  res.json({ version: '3.8.1', name: 'MyMoney888' })
+  res.json({ version: '3.8.2', name: 'MyMoney888' })
 })
 
 // 数据目录信息
@@ -798,6 +798,189 @@ app.post('/api/users/:id/login', async (req, res) => {
 })
 
 // ============================================
+// DataStore 文件存储 API (前端数据持久化)
+// ============================================
+
+// 获取账套数据目录
+function getLedgerDataDir(ledgerId) {
+  const ledgerDir = path.join(DATA_DIR, 'ledgers', String(ledgerId))
+  if (!fs.existsSync(ledgerDir)) {
+    fs.mkdirSync(ledgerDir, { recursive: true, mode: 0o777 })
+  }
+  return ledgerDir
+}
+
+// 保存 DataStore 数据到文件（按账套隔离）
+app.post('/api/datastore/save', async (req, res) => {
+  const { ledgerId, data } = req.body
+  
+  if (!ledgerId) {
+    return res.status(400).json({ success: false, error: '缺少 ledgerId' })
+  }
+  
+  if (!data || typeof data !== 'object') {
+    return res.status(400).json({ success: false, error: '缺少有效数据' })
+  }
+  
+  try {
+    const ledgerDir = getLedgerDataDir(ledgerId)
+    const timestamp = new Date().toISOString()
+    
+    // 保存完整数据
+    const fullDataPath = path.join(ledgerDir, 'datastore.json')
+    const fullData = {
+      version: '3.8.1',
+      ledgerId,
+      savedAt: timestamp,
+      data
+    }
+    fs.writeFileSync(fullDataPath, JSON.stringify(fullData, null, 2), 'utf8')
+    
+    // 增量保存各个表
+    const results = {}
+    for (const [tableName, tableData] of Object.entries(data)) {
+      if (Array.isArray(tableData)) {
+        const tablePath = path.join(ledgerDir, `${tableName}.json`)
+        const tableBackup = {
+          table: tableName,
+          ledgerId,
+          updatedAt: timestamp,
+          count: tableData.length,
+          data: tableData
+        }
+        fs.writeFileSync(tablePath, JSON.stringify(tableBackup, null, 2), 'utf8')
+        results[tableName] = { success: true, count: tableData.length }
+      }
+    }
+    
+    console.log(`💾 DataStore 保存成功: ledger=${ledgerId}, tables=${Object.keys(results).length}`)
+    
+    res.json({
+      success: true,
+      ledgerId,
+      savedAt: timestamp,
+      tables: results
+    })
+    
+  } catch (error) {
+    console.error('保存 DataStore 失败:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// 加载 DataStore 数据（按账套）
+app.get('/api/datastore/load', async (req, res) => {
+  const { ledgerId } = req.query
+  
+  if (!ledgerId) {
+    return res.status(400).json({ success: false, error: '缺少 ledgerId' })
+  }
+  
+  try {
+    const ledgerDir = getLedgerDataDir(ledgerId)
+    const fullDataPath = path.join(ledgerDir, 'datastore.json')
+    
+    // 尝试加载完整数据
+    if (fs.existsSync(fullDataPath)) {
+      const content = fs.readFileSync(fullDataPath, 'utf8')
+      const parsed = JSON.parse(content)
+      console.log(`📂 DataStore 加载成功: ledger=${ledgerId}`)
+      return res.json({
+        success: true,
+        ledgerId,
+        data: parsed.data,
+        savedAt: parsed.savedAt,
+        version: parsed.version
+      })
+    }
+    
+    // 如果没有完整数据，尝试逐表加载
+    const data = {}
+    const tableFiles = fs.readdirSync(ledgerDir).filter(f => f.endsWith('.json') && f !== 'datastore.json')
+    
+    for (const file of tableFiles) {
+      const tableName = file.replace('.json', '')
+      const filePath = path.join(ledgerDir, file)
+      const content = fs.readFileSync(filePath, 'utf8')
+      const parsed = JSON.parse(content)
+      data[tableName] = parsed.data || []
+    }
+    
+    if (tableFiles.length > 0) {
+      console.log(`📂 DataStore 加载成功 (逐表): ledger=${ledgerId}, tables=${tableFiles.length}`)
+      return res.json({
+        success: true,
+        ledgerId,
+        data,
+        loadedTables: tableFiles.length
+      })
+    }
+    
+    // 没有找到数据
+    console.log(`📂 DataStore 无数据: ledger=${ledgerId}`)
+    res.json({
+      success: true,
+      ledgerId,
+      data: null,
+      message: '账套暂无数据'
+    })
+    
+  } catch (error) {
+    console.error('加载 DataStore 失败:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// 保存单个表数据
+app.post('/api/datastore/save/:table', async (req, res) => {
+  const { ledgerId, data } = req.body
+  const { table } = req.params
+  
+  if (!ledgerId) {
+    return res.status(400).json({ success: false, error: '缺少 ledgerId' })
+  }
+  
+  try {
+    const ledgerDir = getLedgerDataDir(ledgerId)
+    const timestamp = new Date().toISOString()
+    const tablePath = path.join(ledgerDir, `${table}.json`)
+    
+    const tableBackup = {
+      table,
+      ledgerId,
+      updatedAt: timestamp,
+      count: Array.isArray(data) ? data.length : 0,
+      data: data || []
+    }
+    
+    fs.writeFileSync(tablePath, JSON.stringify(tableBackup, null, 2), 'utf8')
+    
+    // 更新完整数据文件（如果存在）
+    const fullDataPath = path.join(ledgerDir, 'datastore.json')
+    if (fs.existsSync(fullDataPath)) {
+      const fullData = JSON.parse(fs.readFileSync(fullDataPath, 'utf8'))
+      fullData.data[table] = data
+      fullData.savedAt = timestamp
+      fs.writeFileSync(fullDataPath, JSON.stringify(fullData, null, 2), 'utf8')
+    }
+    
+    console.log(`💾 DataStore 保存表: ledger=${ledgerId}, table=${table}, count=${tableBackup.count}`)
+    
+    res.json({
+      success: true,
+      ledgerId,
+      table,
+      count: tableBackup.count,
+      savedAt: timestamp
+    })
+    
+  } catch (error) {
+    console.error(`保存表 ${table} 失败:`, error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// ============================================
 // 静态文件服务
 // ============================================
 
@@ -814,7 +997,7 @@ app.get('*', (req, res) => {
 
 async function startServer() {
   console.log('🚀 MyMoney888 数据同步服务器启动中...')
-  console.log(`📦 版本: 3.8.0`)
+  console.log(`📦 版本: 3.8.2`)
   console.log(`📁 数据目录: ${DATA_DIR}`)
   
   // 测试数据库连接
