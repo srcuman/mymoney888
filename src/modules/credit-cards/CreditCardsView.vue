@@ -148,13 +148,13 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import unifiedDataStore from '../services/unified-data-store.js'
+import coreDataStore from '../../services/core-data-store.js'
 
 // 信用卡列表（从 DataStore 获取）
-const creditCards = computed(() => unifiedDataStore.getRaw('creditCards') || [])
+const creditCards = computed(() => coreDataStore.getRaw('creditCards') || [])
 
 // 信用卡账单列表（从 DataStore 获取）
-const creditCardBills = computed(() => unifiedDataStore.getRaw('creditCardBills') || [])
+const creditCardBills = computed(() => coreDataStore.getRaw('creditCardBills') || [])
 
 // 数据版本号（用于触发响应式更新）
 const dataVersion = ref(0)
@@ -205,7 +205,7 @@ const editCard = (card) => {
 const saveCard = async () => {
   if (showEditCardModal.value) {
     // 更新现有信用卡
-    await unifiedDataStore.update('creditCards', formData.value.id, {
+    await coreDataStore.update('creditCards', formData.value.id, {
       name: formData.value.name,
       bank: formData.value.bank,
       number: formData.value.number,
@@ -216,7 +216,7 @@ const saveCard = async () => {
     })
   } else {
     // 添加新信用卡（使用 DataStore 的联动方法）
-    await unifiedDataStore.addCreditCard({
+    await coreDataStore.addCreditCard({
       name: formData.value.name,
       bank: formData.value.bank,
       number: formData.value.number,
@@ -241,7 +241,7 @@ const saveCard = async () => {
 const deleteCard = async (cardId) => {
   if (confirm('确定要删除此信用卡吗？')) {
     // 使用 DataStore 的联动方法（会同时删除关联的账户）
-    await unifiedDataStore.deleteCreditCard(cardId)
+    await coreDataStore.deleteCreditCard(cardId)
     forceUpdate()
   }
 }
@@ -250,7 +250,7 @@ const deleteCard = async (cardId) => {
 const payBill = async (bill) => {
   if (confirm(`确定要偿还 ${bill.cardName} 的账单吗？金额：¥${(bill.remainingAmount || 0).toFixed(2)}`)) {
     // 更新账单状态
-    await unifiedDataStore.update('creditCardBills', bill.id, {
+    await coreDataStore.update('creditCardBills', bill.id, {
       paidAmount: bill.amount,
       remainingAmount: 0,
       status: 'paid'
@@ -259,7 +259,7 @@ const payBill = async (bill) => {
     // 更新信用卡可用额度（还款后可用额度增加）
     const card = creditCards.value.find(c => c.name === bill.cardName)
     if (card) {
-      await unifiedDataStore.update('creditCards', card.id, {
+      await coreDataStore.update('creditCards', card.id, {
         availableCredit: (card.availableCredit || 0) + (bill.remainingAmount || 0)
       })
     }
@@ -273,7 +273,7 @@ const getBillTransactions = (billId) => {
   // 访问 version 触发响应式
   void dataVersion.value
   
-  const transactions = unifiedDataStore.getRaw('transactions') || []
+  const transactions = coreDataStore.getRaw('transactions') || []
   return transactions.filter(t => String(t.creditCardBillId) === String(billId))
 }
 

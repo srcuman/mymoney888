@@ -322,19 +322,19 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import unifiedDataStore from '../services/unified-data-store.js'
+import coreDataStore from '../../services/core-data-store.js'
 
 // 支出分类列表（从维度管理获取）
-const expenseCategories = computed(() => unifiedDataStore.get('dimensions').value?.expenseCategories || [])
+const expenseCategories = computed(() => coreDataStore.get('dimensions').value?.expenseCategories || [])
 
 // 收入分类列表（从维度管理获取）
-const incomeCategories = computed(() => unifiedDataStore.get('dimensions').value?.incomeCategories || [])
+const incomeCategories = computed(() => coreDataStore.get('dimensions').value?.incomeCategories || [])
 
 // 账户列表
-const accounts = computed(() => unifiedDataStore.get('accounts').value || [])
+const accounts = computed(() => coreDataStore.get('accounts').value || [])
 
 // 交易记录
-const transactions = computed(() => unifiedDataStore.get('transactions').value || [])
+const transactions = computed(() => coreDataStore.get('transactions').value || [])
 
 // 筛选条件
 const filters = ref({
@@ -522,10 +522,10 @@ const addTransaction = async () => {
   
   // 如果是编辑模式，先更新数据
   if (editingTransactionId.value) {
-    await unifiedDataStore.update('transactions', editingTransactionId.value, transactionData)
+    await coreDataStore.update('transactions', editingTransactionId.value, transactionData)
   } else {
     // 添加新交易
-    await unifiedDataStore.add('transactions', transactionData)
+    await coreDataStore.add('transactions', transactionData)
   }
   
   // 重置表单
@@ -534,7 +534,7 @@ const addTransaction = async () => {
 
 // 应用交易的影响（更新信用卡额度、账户余额）
 const applyTransactionEffect = async (trans) => {
-  const allAccounts = unifiedDataStore.getRaw('accounts')
+  const allAccounts = coreDataStore.getRaw('accounts')
   
   // 检查是否是信用卡账户的交易，并更新信用卡额度
   const account = allAccounts.find(a => String(a.id) === String(trans.account))
@@ -549,10 +549,10 @@ const applyTransactionEffect = async (trans) => {
     const toAccount = allAccounts.find(a => String(a.id) === String(trans.toAccount))
     
     if (fromAccount && toAccount) {
-      await unifiedDataStore.update('accounts', fromAccount.id, {
+      await coreDataStore.update('accounts', fromAccount.id, {
         balance: fromAccount.balance - trans.amount
       })
-      await unifiedDataStore.update('accounts', toAccount.id, {
+      await coreDataStore.update('accounts', toAccount.id, {
         balance: toAccount.balance + trans.amount
       })
     }
@@ -566,7 +566,7 @@ const applyTransactionEffect = async (trans) => {
       } else {
         newBalance = (targetAccount.balance || 0) - trans.amount
       }
-      await unifiedDataStore.update('accounts', targetAccount.id, {
+      await coreDataStore.update('accounts', targetAccount.id, {
         balance: newBalance
       })
     }
@@ -575,7 +575,7 @@ const applyTransactionEffect = async (trans) => {
 
 // 还原交易的影响（用于编辑前或删除时）
 const reverseTransactionEffect = async (trans) => {
-  const allAccounts = unifiedDataStore.getRaw('accounts')
+  const allAccounts = coreDataStore.getRaw('accounts')
   
   // 还原信用卡额度
   const account = allAccounts.find(a => String(a.id) === String(trans.account))
@@ -589,10 +589,10 @@ const reverseTransactionEffect = async (trans) => {
     const toAccount = allAccounts.find(a => String(a.id) === String(trans.toAccount))
     
     if (fromAccount && toAccount) {
-      await unifiedDataStore.update('accounts', fromAccount.id, {
+      await coreDataStore.update('accounts', fromAccount.id, {
         balance: fromAccount.balance + trans.amount
       })
-      await unifiedDataStore.update('accounts', toAccount.id, {
+      await coreDataStore.update('accounts', toAccount.id, {
         balance: toAccount.balance - trans.amount
       })
     }
@@ -605,7 +605,7 @@ const reverseTransactionEffect = async (trans) => {
       } else {
         newBalance = (targetAccount.balance || 0) + trans.amount
       }
-      await unifiedDataStore.update('accounts', targetAccount.id, {
+      await coreDataStore.update('accounts', targetAccount.id, {
         balance: newBalance
       })
     }
@@ -632,12 +632,12 @@ const resetTransactionForm = () => {
 // 更新信用卡额度
 const updateCreditCardBalance = async (cardName, amountChange) => {
   try {
-    const allCards = unifiedDataStore.getRaw('creditCards')
+    const allCards = coreDataStore.getRaw('creditCards')
     const card = allCards.find(c => c.name === cardName)
     if (card) {
       // amountChange 为正表示增加欠款（消费），为负表示减少欠款（还款）
       const newAvailableCredit = (card.availableCredit || 0) - amountChange
-      await unifiedDataStore.update('creditCards', card.id, {
+      await coreDataStore.update('creditCards', card.id, {
         availableCredit: newAvailableCredit
       })
     }
@@ -713,7 +713,7 @@ const deleteTransaction = async (transactionId) => {
       await reverseTransactionEffect(transactionToDelete)
       
       // 从 DataStore 中删除（会自动保存和同步）
-      await unifiedDataStore.remove('transactions', transactionId)
+      await coreDataStore.remove('transactions', transactionId)
     }
   }
 }
@@ -726,7 +726,7 @@ const handleLedgerChange = () => {
 // 监听交易数据更新事件（来自 DataStore）
 const handleDataChanged = (e) => {
   // 触发 Vue 响应式更新
-  unifiedDataStore.refresh(e.detail?.key)
+  coreDataStore.refresh(e.detail?.key)
 }
 
 onMounted(() => {
@@ -739,11 +739,11 @@ onMounted(() => {
   // 监听从信用卡管理跳转过来的事件
   window.addEventListener('showBillDetail', (e) => {
     if (e.detail && e.detail.billId) {
-      const allBills = unifiedDataStore.get('creditCardBills').value || []
+      const allBills = coreDataStore.get('creditCardBills').value || []
       // 使用 String() 转换进行类型安全比较
       const bill = allBills.find(b => String(b.id) === String(e.detail.billId))
       if (bill) {
-        const allTransactions = unifiedDataStore.get('transactions').value || []
+        const allTransactions = coreDataStore.get('transactions').value || []
         // 使用 String() 转换进行类型安全比较
         const billTransactions = allTransactions.filter(t => String(t.creditCardBillId) === String(e.detail.billId))
         billDetail.value = { ...bill, transactions: billTransactions }
@@ -767,7 +767,7 @@ const billDetail = ref(null)
 
 // 获取信用卡账单数据
 const loadCreditCardBills = () => {
-  return unifiedDataStore.get('creditCardBills').value || []
+  return coreDataStore.get('creditCardBills').value || []
 }
 
 // 显示分期详情

@@ -141,13 +141,13 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import unifiedDataStore from '../services/unified-data-store.js'
+import coreDataStore from '../../services/core-data-store.js'
 
 // 贷款列表（从 DataStore 获取）
-const loans = computed(() => unifiedDataStore.getRaw('loans') || [])
+const loans = computed(() => coreDataStore.getRaw('loans') || [])
 
 // 还款计划列表（从 DataStore 获取）
-const repaymentPlans = computed(() => unifiedDataStore.getRaw('repaymentPlans') || [])
+const repaymentPlans = computed(() => coreDataStore.getRaw('repaymentPlans') || [])
 
 // 数据版本号（用于触发响应式更新）
 const dataVersion = ref(0)
@@ -198,7 +198,7 @@ const editLoan = (loan) => {
 const saveLoan = async () => {
   if (showEditLoanModal.value) {
     // 更新现有贷款
-    await unifiedDataStore.update('loans', formData.value.id, {
+    await coreDataStore.update('loans', formData.value.id, {
       name: formData.value.name,
       type: formData.value.type,
       institution: formData.value.institution,
@@ -209,7 +209,7 @@ const saveLoan = async () => {
     })
   } else {
     // 添加新贷款（使用 DataStore 的联动方法）
-    await unifiedDataStore.addLoan({
+    await coreDataStore.addLoan({
       name: formData.value.name,
       type: formData.value.type,
       institution: formData.value.institution,
@@ -233,7 +233,7 @@ const saveLoan = async () => {
 const deleteLoan = async (loanId) => {
   if (confirm('确定要删除此贷款吗？')) {
     // 使用 DataStore 的联动方法（会同时删除关联的账户）
-    await unifiedDataStore.deleteLoan(loanId)
+    await coreDataStore.deleteLoan(loanId)
     forceUpdate()
   }
 }
@@ -242,7 +242,7 @@ const deleteLoan = async (loanId) => {
 const payRepayment = async (plan) => {
   if (confirm(`确定要偿还 ${plan.loanName} 的还款吗？金额：¥${(plan.remainingAmount || 0).toFixed(2)}`)) {
     // 更新还款计划状态
-    await unifiedDataStore.update('repaymentPlans', plan.id, {
+    await coreDataStore.update('repaymentPlans', plan.id, {
       paidAmount: plan.amount,
       remainingAmount: 0,
       status: 'paid'
@@ -251,7 +251,7 @@ const payRepayment = async (plan) => {
     // 更新贷款剩余金额
     const loan = loans.value.find(l => l.name === plan.loanName)
     if (loan) {
-      await unifiedDataStore.update('loans', loan.id, {
+      await coreDataStore.update('loans', loan.id, {
         remainingAmount: Math.max(0, (loan.remainingAmount || 0) - (plan.remainingAmount || 0))
       })
     }

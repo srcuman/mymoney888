@@ -1,5 +1,5 @@
 // MyMoney888 数据同步服务器
-// 版本: 3.7.0
+// 版本: 3.8.0
 // 支持本地数据与MySQL数据库的双向同步
 // 支持本地文件备份（双重持久化）
 
@@ -697,7 +697,7 @@ app.get('*', (req, res) => {
 
 async function startServer() {
   console.log('🚀 MyMoney888 数据同步服务器启动中...')
-  console.log(`📦 版本: 3.7.0`)
+  console.log(`📦 版本: 3.8.0`)
   console.log(`📁 数据目录: ${DATA_DIR}`)
   
   // 测试数据库连接

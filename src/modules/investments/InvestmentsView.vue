@@ -584,7 +584,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import Chart from 'chart.js/auto'
-import unifiedDataStore from '../services/unified-data-store.js'
+import coreDataStore from '../../services/core-data-store.js'
 
 // 数据版本号（用于触发响应式更新）
 const dataVersion = ref(0)
@@ -597,19 +597,19 @@ const forceUpdate = () => {
 // 投资账户列表（从 DataStore 获取）
 const investmentAccounts = computed(() => {
   void dataVersion.value
-  return unifiedDataStore.getRaw('investmentAccounts') || []
+  return coreDataStore.getRaw('investmentAccounts') || []
 })
 
 // 投资明细列表（从 DataStore 获取）
 const investmentDetails = computed(() => {
   void dataVersion.value
-  return unifiedDataStore.getRaw('investmentDetails') || []
+  return coreDataStore.getRaw('investmentDetails') || []
 })
 
 // 历史净值记录 (用于收益分析)
 const netValueHistory = computed(() => {
   void dataVersion.value
-  return unifiedDataStore.getRaw('netValueHistory') || []
+  return coreDataStore.getRaw('netValueHistory') || []
 })
 
 // 筛选后的投资明细（用于收益分析）
@@ -728,7 +728,7 @@ const openEditInvestmentDetailModal = (detail) => {
 // 添加投资账户
 const addInvestmentAccount = async () => {
   // 使用 DataStore 的联动方法（会自动创建关联的账户）
-  await unifiedDataStore.addInvestmentAccount({
+  await coreDataStore.addInvestmentAccount({
     name: newInvestmentAccount.value.name,
     type: newInvestmentAccount.value.type,
     description: newInvestmentAccount.value.description,
@@ -741,7 +741,7 @@ const addInvestmentAccount = async () => {
 
 // 更新投资账户
 const updateInvestmentAccount = async () => {
-  await unifiedDataStore.update('investmentAccounts', editInvestmentAccount.value.id, {
+  await coreDataStore.update('investmentAccounts', editInvestmentAccount.value.id, {
     name: editInvestmentAccount.value.name,
     type: editInvestmentAccount.value.type,
     description: editInvestmentAccount.value.description
@@ -753,7 +753,7 @@ const updateInvestmentAccount = async () => {
 // 删除投资账户
 const deleteInvestmentAccount = async (id) => {
   // 使用 DataStore 的联动方法（会同时删除关联的投资明细和账户）
-  await unifiedDataStore.deleteInvestmentAccount(id)
+  await coreDataStore.deleteInvestmentAccount(id)
   forceUpdate()
 }
 
@@ -1118,7 +1118,7 @@ const addInvestmentDetail = async () => {
   const today = new Date().toISOString().split('T')[0]
   const account = investmentAccounts.value.find(a => String(a.id) === String(newInvestmentDetail.value.accountId))
   
-  await unifiedDataStore.add('investmentDetails', {
+  await coreDataStore.add('investmentDetails', {
     accountId: newInvestmentDetail.value.accountId,
     accountName: account ? account.name : '',
     type: newInvestmentDetail.value.type,
@@ -1147,7 +1147,7 @@ const updateInvestmentDetail = async () => {
   const today = new Date().toISOString().split('T')[0]
   const oldAccountId = investmentDetails.value.find(d => d.id === editInvestmentDetail.value.id)?.accountId
   
-  await unifiedDataStore.update('investmentDetails', editInvestmentDetail.value.id, {
+  await coreDataStore.update('investmentDetails', editInvestmentDetail.value.id, {
     accountId: editInvestmentDetail.value.accountId,
     accountName: investmentAccounts.value.find(a => String(a.id) === String(editInvestmentDetail.value.accountId))?.name || '',
     type: editInvestmentDetail.value.type,
@@ -1173,7 +1173,7 @@ const updateInvestmentDetail = async () => {
 const deleteInvestmentDetail = async (id) => {
   const detail = investmentDetails.value.find(d => String(d.id) === String(id))
   if (detail) {
-    await unifiedDataStore.remove('investmentDetails', id)
+    await coreDataStore.remove('investmentDetails', id)
     updateAccountAsset(detail.accountId)
     forceUpdate()
   }
@@ -1189,7 +1189,7 @@ const updateAccountAsset = async (accountId) => {
     const profitLoss = totalAsset - totalCost
     
     // 使用 DataStore 更新（会自动同步到账户管理）
-    await unifiedDataStore.updateInvestmentAccount(accountId, {
+    await coreDataStore.updateInvestmentAccount(accountId, {
       totalAsset,
       profitLoss,
       totalValue: totalAsset
@@ -1209,13 +1209,13 @@ const recordNetValue = async (detail) => {
   if (existingIndex !== -1) {
     // 更新现有记录
     const existing = allHistory[existingIndex]
-    await unifiedDataStore.update('netValueHistory', existing.id, {
+    await coreDataStore.update('netValueHistory', existing.id, {
       price: detail.currentPrice,
       updateTime: new Date().toISOString()
     })
   } else {
     // 添加新记录
-    await unifiedDataStore.add('netValueHistory', {
+    await coreDataStore.add('netValueHistory', {
       code: detail.code,
       name: detail.name,
       date: today,
@@ -1239,7 +1239,7 @@ const refreshAllNetValues = async () => {
     try {
       const info = await fetchInvestmentInfo(detail.code, detail.type)
       if (info.currentPrice) {
-        await unifiedDataStore.update('investmentDetails', detail.id, {
+        await coreDataStore.update('investmentDetails', detail.id, {
           currentPrice: info.currentPrice,
           netValueDate: info.updateDate || new Date().toISOString().split('T')[0]
         })
@@ -1565,7 +1565,7 @@ const scheduleNetValueUpdate = () => {
       try {
         const info = await fetchInvestmentInfo(detail.code, detail.type)
         if (info.currentPrice) {
-          await unifiedDataStore.update('investmentDetails', detail.id, {
+          await coreDataStore.update('investmentDetails', detail.id, {
             currentPrice: info.currentPrice,
             netValueDate: info.updateDate || new Date().toISOString().split('T')[0],
             updateDate: new Date().toISOString().split('T')[0]

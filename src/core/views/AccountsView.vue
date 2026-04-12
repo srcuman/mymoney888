@@ -74,7 +74,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import unifiedDataStore from '../services/unified-data-store.js'
+import coreDataStore from '../services/core-data-store.js'
 
 // 账户类别列表
 const accountCategories = [
@@ -98,13 +98,13 @@ const accounts = computed(() => {
   const result = []
   
   // 1. 基础账户（手动创建的账户）
-  const baseAccounts = unifiedDataStore.getRaw('accounts') || []
+  const baseAccounts = coreDataStore.getRaw('accounts') || []
   baseAccounts.forEach(account => {
     result.push({ ...account })
   })
   
   // 2. 添加信用卡账户（从 creditCards 计算，但显示为独立账户）
-  const creditCards = unifiedDataStore.getRaw('creditCards') || []
+  const creditCards = coreDataStore.getRaw('creditCards') || []
   creditCards.forEach(card => {
     // 查找是否已存在（通过 linkedCreditCardId 关联）
     const existingByLink = result.find(a => a.linkedCreditCardId === card.id)
@@ -128,7 +128,7 @@ const accounts = computed(() => {
   })
   
   // 3. 添加投资账户（从 investmentAccounts 计算）
-  const investmentAccounts = unifiedDataStore.getRaw('investmentAccounts') || []
+  const investmentAccounts = coreDataStore.getRaw('investmentAccounts') || []
   investmentAccounts.forEach(account => {
     // 查找是否已存在（通过 linkedInvestmentAccountId 关联）
     const existingByLink = result.find(a => a.linkedInvestmentAccountId === account.id)
@@ -149,7 +149,7 @@ const accounts = computed(() => {
   })
   
   // 4. 添加贷款账户（从 loans 计算）
-  const loans = unifiedDataStore.getRaw('loans') || []
+  const loans = coreDataStore.getRaw('loans') || []
   loans.forEach(loan => {
     // 查找是否已存在（通过 linkedLoanId 关联）
     const existingByLink = result.find(a => a.linkedLoanId === loan.id)
@@ -229,7 +229,7 @@ const saveAccount = async () => {
   }
   
   if (showEditAccountModal.value) {
-    await unifiedDataStore.update('accounts', formData.value.id, {
+    await coreDataStore.update('accounts', formData.value.id, {
       name: formData.value.name,
       balance: formData.value.balance,
       category: formData.value.category
@@ -243,7 +243,7 @@ const saveAccount = async () => {
       initialBalance: formData.value.balance,
       sourceType: 'manual'
     }
-    await unifiedDataStore.add('accounts', newAccount)
+    await coreDataStore.add('accounts', newAccount)
   }
   
   // 关闭模态框并重置表单
@@ -261,7 +261,7 @@ const deleteAccount = async (accountId) => {
   }
   
   if (confirm('确定要删除此账户吗？')) {
-    await unifiedDataStore.remove('accounts', accountId)
+    await coreDataStore.remove('accounts', accountId)
   }
 }
 

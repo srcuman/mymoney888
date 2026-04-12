@@ -2,9 +2,12 @@
   <div class="space-y-8">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
       <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">维度管理</h2>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        💡 提示：已被交易使用的维度只能修改名称，不能删除
+      </p>
       
       <div class="mb-6">
-        <div class="flex space-x-4 mb-4">
+        <div class="flex space-x-4 mb-4 flex-wrap">
           <button @click="activeTab = 'categories'" :class="activeTab === 'categories' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-4 py-2 rounded-md font-medium">
             收支分类
           </button>
@@ -19,9 +22,6 @@
           </button>
           <button @click="activeTab = 'payment-channels'" :class="activeTab === 'payment-channels' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-4 py-2 rounded-md font-medium">
             支付渠道
-          </button>
-          <button @click="activeTab = 'defaults'" :class="activeTab === 'defaults' ? 'bg-primary text-white' : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600'" class="px-4 py-2 rounded-md font-medium">
-            默认值设置
           </button>
         </div>
 
@@ -113,11 +113,12 @@
             </button>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div v-for="member in members" :key="member.id" class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-3 rounded">
-              <span>{{ member.name }}</span>
+            <div v-for="member in membersWithUsage" :key="member.id" class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-3 rounded">
+              <span :class="member.isUsed ? 'font-semibold' : ''">{{ member.name }}<span v-if="member.isUsed" class="text-xs text-gray-400 ml-1">(使用中)</span></span>
               <div>
                 <button @click="openEditMemberModal(member)" class="text-blue-500 hover:text-blue-700 mr-2">✏️</button>
-                <button @click="deleteMember(member.id)" class="text-red-500 hover:text-red-700">🗑️</button>
+                <button v-if="!member.isUsed" @click="deleteMember(member.id)" class="text-red-500 hover:text-red-700">🗑️</button>
+                <span v-else class="text-gray-400 text-xs">不可删除</span>
               </div>
             </div>
           </div>
@@ -132,11 +133,12 @@
             </button>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div v-for="merchant in merchants" :key="merchant.id" class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-3 rounded">
-              <span>{{ merchant.name }}</span>
+            <div v-for="merchant in merchantsWithUsage" :key="merchant.id" class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-3 rounded">
+              <span :class="merchant.isUsed ? 'font-semibold' : ''">{{ merchant.name }}<span v-if="merchant.isUsed" class="text-xs text-gray-400 ml-1">(使用中)</span></span>
               <div>
                 <button @click="openEditMerchantModal(merchant)" class="text-blue-500 hover:text-blue-700 mr-2">✏️</button>
-                <button @click="deleteMerchant(merchant.id)" class="text-red-500 hover:text-red-700">🗑️</button>
+                <button v-if="!merchant.isUsed" @click="deleteMerchant(merchant.id)" class="text-red-500 hover:text-red-700">🗑️</button>
+                <span v-else class="text-gray-400 text-xs">不可删除</span>
               </div>
             </div>
           </div>
@@ -151,9 +153,10 @@
             </button>
           </div>
           <div class="flex flex-wrap gap-2">
-            <span v-for="tag in tags" :key="tag.id" class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full flex items-center">
-              {{ tag.name }}
-              <button @click="deleteTag(tag.id)" class="ml-2 text-red-500 hover:text-red-700">×</button>
+            <span v-for="tag in tagsWithUsage" :key="tag.id" class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full flex items-center">
+              {{ tag.name }}<span v-if="tag.isUsed" class="text-xs ml-1">(使用中)</span>
+              <button @click="openEditTagModal(tag)" class="ml-2 text-blue-500 hover:text-blue-700">✏️</button>
+              <button v-if="!tag.isUsed" @click="deleteTag(tag.id)" class="ml-1 text-red-500 hover:text-red-700">×</button>
             </span>
           </div>
         </div>
@@ -167,66 +170,15 @@
             </button>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div v-for="channel in paymentChannels" :key="channel.id" class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-3 rounded">
-              <span>{{ channel.name }}</span>
+            <div v-for="channel in channelsWithUsage" :key="channel.id" class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-3 rounded">
+              <span :class="channel.isUsed ? 'font-semibold' : ''">{{ channel.name }}<span v-if="channel.isUsed" class="text-xs text-gray-400 ml-1">(使用中)</span></span>
               <div>
                 <button @click="openEditPaymentChannelModal(channel)" class="text-blue-500 hover:text-blue-700 mr-2">✏️</button>
-                <button @click="deletePaymentChannel(channel.id)" class="text-red-500 hover:text-red-700">🗑️</button>
+                <button v-if="!channel.isUsed" @click="deletePaymentChannel(channel.id)" class="text-red-500 hover:text-red-700">🗑️</button>
+                <span v-else class="text-gray-400 text-xs">不可删除</span>
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- 默认值设置 -->
-        <div v-if="activeTab === 'defaults'">
-          <h3 class="font-semibold mb-4">默认选项设置</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium mb-1">默认支出分类</label>
-              <select v-model="defaults.expenseCategory" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
-                <option value="">请选择</option>
-                <option v-for="cat in expenseCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1">默认收入分类</label>
-              <select v-model="defaults.incomeCategory" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
-                <option value="">请选择</option>
-                <option v-for="cat in incomeCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1">默认成员</label>
-              <select v-model="defaults.member" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
-                <option value="">请选择</option>
-                <option v-for="m in members" :key="m.id" :value="m.id">{{ m.name }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1">默认商家</label>
-              <select v-model="defaults.merchant" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
-                <option value="">请选择</option>
-                <option v-for="mer in merchants" :key="mer.id" :value="mer.id">{{ mer.name }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1">默认标签</label>
-              <select v-model="defaults.tag" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
-                <option value="">请选择</option>
-                <option v-for="t in tags" :key="t.id" :value="t.id">{{ t.name }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-1">默认支付渠道</label>
-              <select v-model="defaults.paymentChannel" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
-                <option value="">请选择</option>
-                <option v-for="ch in paymentChannels" :key="ch.id" :value="ch.id">{{ ch.name }}</option>
-              </select>
-            </div>
-          </div>
-          <button @click="saveDefaults" class="mt-4 bg-primary text-white px-6 py-2 rounded-md hover:bg-primary/90">
-            保存默认值
-          </button>
         </div>
       </div>
     </div>
@@ -234,9 +186,9 @@
     <!-- 添加分类模态框 -->
     <div v-if="showAddCategoryModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showAddCategoryModal = false">
       <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
-        <h3 class="text-lg font-semibold mb-4">添加分类</h3>
+        <h3 class="text-lg font-semibold mb-4">{{ categoryForm.parentId ? '添加子分类' : '添加分类' }}</h3>
         <div class="space-y-4">
-          <div>
+          <div v-if="!categoryForm.parentId">
             <label class="block text-sm font-medium mb-1">分类类型</label>
             <select v-model="categoryForm.type" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
               <option value="expense">支出</option>
@@ -246,23 +198,6 @@
           <div>
             <label class="block text-sm font-medium mb-1">分类名称</label>
             <input v-model="categoryForm.name" type="text" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="请输入分类名称">
-          </div>
-        </div>
-        <div class="flex justify-end space-x-2 mt-6">
-          <button @click="showAddCategoryModal = false" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">取消</button>
-          <button @click="saveCategory" class="px-4 py-2 bg-primary text-white rounded-md">保存</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 添加子分类模态框 -->
-    <div v-if="showAddCategoryModal && categoryForm.parentId" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showAddCategoryModal = false">
-      <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
-        <h3 class="text-lg font-semibold mb-4">添加子分类</h3>
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium mb-1">子分类名称</label>
-            <input v-model="categoryForm.name" type="text" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="请输入子分类名称">
           </div>
         </div>
         <div class="flex justify-end space-x-2 mt-6">
@@ -349,16 +284,16 @@
       </div>
     </div>
 
-    <!-- 添加标签模态框 -->
-    <div v-if="showAddTagModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showAddTagModal = false">
+    <!-- 添加/编辑标签模态框 -->
+    <div v-if="showAddTagModal || showEditTagModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="closeTagModal">
       <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
-        <h3 class="text-lg font-semibold mb-4">添加标签</h3>
+        <h3 class="text-lg font-semibold mb-4">{{ showEditTagModal ? '编辑标签' : '添加标签' }}</h3>
         <div>
           <label class="block text-sm font-medium mb-1">标签名称</label>
           <input v-model="tagForm.name" type="text" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="请输入标签名称">
         </div>
         <div class="flex justify-end space-x-2 mt-6">
-          <button @click="showAddTagModal = false" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">取消</button>
+          <button @click="closeTagModal" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-md">取消</button>
           <button @click="saveTag" class="px-4 py-2 bg-primary text-white rounded-md">保存</button>
         </div>
       </div>
@@ -397,29 +332,39 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import coreDataStore from '../services/core-data-store.js'
 
 // 活跃标签页
 const activeTab = ref('categories')
 
-// 收支分类
+// 是否为子分类
+const isSubCategory = ref(false)
+
+// 收支分类（从 dimensions 获取）
+const dimensions = computed(() => coreDataStore.get('dimensions').value || {})
 const expenseCategories = ref([])
 const incomeCategories = ref([])
 
-// 成员
+// 成员/商家/标签/支付渠道（独立存储）
 const members = ref([])
-
-// 商家
 const merchants = ref([])
-
-// 标签
 const tags = ref([])
-
-// 支付渠道
 const paymentChannels = ref([])
 
-// 是否为子分类
-const isSubCategory = ref(false)
+// 带使用状态的计算属性
+const membersWithUsage = computed(() => 
+  members.value.map(m => ({ ...m, isUsed: coreDataStore.isDimensionUsed('members', m.name) }))
+)
+const merchantsWithUsage = computed(() => 
+  merchants.value.map(m => ({ ...m, isUsed: coreDataStore.isDimensionUsed('merchants', m.name) }))
+)
+const tagsWithUsage = computed(() => 
+  tags.value.map(t => ({ ...t, isUsed: coreDataStore.isDimensionUsed('tags', t.name) }))
+)
+const channelsWithUsage = computed(() => 
+  paymentChannels.value.map(c => ({ ...c, isUsed: coreDataStore.isDimensionUsed('paymentChannels', c.name) }))
+)
 
 // 模态框状态
 const showAddCategoryModal = ref(false)
@@ -429,6 +374,7 @@ const showEditMemberModal = ref(false)
 const showAddMerchantModal = ref(false)
 const showEditMerchantModal = ref(false)
 const showAddTagModal = ref(false)
+const showEditTagModal = ref(false)
 const showAddPaymentChannelModal = ref(false)
 const showEditPaymentChannelModal = ref(false)
 
@@ -439,49 +385,27 @@ const merchantForm = ref({ id: null, name: '' })
 const tagForm = ref({ id: null, name: '' })
 const paymentChannelForm = ref({ id: null, name: '' })
 
-// 默认值设置
-const defaults = ref({
-  expenseCategory: '',
-  incomeCategory: '',
-  member: '',
-  merchant: '',
-  tag: '',
-  paymentChannel: ''
-})
+// 加载数据
+const loadDimensions = () => {
+  const dims = coreDataStore.get('dimensions').value || {}
+  expenseCategories.value = dims.expenseCategories || []
+  incomeCategories.value = dims.incomeCategories || []
+  members.value = coreDataStore.get('members').value || []
+  merchants.value = coreDataStore.get('merchants').value || []
+  tags.value = coreDataStore.get('tags').value || []
+  paymentChannels.value = coreDataStore.get('paymentChannels').value || []
+}
 
-// 保存维度数据（支持多账套）
+// 保存维度数据
 const saveDimensions = () => {
-  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
-  const dimensions = {
+  coreDataStore.set('dimensions', {
     expenseCategories: expenseCategories.value,
-    incomeCategories: incomeCategories.value,
-    members: members.value,
-    merchants: merchants.value,
-    tags: tags.value,
-    paymentChannels: paymentChannels.value
-  }
-  localStorage.setItem(`dimensions_${currentLedgerId}`, JSON.stringify(dimensions))
-}
-
-// 获取账套特定数据
-const getLedgerDimensions = (ledgerId) => {
-  const dimensionsData = localStorage.getItem(`dimensions_${ledgerId}`)
-  if (dimensionsData) {
-    return JSON.parse(dimensionsData)
-  }
-  return null
-}
-
-// 保存默认值（支持多账套）
-const saveDefaults = () => {
-  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
-  localStorage.setItem(`defaults_${currentLedgerId}`, JSON.stringify(defaults.value))
-  alert('默认值保存成功')
+    incomeCategories: incomeCategories.value
+  }, { skipSync: true })
 }
 
 // 获取子分类
 const getSubCategories = (parentId) => {
-  // 先在一级分类中查找对应的children数组
   const allCategories = [...expenseCategories.value, ...incomeCategories.value]
   const parent = allCategories.find(c => c.id === parentId)
   if (parent && parent.children) {
@@ -509,7 +433,7 @@ const openEditCategoryModal = (category) => {
 }
 
 // 保存分类
-const saveCategory = () => {
+const saveCategory = async () => {
   if (!categoryForm.value.name.trim()) {
     alert('请输入分类名称')
     return
@@ -549,21 +473,21 @@ const saveCategory = () => {
     }
   }
   
-  saveDimensions()
+  await saveDimensions()
   showAddCategoryModal.value = false
   showEditCategoryModal.value = false
   categoryForm.value = { id: null, name: '', type: 'expense', parentId: null }
 }
 
-// 删除分类
-const deleteCategory = (categoryId) => {
+// 删除分类（不检查使用情况，分类可以删除）
+const deleteCategory = async (categoryId) => {
   if (!confirm('确定要删除此分类吗？')) return
   
   // 从支出分类中删除
   let index = expenseCategories.value.findIndex(c => c.id === categoryId)
   if (index !== -1) {
     expenseCategories.value.splice(index, 1)
-    saveDimensions()
+    await saveDimensions()
     return
   }
   
@@ -571,7 +495,7 @@ const deleteCategory = (categoryId) => {
   index = incomeCategories.value.findIndex(c => c.id === categoryId)
   if (index !== -1) {
     incomeCategories.value.splice(index, 1)
-    saveDimensions()
+    await saveDimensions()
     return
   }
   
@@ -581,7 +505,7 @@ const deleteCategory = (categoryId) => {
       index = parent.children.findIndex(c => c.id === categoryId)
       if (index !== -1) {
         parent.children.splice(index, 1)
-        saveDimensions()
+        await saveDimensions()
         return
       }
     }
@@ -601,33 +525,37 @@ const openEditMemberModal = (member) => {
 }
 
 // 保存成员
-const saveMember = () => {
+const saveMember = async () => {
   if (!memberForm.value.name.trim()) {
     alert('请输入成员名称')
     return
   }
   
   if (showEditMemberModal.value) {
-    const index = members.value.findIndex(m => m.id === memberForm.value.id)
-    if (index !== -1) {
-      members.value[index] = { ...memberForm.value }
-    }
+    // 编辑：使用 coreDataStore 更新维度（会自动更新所有使用该维度的交易）
+    await coreDataStore.updateDimension('members', memberForm.value.id, { name: memberForm.value.name })
   } else {
-    members.value.push({
-      id: Date.now().toString(),
-      name: memberForm.value.name
-    })
+    // 添加
+    await coreDataStore.addDimension('members', { name: memberForm.value.name })
   }
-  saveDimensions()
+  
+  loadDimensions()
   showAddMemberModal.value = false
   showEditMemberModal.value = false
   memberForm.value = { id: null, name: '' }
 }
 
-// 删除成员
-const deleteMember = (memberId) => {
-  members.value = members.value.filter(m => m.id !== memberId)
-  saveDimensions()
+// 删除成员（检查使用情况）
+const deleteMember = async (memberId) => {
+  const member = members.value.find(m => m.id === memberId)
+  if (member && coreDataStore.isDimensionUsed('members', member.name)) {
+    alert('该成员已被交易使用，无法删除，只能修改名称')
+    return
+  }
+  
+  if (!confirm('确定要删除此成员吗？')) return
+  await coreDataStore.deleteDimension('members', memberId)
+  loadDimensions()
 }
 
 // 打开添加商家模态框
@@ -643,33 +571,35 @@ const openEditMerchantModal = (merchant) => {
 }
 
 // 保存商家
-const saveMerchant = () => {
+const saveMerchant = async () => {
   if (!merchantForm.value.name.trim()) {
     alert('请输入商家名称')
     return
   }
   
   if (showEditMerchantModal.value) {
-    const index = merchants.value.findIndex(m => m.id === merchantForm.value.id)
-    if (index !== -1) {
-      merchants.value[index] = { ...merchantForm.value }
-    }
+    await coreDataStore.updateDimension('merchants', merchantForm.value.id, { name: merchantForm.value.name })
   } else {
-    merchants.value.push({
-      id: Date.now().toString(),
-      name: merchantForm.value.name
-    })
+    await coreDataStore.addDimension('merchants', { name: merchantForm.value.name })
   }
-  saveDimensions()
+  
+  loadDimensions()
   showAddMerchantModal.value = false
   showEditMerchantModal.value = false
   merchantForm.value = { id: null, name: '' }
 }
 
-// 删除商家
-const deleteMerchant = (merchantId) => {
-  merchants.value = merchants.value.filter(m => m.id !== merchantId)
-  saveDimensions()
+// 删除商家（检查使用情况）
+const deleteMerchant = async (merchantId) => {
+  const merchant = merchants.value.find(m => m.id === merchantId)
+  if (merchant && coreDataStore.isDimensionUsed('merchants', merchant.name)) {
+    alert('该商家已被交易使用，无法删除，只能修改名称')
+    return
+  }
+  
+  if (!confirm('确定要删除此商家吗？')) return
+  await coreDataStore.deleteDimension('merchants', merchantId)
+  loadDimensions()
 }
 
 // 打开添加标签模态框
@@ -678,26 +608,47 @@ const openAddTagModal = () => {
   showAddTagModal.value = true
 }
 
+// 打开编辑标签模态框
+const openEditTagModal = (tag) => {
+  tagForm.value = { ...tag }
+  showEditTagModal.value = true
+}
+
+// 关闭标签模态框
+const closeTagModal = () => {
+  showAddTagModal.value = false
+  showEditTagModal.value = false
+  tagForm.value = { id: null, name: '' }
+}
+
 // 保存标签
-const saveTag = () => {
+const saveTag = async () => {
   if (!tagForm.value.name.trim()) {
     alert('请输入标签名称')
     return
   }
   
-  tags.value.push({
-    id: Date.now().toString(),
-    name: tagForm.value.name
-  })
-  saveDimensions()
-  showAddTagModal.value = false
-  tagForm.value = { id: null, name: '' }
+  if (showEditTagModal.value) {
+    await coreDataStore.updateDimension('tags', tagForm.value.id, { name: tagForm.value.name })
+  } else {
+    await coreDataStore.addDimension('tags', { name: tagForm.value.name })
+  }
+  
+  loadDimensions()
+  closeTagModal()
 }
 
-// 删除标签
-const deleteTag = (tagId) => {
-  tags.value = tags.value.filter(t => t.id !== tagId)
-  saveDimensions()
+// 删除标签（检查使用情况）
+const deleteTag = async (tagId) => {
+  const tag = tags.value.find(t => t.id === tagId)
+  if (tag && coreDataStore.isDimensionUsed('tags', tag.name)) {
+    alert('该标签已被交易使用，无法删除，只能修改名称')
+    return
+  }
+  
+  if (!confirm('确定要删除此标签吗？')) return
+  await coreDataStore.deleteDimension('tags', tagId)
+  loadDimensions()
 }
 
 // 打开添加支付渠道模态框
@@ -713,33 +664,40 @@ const openEditPaymentChannelModal = (channel) => {
 }
 
 // 保存支付渠道
-const savePaymentChannel = () => {
+const savePaymentChannel = async () => {
   if (!paymentChannelForm.value.name.trim()) {
     alert('请输入支付渠道名称')
     return
   }
   
   if (showEditPaymentChannelModal.value) {
-    const index = paymentChannels.value.findIndex(c => c.id === paymentChannelForm.value.id)
-    if (index !== -1) {
-      paymentChannels.value[index] = { ...paymentChannelForm.value }
-    }
+    await coreDataStore.updateDimension('paymentChannels', paymentChannelForm.value.id, { name: paymentChannelForm.value.name })
   } else {
-    paymentChannels.value.push({
-      id: Date.now().toString(),
-      name: paymentChannelForm.value.name
-    })
+    await coreDataStore.addDimension('paymentChannels', { name: paymentChannelForm.value.name })
   }
-  saveDimensions()
+  
+  loadDimensions()
   showAddPaymentChannelModal.value = false
   showEditPaymentChannelModal.value = false
   paymentChannelForm.value = { id: null, name: '' }
 }
 
-// 删除支付渠道
-const deletePaymentChannel = (channelId) => {
-  paymentChannels.value = paymentChannels.value.filter(c => c.id !== channelId)
-  saveDimensions()
+// 删除支付渠道（检查使用情况）
+const deletePaymentChannel = async (channelId) => {
+  const channel = paymentChannels.value.find(c => c.id === channelId)
+  if (channel && coreDataStore.isDimensionUsed('paymentChannels', channel.name)) {
+    alert('该支付渠道已被交易使用，无法删除，只能修改名称')
+    return
+  }
+  
+  if (!confirm('确定要删除此支付渠道吗？')) return
+  await coreDataStore.deleteDimension('paymentChannels', channelId)
+  loadDimensions()
+}
+
+// 数据变更处理
+const handleDataChanged = () => {
+  loadDimensions()
 }
 
 // 监听账套切换
@@ -747,29 +705,14 @@ const handleLedgerChange = () => {
   loadDimensions()
 }
 
-// 加载维度数据
-const loadDimensions = () => {
-  const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
-  
-  const ledgerDimensions = getLedgerDimensions(currentLedgerId)
-  
-  if (ledgerDimensions) {
-    expenseCategories.value = ledgerDimensions.expenseCategories || []
-    incomeCategories.value = ledgerDimensions.incomeCategories || []
-    members.value = ledgerDimensions.members || []
-    merchants.value = ledgerDimensions.merchants || []
-    tags.value = ledgerDimensions.tags || []
-    paymentChannels.value = ledgerDimensions.paymentChannels || []
-  }
-  
-  const savedDefaults = localStorage.getItem(`defaults_${currentLedgerId}`)
-  if (savedDefaults) {
-    defaults.value = JSON.parse(savedDefaults)
-  }
-}
-
 onMounted(() => {
   loadDimensions()
+  window.addEventListener('dataChanged', handleDataChanged)
   window.addEventListener('ledgerChanged', handleLedgerChange)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('dataChanged', handleDataChanged)
+  window.removeEventListener('ledgerChanged', handleLedgerChange)
 })
 </script>

@@ -97,7 +97,7 @@
               快速记账
             </button>
             <!-- 当前版本 -->
-            <span class="text-sm text-gray-600 dark:text-gray-400">v3.7.0</span>
+            <span class="text-sm text-gray-600 dark:text-gray-400">v3.8.0</span>
           </div>
         </div>
       </header>
@@ -131,7 +131,7 @@
 <script setup>
 import { ref, onMounted, provide, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import QuickAddComponent from './components/QuickAddComponent.vue'
+import QuickAddComponent from './core/components/QuickAddComponent.vue'
 import { APP_VERSION } from './config/version.js'
 
 const router = useRouter()
