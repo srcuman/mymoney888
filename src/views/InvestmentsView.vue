@@ -754,6 +754,31 @@ const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
   }
 }
 
+// 使用JSONP方式获取天天基金数据（解决CORS和代理问题）
+const fetchTianTianFundJSONP = (code) => {
+  return new Promise((resolve, reject) => {
+    const callbackName = `jsonpgz_${Date.now()}`
+    const url = `https://fundgz.1234567.com.cn/js/${code}.js?rt=${Date.now()}&callback=${callbackName}`
+    
+    const script = document.createElement('script')
+    script.src = url
+    
+    window[callbackName] = (data) => {
+      delete window[callbackName]
+      if (script.parentNode) script.parentNode.removeChild(script)
+      resolve(data)
+    }
+    
+    script.onerror = () => {
+      delete window[callbackName]
+      if (script.parentNode) script.parentNode.removeChild(script)
+      reject(new Error('网络错误'))
+    }
+    
+    document.head.appendChild(script)
+  })
+}
+
 // 调用单个API的函数
 const fetchSingleAPI = async (url, source) => {
   const startTime = Date.now()
@@ -885,18 +910,32 @@ const fetchInvestmentInfo = async (code, userSelectedType = null) => {
     })
   }
   
-  // 2. 基金 - 天天基金API（实时估值）
+  // 2. 基金 - 天天基金API（使用JSONP方式）
   if (userWantsFund || (isPossibleFund && !userWantsStock)) {
     // 排除6/3开头(明显是股票)
     if (!code.startsWith('6') && !code.startsWith('3')) {
-      apiTasks.push({
-        url: `/fund/${code}.js?rt=1`,
-        source: '天天基金',
-        type: 'fund'
-      })
+      // 使用JSONP方式获取基金数据
+      try {
+        console.log('正在通过JSONP获取天天基金数据...')
+        const fundData = await fetchTianTianFundJSONP(code)
+        console.log('天天基金数据:', fundData)
+        
+        if (fundData && fundData.name) {
+          const price = parseFloat(fundData.gsz) || parseFloat(fundData.dwjz) || 0
+          return {
+            name: fundData.name,
+            type: '基金',
+            currentPrice: price,
+            updateDate: fundData.gztime || fundData.jzrq || new Date().toISOString().split('T')[0]
+          }
+        }
+      } catch (e) {
+        console.log('天天基金JSONP失败:', e.message)
+      }
     }
   }
   
+  // 股票请求
   if (apiTasks.length === 0) {
     throw new Error('无法识别代码类型，请手动选择品种类型')
   }
