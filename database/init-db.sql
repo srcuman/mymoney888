@@ -1,6 +1,8 @@
 -- 个人记账系统数据库初始化脚本
--- 版本: 3.0
--- 创建时间: 2026-03-28
+-- 版本: 3.1
+-- 创建时间: 2026-04-12
+-- 说明: 此版本不依赖数据库全局权限，仅需普通数据库用户权限即可运行
+--       触发器、存储过程、事件等功能已移除，需在应用层实现
 
 -- 创建数据库
 CREATE DATABASE IF NOT EXISTS mymoney888 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -63,10 +65,15 @@ CREATE TABLE IF NOT EXISTS transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL COMMENT '用户ID',
     account_id INT NOT NULL COMMENT '账户ID',
+    to_account_id INT COMMENT '目标账户ID（转账时使用）',
     category_id INT COMMENT '分类ID',
-    type ENUM('expense', 'income') NOT NULL COMMENT '交易类型: expense-支出, income-收入',
+    merchant_id INT COMMENT '商家ID',
+    project_id INT COMMENT '项目ID',
+    member_id INT COMMENT '成员ID',
+    type ENUM('expense', 'income', 'transfer') NOT NULL COMMENT '交易类型: expense-支出, income-收入, transfer-转账',
     amount DECIMAL(15, 2) NOT NULL COMMENT '交易金额',
     description TEXT COMMENT '交易描述',
+    notes TEXT COMMENT '备注',
     transaction_date DATE NOT NULL COMMENT '交易日期',
     transaction_time TIME COMMENT '交易时间',
     tags JSON COMMENT '交易标签',
@@ -80,10 +87,18 @@ CREATE TABLE IF NOT EXISTS transactions (
     synced_at TIMESTAMP NULL COMMENT '同步时间',
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+    FOREIGN KEY (to_account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
     FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+    FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE SET NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+    FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE SET NULL,
     INDEX idx_user_id (user_id),
     INDEX idx_account_id (account_id),
+    INDEX idx_to_account_id (to_account_id),
     INDEX idx_category_id (category_id),
+    INDEX idx_merchant_id (merchant_id),
+    INDEX idx_project_id (project_id),
+    INDEX idx_member_id (member_id),
     INDEX idx_type (type),
     INDEX idx_transaction_date (transaction_date),
     INDEX idx_created_at (created_at)
@@ -332,44 +347,6 @@ CREATE TABLE IF NOT EXISTS members (
     INDEX idx_relationship (relationship)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='成员表';
 
--- 交易商家关联表
-CREATE TABLE IF NOT EXISTS transaction_merchants (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    transaction_id INT NOT NULL COMMENT '交易ID',
-    merchant_id INT NOT NULL COMMENT '商家ID',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
-    FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE,
-    INDEX idx_transaction_id (transaction_id),
-    INDEX idx_merchant_id (merchant_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='交易商家关联表';
-
--- 交易项目关联表
-CREATE TABLE IF NOT EXISTS transaction_projects (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    transaction_id INT NOT NULL COMMENT '交易ID',
-    project_id INT NOT NULL COMMENT '项目ID',
-    amount DECIMAL(15, 2) NOT NULL COMMENT '项目分配金额',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    INDEX idx_transaction_id (transaction_id),
-    INDEX idx_project_id (project_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='交易项目关联表';
-
--- 交易成员关联表
-CREATE TABLE IF NOT EXISTS transaction_members (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    transaction_id INT NOT NULL COMMENT '交易ID',
-    member_id INT NOT NULL COMMENT '成员ID',
-    amount DECIMAL(15, 2) NOT NULL COMMENT '成员分配金额',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
-    FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
-    INDEX idx_transaction_id (transaction_id),
-    INDEX idx_member_id (member_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='交易成员关联表';
-
 -- 投资账户表
 CREATE TABLE IF NOT EXISTS investment_accounts (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -452,28 +429,9 @@ CREATE TABLE IF NOT EXISTS user_defaults (
     UNIQUE KEY unique_user_defaults (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户设置默认值表';
 
--- 修改交易记录表，添加关联字段
-ALTER TABLE transactions ADD COLUMN merchant_id INT COMMENT '商家ID', ADD FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE SET NULL, ADD INDEX idx_merchant_id (merchant_id);
-ALTER TABLE transactions ADD COLUMN project_id INT COMMENT '项目ID', ADD FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL, ADD INDEX idx_project_id (project_id);
-ALTER TABLE transactions ADD COLUMN member_id INT COMMENT '成员ID', ADD FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE SET NULL, ADD INDEX idx_member_id (member_id);
-
--- 预设分类数据
--- 首先插入一个默认用户，用于预设分类
-INSERT INTO users (name, email, password_hash, is_active) VALUES
-('默认用户', 'default@mymoney888.com', 'default_password_hash', 1);
-
--- 获取默认用户的ID并插入预设分类
-INSERT INTO categories (user_id, name, type, icon, color, is_default, sort_order) VALUES
-((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '餐饮', 'expense', 'food', '#FF6B6B', 1, 1),
-((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '交通', 'expense', 'transport', '#4ECDC4', 1, 2),
-((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '购物', 'expense', 'shopping', '#45B7D1', 1, 3),
-((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '娱乐', 'expense', 'entertainment', '#96CEB4', 1, 4),
-((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '医疗', 'expense', 'medical', '#FFEAA7', 1, 5),
-((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '教育', 'expense', 'education', '#DDA0DD', 1, 6),
-((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '工资', 'income', 'salary', '#98D8C8', 1, 1),
-((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '投资', 'income', 'investment', '#F7DC6F', 1, 2),
-((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '其他', 'expense', 'other', '#95A5A6', 1, 99),
-((SELECT id FROM users WHERE email = 'default@mymoney888.com' LIMIT 1), '其他', 'income', 'other', '#95A5A6', 1, 99);
+-- ============================================
+-- 视图定义（视图不需要特殊权限）
+-- ============================================
 
 -- 创建视图：用户账户余额汇总
 CREATE OR REPLACE VIEW v_account_balance AS
@@ -509,597 +467,79 @@ LEFT JOIN accounts a ON u.id = a.user_id
 LEFT JOIN transactions t ON a.id = t.account_id
 GROUP BY u.id, u.name;
 
--- 注意：如果遇到权限错误，需要手动执行以下命令：
--- SET GLOBAL log_bin_trust_function_creators = 1;
--- 或者联系DBA授权
+-- 创建视图：月度收支统计
+CREATE OR REPLACE VIEW v_monthly_statistics AS
+SELECT 
+    user_id,
+    DATE_FORMAT(transaction_date, '%Y-%m') as month,
+    SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income,
+    SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expense,
+    COUNT(*) as transaction_count
+FROM transactions
+WHERE status = 'completed'
+GROUP BY user_id, DATE_FORMAT(transaction_date, '%Y-%m');
 
--- 创建触发器：更新账户余额
-DELIMITER //
-CREATE TRIGGER trg_update_account_balance_after_transaction
-AFTER INSERT ON transactions
-FOR EACH ROW
-BEGIN
-    IF NEW.type = 'income' THEN
-        UPDATE accounts SET balance = balance + NEW.amount WHERE id = NEW.account_id;
-    ELSE
-        UPDATE accounts SET balance = balance - NEW.amount WHERE id = NEW.account_id;
-    END IF;
-END//
+-- ============================================
+-- 预设数据（默认用户和分类）
+-- ============================================
 
-CREATE TRIGGER trg_update_account_balance_after_transaction_update
-AFTER UPDATE ON transactions
-FOR EACH ROW
-BEGIN
-    -- 恢复原始交易对余额的影响
-    IF OLD.type = 'income' THEN
-        UPDATE accounts SET balance = balance - OLD.amount WHERE id = OLD.account_id;
-    ELSE
-        UPDATE accounts SET balance = balance + OLD.amount WHERE id = OLD.account_id;
-    END IF;
-    
-    -- 应用新交易对余额的影响
-    IF NEW.type = 'income' THEN
-        UPDATE accounts SET balance = balance + NEW.amount WHERE id = NEW.account_id;
-    ELSE
-        UPDATE accounts SET balance = balance - NEW.amount WHERE id = NEW.account_id;
-    END IF;
-END//
+-- 插入默认用户
+INSERT INTO users (name, email, password_hash, is_active) VALUES
+('默认用户', 'default@mymoney888.com', 'default_password_hash', 1)
+ON DUPLICATE KEY UPDATE name = name;
 
-CREATE TRIGGER trg_update_account_balance_after_transaction_delete
-AFTER DELETE ON transactions
-FOR EACH ROW
-BEGIN
-    IF OLD.type = 'income' THEN
-        UPDATE accounts SET balance = balance - OLD.amount WHERE id = OLD.account_id;
-    ELSE
-        UPDATE accounts SET balance = balance + OLD.amount WHERE id = OLD.account_id;
-    END IF;
-END//
-DELIMITER ;
+-- 插入预设支出分类（参考随手记、挖财等软件）
+INSERT INTO categories (user_id, name, type, icon, color, is_default, sort_order) VALUES
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '餐饮', 'expense', 'restaurant', '#FF6B6B', 1, 1),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '交通出行', 'expense', 'car', '#4ECDC4', 1, 2),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '购物', 'expense', 'shopping', '#45B7D1', 1, 3),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '日用服务', 'expense', 'service', '#96CEB4', 1, 4),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '娱乐', 'expense', 'entertainment', '#FFEAA7', 1, 5),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '运动健身', 'expense', 'fitness', '#DDA0DD', 1, 6),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '医疗健康', 'expense', 'medical', '#98D8C8', 1, 7),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '教育', 'expense', 'education', '#F7DC6F', 1, 8),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '住房', 'expense', 'home', '#BB8FCE', 1, 9),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '通讯', 'expense', 'phone', '#85C1E9', 1, 10),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '人情社交', 'expense', 'social', '#F8B500', 1, 11),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '旅游', 'expense', 'travel', '#00CED1', 1, 12),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '宠物', 'expense', 'pet', '#FFB6C1', 1, 13),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '保险', 'expense', 'insurance', '#B8B8B8', 1, 14),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '投资理财', 'expense', 'investment', '#D4A574', 1, 15),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '其他', 'expense', 'other', '#95A5A6', 1, 99);
 
--- 创建存储过程：同步本地数据到数据库
-DELIMITER //
-CREATE PROCEDURE sp_sync_local_to_db(
-    IN p_user_id INT,
-    IN p_table_name VARCHAR(50),
-    IN p_data JSON,
-    OUT p_result INT
-)
-BEGIN
-    DECLARE v_count INT DEFAULT 0;
-    DECLARE v_error_msg TEXT DEFAULT NULL;
-    
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        GET DIAGNOSTICS CONDITION 1 v_error_msg = MESSAGE_TEXT;
-        INSERT INTO sync_logs (user_id, sync_type, table_name, record_count, status, error_message, completed_at)
-        VALUES (p_user_id, 'local_to_db', p_table_name, 0, 'failed', v_error_msg, NOW());
-        SET p_result = -1;
-    END;
-    
-    START TRANSACTION;
-    
-    -- 根据不同的表执行不同的同步逻辑
-    IF p_table_name = 'accounts' THEN
-        -- 同步账户数据
-        -- 这里需要根据实际的数据格式进行解析和插入/更新
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'transactions' THEN
-        -- 同步交易数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'categories' THEN
-        -- 同步分类数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'credit_cards' THEN
-        -- 同步信用卡数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'credit_card_bills' THEN
-        -- 同步信用卡账单数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'loans' THEN
-        -- 同步贷款数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'loan_payments' THEN
-        -- 同步贷款还款记录数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'installment_templates' THEN
-        -- 同步分期模板数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'installments' THEN
-        -- 同步分期记录数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'merchants' THEN
-        -- 同步商家数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'projects' THEN
-        -- 同步项目数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'members' THEN
-        -- 同步成员数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'transaction_merchants' THEN
-        -- 同步交易商家关联数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'transaction_projects' THEN
-        -- 同步交易项目关联数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    ELSEIF p_table_name = 'transaction_members' THEN
-        -- 同步交易成员关联数据
-        SET v_count = JSON_LENGTH(p_data);
-        
-    END IF;
-    
-    COMMIT;
-    
-    -- 记录同步日志
-    INSERT INTO sync_logs (user_id, sync_type, table_name, record_count, status, sync_details, completed_at)
-    VALUES (p_user_id, 'local_to_db', p_table_name, v_count, 'success', p_data, NOW());
-    
-    SET p_result = v_count;
-END//
-DELIMITER ;
+-- 插入预设收入分类
+INSERT INTO categories (user_id, name, type, icon, color, is_default, sort_order) VALUES
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '工资收入', 'income', 'salary', '#27AE60', 1, 1),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '奖金外快', 'income', 'bonus', '#2ECC71', 1, 2),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '投资收入', 'income', 'investment', '#F39C12', 1, 3),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '副业收入', 'income', 'side_job', '#E74C3C', 1, 4),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '经营收入', 'income', 'business', '#9B59B6', 1, 5),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '礼金收入', 'income', 'gift', '#E91E63', 1, 6),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '退款回收', 'income', 'refund', '#00BCD4', 1, 7),
+((SELECT id FROM users WHERE email = 'default@mymoney888.com'), '其他收入', 'income', 'other', '#95A5A6', 1, 99);
 
--- 创建存储过程：从数据库同步数据到本地
-DELIMITER //
-CREATE PROCEDURE sp_sync_db_to_local(
-    IN p_user_id INT,
-    IN p_table_name VARCHAR(50),
-    IN p_last_sync_time TIMESTAMP,
-    OUT p_result JSON
-)
-BEGIN
-    DECLARE v_data JSON DEFAULT '[]';
-    DECLARE v_error_msg TEXT DEFAULT NULL;
-    
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        GET DIAGNOSTICS CONDITION 1 v_error_msg = MESSAGE_TEXT;
-        INSERT INTO sync_logs (user_id, sync_type, table_name, record_count, status, error_message, completed_at)
-        VALUES (p_user_id, 'db_to_local', p_table_name, 0, 'failed', v_error_msg, NOW());
-        SET p_result = JSON_OBJECT('error', v_error_msg);
-    END;
-    
-    -- 根据不同的表查询数据
-    IF p_table_name = 'accounts' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'name', name,
-                'balance', balance,
-                'account_type', account_type,
-                'description', description,
-                'is_active', is_active,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM accounts 
-        WHERE user_id = p_user_id 
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'transactions' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'account_id', account_id,
-                'category_id', category_id,
-                'type', type,
-                'amount', amount,
-                'description', description,
-                'transaction_date', transaction_date,
-                'transaction_time', transaction_time,
-                'tags', tags,
-                'is_recurring', is_recurring,
-                'status', status,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM transactions 
-        WHERE user_id = p_user_id 
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'categories' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'name', name,
-                'type', type,
-                'icon', icon,
-                'color', color,
-                'parent_id', parent_id,
-                'sort_order', sort_order,
-                'is_default', is_default,
-                'is_active', is_active,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM categories 
-        WHERE user_id = p_user_id OR (user_id = 0 AND is_default = 1)
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'credit_cards' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'account_id', account_id,
-                'card_number', card_number,
-                'card_name', card_name,
-                'credit_limit', credit_limit,
-                'available_credit', available_credit,
-                'bill_day', bill_day,
-                'due_day', due_day,
-                'bank_name', bank_name,
-                'card_type', card_type,
-                'is_active', is_active,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM credit_cards 
-        WHERE user_id = p_user_id 
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'credit_card_bills' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'credit_card_id', credit_card_id,
-                'bill_date', bill_date,
-                'due_date', due_date,
-                'bill_amount', bill_amount,
-                'paid_amount', paid_amount,
-                'remaining_amount', remaining_amount,
-                'transaction_count', transaction_count,
-                'status', status,
-                'paid_at', paid_at,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM credit_card_bills 
-        WHERE credit_card_id IN (SELECT id FROM credit_cards WHERE user_id = p_user_id)
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'loans' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'account_id', account_id,
-                'name', name,
-                'type', type,
-                'total_amount', total_amount,
-                'remaining_amount', remaining_amount,
-                'interest_rate', interest_rate,
-                'period_months', period_months,
-                'paid_periods', paid_periods,
-                'monthly_payment', monthly_payment,
-                'start_date', start_date,
-                'end_date', end_date,
-                'next_payment_date', next_payment_date,
-                'status', status,
-                'description', description,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM loans 
-        WHERE user_id = p_user_id 
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'loan_payments' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'loan_id', loan_id,
-                'account_id', account_id,
-                'period_number', period_number,
-                'payment_date', payment_date,
-                'amount', amount,
-                'principal', principal,
-                'interest', interest,
-                'remaining_principal', remaining_principal,
-                'status', status,
-                'notes', notes,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM loan_payments 
-        WHERE loan_id IN (SELECT id FROM loans WHERE user_id = p_user_id)
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'installment_templates' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'name', name,
-                'total_amount', total_amount,
-                'period_count', period_count,
-                'period_amount', period_amount,
-                'category_id', category_id,
-                'account_id', account_id,
-                'description', description,
-                'is_default', is_default,
-                'is_active', is_active,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM installment_templates 
-        WHERE user_id = p_user_id 
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'installments' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'template_id', template_id,
-                'transaction_id', transaction_id,
-                'installment_group_id', installment_group_id,
-                'installment_number', installment_number,
-                'total_amount', total_amount,
-                'period_amount', period_amount,
-                'paid_amount', paid_amount,
-                'remaining_amount', remaining_amount,
-                'due_date', due_date,
-                'status', status,
-                'paid_at', paid_at,
-                'description', description,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM installments 
-        WHERE user_id = p_user_id 
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'merchants' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'name', name,
-                'category', category,
-                'address', address,
-                'phone', phone,
-                'website', website,
-                'logo', logo,
-                'is_favorite', is_favorite,
-                'is_active', is_active,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM merchants 
-        WHERE user_id = p_user_id 
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'projects' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'name', name,
-                'description', description,
-                'start_date', start_date,
-                'end_date', end_date,
-                'budget', budget,
-                'actual_amount', actual_amount,
-                'status', status,
-                'color', color,
-                'is_active', is_active,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM projects 
-        WHERE user_id = p_user_id 
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'members' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'name', name,
-                'relationship', relationship,
-                'avatar', avatar,
-                'email', email,
-                'phone', phone,
-                'is_active', is_active,
-                'created_at', created_at,
-                'updated_at', updated_at
-            )
-        ) INTO v_data
-        FROM members 
-        WHERE user_id = p_user_id 
-        AND (p_last_sync_time IS NULL OR updated_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'transaction_merchants' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'transaction_id', transaction_id,
-                'merchant_id', merchant_id,
-                'created_at', created_at
-            )
-        ) INTO v_data
-        FROM transaction_merchants 
-        WHERE transaction_id IN (SELECT id FROM transactions WHERE user_id = p_user_id)
-        AND (p_last_sync_time IS NULL OR created_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'transaction_projects' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'transaction_id', transaction_id,
-                'project_id', project_id,
-                'amount', amount,
-                'created_at', created_at
-            )
-        ) INTO v_data
-        FROM transaction_projects 
-        WHERE transaction_id IN (SELECT id FROM transactions WHERE user_id = p_user_id)
-        AND (p_last_sync_time IS NULL OR created_at > p_last_sync_time);
-        
-    ELSEIF p_table_name = 'transaction_members' THEN
-        SELECT JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'id', id,
-                'transaction_id', transaction_id,
-                'member_id', member_id,
-                'amount', amount,
-                'created_at', created_at
-            )
-        ) INTO v_data
-        FROM transaction_members 
-        WHERE transaction_id IN (SELECT id FROM transactions WHERE user_id = p_user_id)
-        AND (p_last_sync_time IS NULL OR created_at > p_last_sync_time);
-        
-    END IF;
-    
-    -- 记录同步日志
-    INSERT INTO sync_logs (user_id, sync_type, table_name, record_count, status, sync_details, completed_at)
-    VALUES (p_user_id, 'db_to_local', p_table_name, JSON_LENGTH(v_data), 'success', v_data, NOW());
-    
-    SET p_result = v_data;
-END//
-DELIMITER ;
-
--- 创建存储过程：双向同步
-DELIMITER //
-CREATE PROCEDURE sp_bidirectional_sync(
-    IN p_user_id INT,
-    IN p_local_accounts JSON,
-    IN p_local_transactions JSON,
-    IN p_local_categories JSON,
-    IN p_local_credit_cards JSON,
-    IN p_local_credit_card_bills JSON,
-    IN p_local_loans JSON,
-    IN p_local_loan_payments JSON,
-    IN p_local_installment_templates JSON,
-    IN p_local_installments JSON,
-    OUT p_result JSON
-)
-BEGIN
-    DECLARE v_sync_time TIMESTAMP DEFAULT NOW();
-    DECLARE v_error_msg TEXT DEFAULT NULL;
-    DECLARE v_accounts_result INT;
-    DECLARE v_transactions_result INT;
-    DECLARE v_categories_result INT;
-    DECLARE v_credit_cards_result INT;
-    DECLARE v_credit_card_bills_result INT;
-    DECLARE v_loans_result INT;
-    DECLARE v_loan_payments_result INT;
-    DECLARE v_installment_templates_result INT;
-    DECLARE v_installments_result INT;
-    DECLARE v_db_accounts JSON;
-    DECLARE v_db_transactions JSON;
-    DECLARE v_db_categories JSON;
-    DECLARE v_db_credit_cards JSON;
-    DECLARE v_db_credit_card_bills JSON;
-    DECLARE v_db_loans JSON;
-    DECLARE v_db_loan_payments JSON;
-    DECLARE v_db_installment_templates JSON;
-    DECLARE v_db_installments JSON;
-    
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        GET DIAGNOSTICS CONDITION 1 v_error_msg = MESSAGE_TEXT;
-        ROLLBACK;
-        INSERT INTO sync_logs (user_id, sync_type, table_name, record_count, status, error_message, completed_at)
-        VALUES (p_user_id, 'bidirectional', 'all', 0, 'failed', v_error_msg, NOW());
-        SET p_result = JSON_OBJECT('error', v_error_msg);
-    END;
-    
-    START TRANSACTION;
-    
-    -- 1. 从本地同步到数据库
-    CALL sp_sync_local_to_db(p_user_id, 'accounts', p_local_accounts, v_accounts_result);
-    CALL sp_sync_local_to_db(p_user_id, 'transactions', p_local_transactions, v_transactions_result);
-    CALL sp_sync_local_to_db(p_user_id, 'categories', p_local_categories, v_categories_result);
-    CALL sp_sync_local_to_db(p_user_id, 'credit_cards', p_local_credit_cards, v_credit_cards_result);
-    CALL sp_sync_local_to_db(p_user_id, 'credit_card_bills', p_local_credit_card_bills, v_credit_card_bills_result);
-    CALL sp_sync_local_to_db(p_user_id, 'loans', p_local_loans, v_loans_result);
-    CALL sp_sync_local_to_db(p_user_id, 'loan_payments', p_local_loan_payments, v_loan_payments_result);
-    CALL sp_sync_local_to_db(p_user_id, 'installment_templates', p_local_installment_templates, v_installment_templates_result);
-    CALL sp_sync_local_to_db(p_user_id, 'installments', p_local_installments, v_installments_result);
-    
-    -- 2. 从数据库同步到本地
-    CALL sp_sync_db_to_local(p_user_id, 'accounts', NULL, v_db_accounts);
-    CALL sp_sync_db_to_local(p_user_id, 'transactions', NULL, v_db_transactions);
-    CALL sp_sync_db_to_local(p_user_id, 'categories', NULL, v_db_categories);
-    CALL sp_sync_db_to_local(p_user_id, 'credit_cards', NULL, v_db_credit_cards);
-    CALL sp_sync_db_to_local(p_user_id, 'credit_card_bills', NULL, v_db_credit_card_bills);
-    CALL sp_sync_db_to_local(p_user_id, 'loans', NULL, v_db_loans);
-    CALL sp_sync_db_to_local(p_user_id, 'loan_payments', NULL, v_db_loan_payments);
-    CALL sp_sync_db_to_local(p_user_id, 'installment_templates', NULL, v_db_installment_templates);
-    CALL sp_sync_db_to_local(p_user_id, 'installments', NULL, v_db_installments);
-    
-    COMMIT;
-    
-    -- 返回同步结果
-    SET p_result = JSON_OBJECT(
-        'sync_time', v_sync_time,
-        'local_to_db', JSON_OBJECT(
-            'accounts', v_accounts_result,
-            'transactions', v_transactions_result,
-            'categories', v_categories_result,
-            'credit_cards', v_credit_cards_result,
-            'credit_card_bills', v_credit_card_bills_result,
-            'loans', v_loans_result,
-            'loan_payments', v_loan_payments_result,
-            'installment_templates', v_installment_templates_result,
-            'installments', v_installments_result
-        ),
-        'db_to_local', JSON_OBJECT(
-            'accounts', JSON_LENGTH(v_db_accounts),
-            'transactions', JSON_LENGTH(v_db_transactions),
-            'categories', JSON_LENGTH(v_db_categories),
-            'credit_cards', JSON_LENGTH(v_db_credit_cards),
-            'credit_card_bills', JSON_LENGTH(v_db_credit_card_bills),
-            'loans', JSON_LENGTH(v_db_loans),
-            'loan_payments', JSON_LENGTH(v_db_loan_payments),
-            'installment_templates', JSON_LENGTH(v_db_installment_templates),
-            'installments', JSON_LENGTH(v_db_installments)
-        ),
-        'data', JSON_OBJECT(
-            'accounts', v_db_accounts,
-            'transactions', v_db_transactions,
-            'categories', v_db_categories,
-            'credit_cards', v_db_credit_cards,
-            'credit_card_bills', v_db_credit_card_bills,
-            'loans', v_db_loans,
-            'loan_payments', v_db_loan_payments,
-            'installment_templates', v_db_installment_templates,
-            'installments', v_db_installments
-        )
-    );
-END//
-DELIMITER ;
-
--- 创建定时事件：清理旧的同步日志（可选）
--- 需要确保事件调度器已启用：SET GLOBAL event_scheduler = ON;
-CREATE EVENT IF NOT EXISTS evt_cleanup_old_sync_logs
-ON SCHEDULE EVERY 1 DAY
-STARTS (TIMESTAMP(CURRENT_DATE) + INTERVAL 1 DAY)
-DO
-DELETE FROM sync_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY);
+-- ============================================
+-- 权限配置说明
+-- ============================================
+-- 
+-- 此脚本不依赖任何全局权限或特殊权限，只需数据库普通用户权限即可执行。
+-- 
+-- 建议的数据库用户权限配置：
+-- CREATE USER 'mymoney888'@'%' IDENTIFIED BY 'your_password';
+-- GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, REFERENCES ON mymoney888.* TO 'mymoney888'@'%';
+-- FLUSH PRIVILEGES;
+--
+-- 如需创建视图，还需添加：
+-- GRANT CREATE VIEW ON mymoney888.* TO 'mymoney888'@'%';
+--
+-- 注意：本脚本移除了以下需要特殊权限的功能：
+--   - 触发器（TRIGGER） - 需在应用层实现账户余额更新
+--   - 存储过程（PROCEDURE） - 需在应用层实现数据同步
+--   - 事件调度器（EVENT） - 需在应用层实现定时任务
+--
+-- ============================================
 
 -- 完成提示
 SELECT '数据库初始化完成！' as message;
-SELECT '版本: 3.0' as version;
-SELECT '创建时间: 2026-03-28' as created_at;
+SELECT '版本: 3.1' as version;
+SELECT '说明: 此版本不依赖全局权限，普通数据库用户权限即可运行' as note;
