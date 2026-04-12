@@ -20,13 +20,20 @@ services:
       - .env
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:3000/api}
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8888/api}
       - DB_HOST=${DB_HOST:-mysql}
       - DB_PORT=${DB_PORT:-3306}
-      - DB_USER=${DB_USER:-root}
+      - DB_USER=${DB_USER:-mymoney888}
       - DB_PASSWORD=${DB_PASSWORD:-mymoney888}
       - DB_NAME=${DB_NAME:-mymoney888}
       - NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
+      # 数据持久化配置
+      - DATA_DIR=/data
+      - AUTO_BACKUP_INTERVAL=${AUTO_BACKUP_INTERVAL:-30}
+      - AUTO_BACKUP_ON_CHANGE=${AUTO_BACKUP_ON_CHANGE:-true}
+    volumes:
+      # 持久化DataStore备份数据
+      - app_data:/data
     # 健康检查
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
@@ -43,6 +50,9 @@ services:
         reservations:
           cpus: '0.5'
           memory: 256M
+    depends_on:
+      mysql:
+        condition: service_healthy
 
   mysql:
     image: mysql:8.0
@@ -52,12 +62,13 @@ services:
       - .env
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-mymoney888}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-mymoney888}
-      - MYSQL_USER=${MYSQL_USER:-mymoney}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-mymoney888}
+      - MYSQL_DATABASE=${DB_NAME:-mymoney888}
+      - MYSQL_USER=${DB_USER:-mymoney888}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-mymoney888}
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
+      # 持久化MySQL数据
       - mysql_data:/var/lib/mysql
       - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
@@ -79,7 +90,11 @@ services:
       - internal
 
 volumes:
+  # MySQL数据持久化卷
   mysql_data:
+    driver: local
+  # 应用数据持久化卷（DataStore文件备份）
+  app_data:
     driver: local
 
 # 网络配置 - 显式定义桥接网络

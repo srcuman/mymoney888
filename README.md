@@ -165,9 +165,137 @@ npm run build
 ```
 
 ## 数据存储
-- 数据存储在浏览器的 LocalStorage 中
-- 包括用户信息、账套、账户、交易记录、维度数据等
+
+### 三重数据持久化机制
+
+系统采用三重数据持久化机制，确保数据安全：
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         前端浏览器                                │
+│                    localStorage (即时缓存)                       │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        Docker 容器                               │
+│  ┌─────────────────┐          ┌─────────────────┐              │
+│  │  MyMoney888 App  │ ──────► │   MySQL 8.0     │              │
+│  │                 │          │   (关系型存储)   │              │
+│  └─────────────────┘          └─────────────────┘              │
+│           │                                                      │
+│           ▼                                                      │
+│  ┌─────────────────┐                                            │
+│  │  /data 目录      │ ◄─── Docker 卷挂载                         │
+│  │  (JSON文件备份)  │     (持久化到宿主机)                        │
+│  └─────────────────┘                                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 数据持久化配置
+
+通过 `.env` 文件配置数据路径：
+
+```bash
+# 数据持久化配置
+DATA_DIR=./data                    # 本地数据备份路径
+AUTO_BACKUP_INTERVAL=30            # 自动备份间隔（分钟），0表示禁用
+AUTO_BACKUP_ON_CHANGE=true        # 每次同步后自动备份到文件
+```
+
+### 备份 API
+
+系统提供以下备份/恢复 API：
+
+| API | 方法 | 说明 |
+|-----|------|------|
+| `/api/data-dir` | GET | 获取数据目录信息 |
+| `/api/backup` | POST | 手动触发全量备份 |
+| `/api/backup/:table` | POST | 备份指定表 |
+| `/api/restore/:table` | POST | 从文件恢复指定表 |
+
+## Docker 部署
+
+### 方式一：完整部署（推荐）
+
+包含 MySQL 数据库和文件备份：
+
+```bash
+# 修改配置
+cp .env.example .env
+vim .env  # 编辑数据库密码等配置
+
+# 构建并启动
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f mymoney888
+```
+
+### 方式二：独立部署（仅文件存储）
+
+不依赖 MySQL，数据完全保存在本地文件系统：
+
+```bash
+# 使用独立部署配置
+docker-compose -f docker-compose.standalone.yml up -d
+```
+
+### 方式三：国内网络加速部署
+
+使用国内镜像源加速：
+
+```bash
+# 使用国内配置
+docker-compose -f docker-compose.cn.yml up -d
+```
+
+### 数据卷挂载
+
+Docker 部署会自动创建以下持久化卷：
+
+| 卷名 | 说明 | 挂载路径 |
+|------|------|----------|
+| `mysql_data` | MySQL 数据文件 | `/var/lib/mysql` |
+| `app_data` | 应用备份数据 | `/data` |
+
+### 自定义数据路径
+
+修改 `.env` 文件：
+
+```bash
+# MySQL 数据路径
+MYSQL_PORT=3306
+MYSQL_ROOT_PASSWORD=your_secure_password
+
+# 应用端口
+APP_PORT=8888
+
+# 数据备份路径
+DATA_DIR=/your/custom/path
+AUTO_BACKUP_INTERVAL=5
+```
+
+## 数据恢复
+
+### 从 MySQL 恢复
+
+数据已持久化到 Docker 卷，容器重启后自动恢复。
+
+### 从文件备份恢复
+
+```bash
+# 恢复指定表
+curl -X POST http://localhost:8888/api/restore/transactions
+
+# 恢复到 MySQL
+curl -X POST http://localhost:8888/api/restore/transactions \
+  -H "Content-Type: application/json" \
+  -d '{"toDb": true}'
+```
 
 ## 注意事项
-- 本系统为前端项目，数据存储在本地浏览器中，清除浏览器数据会导致数据丢失
-- 建议定期导出数据备份
+
+- **数据安全**：建议定期检查备份文件 (`./data/*.json`)
+- **容器重建**：使用 `docker-compose down -v` 会删除数据卷，如需保留数据请不要加 `-v` 参数
+- **版本升级**：升级前建议手动执行 `POST /api/backup` 备份所有数据

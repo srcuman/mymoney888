@@ -4,7 +4,7 @@
  * 设计原则：
  * 1. 单一数据源：每种数据只存储一份
  * 2. 计算派生：衍生数据（如余额）通过计算得出
- * 3. 自动同步：数据变更自动同步到数据库
+ * 3. 三重持久化：localStorage + 服务器MySQL + 服务器文件备份
  * 4. 事件通知：数据变更通知所有监听者
  * 
  * 数据关系：
@@ -16,6 +16,11 @@
  *                              ├──► loans.paidAmount (计算得出)
  *                              │
  *                              └──► investmentAccounts.totalAsset (计算得出)
+ * 
+ * 持久化策略：
+ * - localStorage: 前端即时缓存
+ * - MySQL: 服务器端关系型存储
+ * - 文件备份: 服务器端JSON文件（Docker卷挂载可持久化）
  */
 
 import { ref, computed } from 'vue'
@@ -37,6 +42,9 @@ class DataStore {
     // 数据版本号，用于检测变更
     this._versions = {}
     
+    // 是否使用服务器同步
+    this._serverSyncEnabled = true
+    
     // 初始化
     this._init()
   }
@@ -56,12 +64,37 @@ class DataStore {
       }
     }
     
+    // 尝试从服务器拉取最新数据（覆盖本地）
+    if (navigator.onLine) {
+      await this._pullFromServer()
+    }
+    
     // 初始化版本号
     for (const key of Object.keys(this._data)) {
       this._versions[key] = 1
     }
     
     console.log('DataStore 初始化完成')
+  }
+  
+  // 从服务器拉取数据并合并
+  async _pullFromServer() {
+    console.log('[DataStore] 尝试从服务器同步数据...')
+    const user = JSON.parse(localStorage.getItem('user'))
+    if (!user || !user.id) {
+      console.log('[DataStore] 未登录，跳过服务器同步')
+      return
+    }
+    
+    for (const key of Object.keys(this._data)) {
+      const data = await this._fetchFromServer(key)
+      if (data && Array.isArray(data) && data.length > 0) {
+        // 使用服务器数据覆盖本地数据
+        this._data[key].value = data
+        localStorage.setItem(key, JSON.stringify(data))
+        console.log(`[DataStore] ${key} 从服务器更新 (${data.length}条)`)
+      }
+    }
   }
   
   // 获取数据（响应式）
@@ -74,18 +107,18 @@ class DataStore {
     return this._data[key].value
   }
   
-  // 设置数据（自动保存和同步）
+  // 设置数据（自动保存和三重持久化）
   async set(key, value, options = {}) {
     const { skipSync = false, skipNotify = false } = options
     
     this._data[key].value = value
     this._versions[key]++
     
-    // 保存到 localStorage
+    // 1. 保存到 localStorage
     localStorage.setItem(key, JSON.stringify(value))
     
-    // 同步到数据库
-    if (!skipSync && navigator.onLine) {
+    // 2. 同步到服务器MySQL数据库
+    if (!skipSync && navigator.onLine && this._serverSyncEnabled) {
       await this._syncToServer(key)
     }
     

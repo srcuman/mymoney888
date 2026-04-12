@@ -1,12 +1,14 @@
 // MyMoney888 数据同步服务器
 // 版本: 3.6.0
 // 支持本地数据与MySQL数据库的双向同步
+// 支持本地文件备份（双重持久化）
 
 import express from 'express'
 import cors from 'cors'
 import mysql from 'mysql2/promise'
 import { fileURLToPath } from 'url'
 import path from 'path'
+import fs from 'fs'
 import dotenv from 'dotenv'
 
 // 加载环境变量
@@ -17,6 +19,121 @@ const __dirname = path.dirname(__filename)
 
 const app = express()
 const PORT = process.env.PORT || 8888
+
+// ============ 数据持久化配置 ============
+// 数据存储目录（支持环境变量配置）
+const DATA_DIR = process.env.DATA_DIR 
+  ? path.resolve(process.env.DATA_DIR) 
+  : path.join(__dirname, 'data')
+
+// 自动备份配置
+const AUTO_BACKUP_INTERVAL = parseInt(process.env.AUTO_BACKUP_INTERVAL || '30') // 分钟
+const AUTO_BACKUP_ON_CHANGE = process.env.AUTO_BACKUP_ON_CHANGE !== 'false'
+
+// 确保数据目录存在
+function ensureDataDir() {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true })
+    console.log(`📁 创建数据目录: ${DATA_DIR}`)
+  }
+}
+
+// ============ 文件备份功能 ============
+// 备份数据到本地文件
+async function backupToFile(tableName, data) {
+  try {
+    ensureDataDir()
+    const filePath = path.join(DATA_DIR, `${tableName}.json`)
+    const backup = {
+      table: tableName,
+      updatedAt: new Date().toISOString(),
+      count: data.length,
+      data: data
+    }
+    fs.writeFileSync(filePath, JSON.stringify(backup, null, 2), 'utf8')
+    return true
+  } catch (error) {
+    console.error(`❌ 备份 ${tableName} 到文件失败:`, error.message)
+    return false
+  }
+}
+
+// 从本地文件恢复数据
+async function restoreFromFile(tableName) {
+  try {
+    const filePath = path.join(DATA_DIR, `${tableName}.json`)
+    if (!fs.existsSync(filePath)) {
+      return null
+    }
+    const content = fs.readFileSync(filePath, 'utf8')
+    const backup = JSON.parse(content)
+    console.log(`📥 从文件恢复 ${tableName} (${backup.count}条, ${backup.updatedAt})`)
+    return backup.data
+  } catch (error) {
+    console.error(`❌ 从文件恢复 ${tableName} 失败:`, error.message)
+    return null
+  }
+}
+
+// 获取所有备份文件列表
+function listBackups() {
+  try {
+    ensureDataDir()
+    const files = fs.readdirSync(DATA_DIR)
+    return files
+      .filter(f => f.endsWith('.json'))
+      .map(f => {
+        const filePath = path.join(DATA_DIR, f)
+        const stats = fs.statSync(filePath)
+        return {
+          name: f,
+          table: f.replace('.json', ''),
+          size: stats.size,
+          modified: stats.mtime.toISOString()
+        }
+      })
+  } catch (error) {
+    console.error('❌ 列出备份文件失败:', error.message)
+    return []
+  }
+}
+
+// 自动备份定时器
+let backupTimer = null
+function startAutoBackup() {
+  if (AUTO_BACKUP_INTERVAL <= 0) {
+    console.log('⏭️  自动备份已禁用')
+    return
+  }
+  
+  const intervalMs = AUTO_BACKUP_INTERVAL * 60 * 1000
+  backupTimer = setInterval(async () => {
+    console.log(`⏰ 执行定时备份...`)
+    await backupAllData()
+  }, intervalMs)
+  
+  console.log(`✅ 自动备份已启用，间隔: ${AUTO_BACKUP_INTERVAL}分钟`)
+}
+
+// 备份所有同步表的数据
+async function backupAllData() {
+  const results = {}
+  for (const table of SYNC_TABLES) {
+    try {
+      const connection = await pool.getConnection()
+      try {
+        const [rows] = await pool.execute(`SELECT * FROM ${table}`)
+        await backupToFile(table, rows)
+        results[table] = { success: true, count: rows.length }
+      } finally {
+        connection.release()
+      }
+    } catch (error) {
+      results[table] = { success: false, error: error.message }
+    }
+  }
+  return results
+}
 
 // 中间件
 app.use(cors())
@@ -48,6 +165,9 @@ async function testConnection() {
     return false
   }
 }
+
+// 初始化数据目录
+ensureDataDir()
 
 // 允许同步的表列表
 const SYNC_TABLES = [
@@ -99,6 +219,123 @@ app.get('/api/health', (req, res) => {
 // 版本信息
 app.get('/api/version', (req, res) => {
   res.json({ version: '3.6.0', name: 'MyMoney888' })
+})
+
+// 数据目录信息
+app.get('/api/data-dir', (req, res) => {
+  res.json({
+    dataDir: DATA_DIR,
+    autoBackup: AUTO_BACKUP_INTERVAL > 0,
+    backupInterval: AUTO_BACKUP_INTERVAL,
+    backupOnChange: AUTO_BACKUP_ON_CHANGE,
+    backups: listBackups()
+  })
+})
+
+// 手动触发备份
+app.post('/api/backup', async (req, res) => {
+  try {
+    const results = await backupAllData()
+    const successCount = Object.values(results).filter(r => r.success).length
+    res.json({
+      success: true,
+      message: `备份完成，成功: ${successCount}/${Object.keys(results).length}`,
+      details: results
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// 备份指定表
+app.post('/api/backup/:table', async (req, res) => {
+  const { table } = req.params
+  
+  if (!SYNC_TABLES.includes(table)) {
+    return res.status(400).json({ success: false, error: `不支持的表: ${table}` })
+  }
+  
+  try {
+    const connection = await pool.getConnection()
+    try {
+      const [rows] = await pool.execute(`SELECT * FROM ${table}`)
+      await backupToFile(table, rows)
+      res.json({ success: true, table, count: rows.length })
+    } finally {
+      connection.release()
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// 从文件恢复指定表
+app.post('/api/restore/:table', async (req, res) => {
+  const { table } = req.params
+  const { data, toDb = true } = req.body
+  
+  if (!SYNC_TABLES.includes(table)) {
+    return res.status(400).json({ success: false, error: `不支持的表: ${table}` })
+  }
+  
+  try {
+    // 如果提供了数据，先保存到文件
+    if (data && Array.isArray(data)) {
+      await backupToFile(table, data)
+    }
+    
+    // 从文件恢复
+    const restoreData = data || await restoreFromFile(table)
+    if (!restoreData) {
+      return res.status(404).json({ success: false, error: '没有找到可恢复的数据' })
+    }
+    
+    // 如果需要同步到数据库
+    if (toDb) {
+      const connection = await pool.getConnection()
+      try {
+        await connection.beginTransaction()
+        
+        for (const item of restoreData) {
+          const id = item.id
+          const fields = Object.keys(item).filter(k => k !== 'id')
+          const values = fields.map(k => item[k])
+          
+          const [existing] = await connection.execute(
+            `SELECT id FROM ${table} WHERE id = ?`,
+            [id]
+          )
+          
+          if (existing.length > 0) {
+            const setClause = fields.map(f => `${f} = ?`).join(', ')
+            await connection.execute(
+              `UPDATE ${table} SET ${setClause}, updated_at = NOW() WHERE id = ?`,
+              [...values, id]
+            )
+          } else {
+            const fieldList = ['id', ...fields].join(', ')
+            const placeholders = ['?', ...fields.map(() => '?')].join(', ')
+            await connection.execute(
+              `INSERT INTO ${table} (${fieldList}) VALUES (${placeholders})`,
+              [id, ...values]
+            )
+          }
+        }
+        
+        await connection.commit()
+        res.json({ success: true, table, count: restoreData.length, toDb: true })
+      } catch (error) {
+        await connection.rollback()
+        throw error
+      } finally {
+        connection.release()
+      }
+    } else {
+      res.json({ success: true, table, count: restoreData.length, toDb: false })
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
 })
 
 // 数据库连接测试
@@ -197,13 +434,29 @@ app.post('/api/sync', async (req, res) => {
         errorCount > 0 ? JSON.stringify(errors) : null
       )
       
+      // 自动备份到本地文件（双重保险）
+      let backupSuccess = false
+      if (AUTO_BACKUP_ON_CHANGE && successCount > 0) {
+        // 获取更新后的完整数据并备份
+        try {
+          const [rows] = await pool.execute(
+            `SELECT * FROM ${table} WHERE user_id = ?`,
+            [userId]
+          )
+          backupSuccess = await backupToFile(table, rows)
+        } catch (backupError) {
+          console.warn(`同步后备份失败: ${backupError.message}`)
+        }
+      }
+      
       res.json({
         success: true,
         table,
         total: data.length,
         successCount,
         errorCount,
-        errors: errorCount > 0 ? errors : null
+        errors: errorCount > 0 ? errors : null,
+        backedUp: backupSuccess
       })
       
     } catch (error) {
@@ -445,17 +698,24 @@ app.get('*', (req, res) => {
 async function startServer() {
   console.log('🚀 MyMoney888 数据同步服务器启动中...')
   console.log(`📦 版本: 3.6.0`)
+  console.log(`📁 数据目录: ${DATA_DIR}`)
   
   // 测试数据库连接
   const dbConnected = await testConnection()
   if (!dbConnected) {
     console.warn('⚠️  数据库连接失败，服务器将以离线模式启动')
+    console.log('💡 提示: 可使用 /api/backup 从文件恢复数据')
   }
+  
+  // 启动自动备份定时器
+  startAutoBackup()
   
   app.listen(PORT, () => {
     console.log(`✅ 服务器运行在 http://localhost:${PORT}`)
     console.log(`📡 API 端点: http://localhost:${PORT}/api`)
     console.log(`🔄 同步服务: http://localhost:${PORT}/api/sync`)
+    console.log(`💾 备份服务: http://localhost:${PORT}/api/backup`)
+    console.log(`📥 恢复服务: http://localhost:${PORT}/api/restore/{table}`)
   })
 }
 
