@@ -740,7 +740,29 @@ const parseEastMoneyStockData = (data) => {
       code: stockData.f57
     }
   } catch (e) {
-    console.log('东方财富解析失败:', e.message)
+    console.log('东方财富股票解析失败:', e.message)
+    return null
+  }
+}
+
+// 解析东方财富基金历史净值数据
+const parseEastMoneyFundData = (data) => {
+  try {
+    const json = JSON.parse(data)
+    const fundData = json.Data
+    if (!fundData || !fundData.LSJZList || fundData.LSJZList.length === 0) {
+      console.log('东方财富基金: 无净值数据')
+      return null
+    }
+    
+    const latest = fundData.LSJZList[0]
+    return {
+      name: '',  // 需要额外API获取名称，暂时用代码
+      price: parseFloat(latest.DWJZ) || 0,
+      updateDate: latest.FSRQ
+    }
+  } catch (e) {
+    console.log('东方财富基金解析失败:', e.message)
     return null
   }
 }
@@ -781,13 +803,19 @@ const fetchInvestmentInfo = async (code, userSelectedType = null) => {
     })
   }
   
-  // 2. 基金 - 天天基金API (支持UTF-8)
+  // 2. 基金 - 使用代理API（解决CORS问题）
   if (userWantsFund || (isPossibleFund && !userWantsStock)) {
-    // 排除6开头(明显是股票)
+    // 排除6/3开头(明显是股票)
     if (!code.startsWith('6') && !code.startsWith('3')) {
       apiTasks.push({
-        url: `https://fundgz.1234567.com.cn/js/${code}.js?rt=1`,
+        url: `/fund/${code}.js?rt=1`,
         source: '天天基金',
+        type: 'fund'
+      })
+      // 也添加东方财富基金API作为备选
+      apiTasks.push({
+        url: `/api/fund?fundCode=${code}&pageIndex=1&pageSize=1`,
+        source: '东方财富基金',
         type: 'fund'
       })
     }
@@ -831,6 +859,21 @@ const fetchInvestmentInfo = async (code, userSelectedType = null) => {
         console.log('名称:', parsed.name, '| 净值:', parsed.price, '| 日期:', parsed.updateDate)
         return {
           name: parsed.name,
+          type: '基金',
+          currentPrice: parsed.price,
+          updateDate: parsed.updateDate
+        }
+      }
+    }
+    
+    // 东方财富基金
+    if (result.source === '东方财富基金') {
+      const parsed = parseEastMoneyFundData(result.data)
+      if (parsed && parsed.price > 0) {
+        console.log('========== 成功: 东方财富基金 ==========')
+        console.log('净值:', parsed.price, '| 日期:', parsed.updateDate)
+        return {
+          name: `基金${code}`,  // 东方财富基金API不返回名称
           type: '基金',
           currentPrice: parsed.price,
           updateDate: parsed.updateDate
