@@ -758,7 +758,7 @@ const parseAPIResponse = (response, code) => {
     }
     
     // 解析腾讯财经股票数据
-    if (source === '腾讯财经上海' || source === '腾讯财经深圳') {
+    if (source === '腾讯财经上海' || source === '腾讯财经深圳' || source === '腾讯财经北京') {
       if (data && data.includes('~')) {
         const stockData = data.split('~')
         if (stockData.length > 4 && stockData[1] && stockData[3]) {
@@ -772,6 +772,31 @@ const parseAPIResponse = (response, code) => {
               type: '股票',
               currentPrice: price || 0,
               updateDate: new Date().toISOString().split('T')[0]
+            }
+          }
+        }
+      }
+    }
+    
+    // 解析新浪财经股票数据 (已验证可用)
+    if (source === '新浪财经上海' || source === '新浪财经深圳' || source === '新浪财经北京') {
+      if (data && data.includes('hq_str_')) {
+        const match = data.match(/="([^"]+)"/)
+        if (match && match[1]) {
+          const fields = match[1].split(',')
+          if (fields.length > 3) {
+            const name = fields[0]
+            const price = parseFloat(fields[3])
+            const dateStr = fields.length > 31 ? fields[31] : new Date().toISOString().split('T')[0]
+            if (name && price > 0) {
+              console.log(`新浪财经股票获取成功:`, name)
+              return {
+                source: source,
+                name: name,
+                type: '股票',
+                currentPrice: price || 0,
+                updateDate: dateStr || new Date().toISOString().split('T')[0]
+              }
             }
           }
         }
@@ -835,12 +860,15 @@ const fetchInvestmentInfo = async (code, userSelectedType = null) => {
   // 股票API - 腾讯财经
   if (isShanghaiStock) {
     apiPromises.push(fetchSingleAPI(`/stock/sh${code}`, '腾讯财经上海', code))
+    apiPromises.push(fetchSingleAPI(`/sina/sh${code}`, '新浪财经上海', code))
   }
   if (isShenzhenStock) {
     apiPromises.push(fetchSingleAPI(`/stock/sz${code}`, '腾讯财经深圳', code))
+    apiPromises.push(fetchSingleAPI(`/sina/sz${code}`, '新浪财经深圳', code))
   }
   if (isBeijingStock) {
     apiPromises.push(fetchSingleAPI(`/stock/sz${code}`, '腾讯财经北京', code))
+    apiPromises.push(fetchSingleAPI(`/sina/bj${code}`, '新浪财经北京', code))
   }
   
   // 等待所有API调用完成，使用 Promise.race 获取最快响应

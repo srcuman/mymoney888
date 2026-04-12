@@ -18,9 +18,9 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/fund\/pingzhongdata/, '')
       },
-      // 腾讯财经股票API
+      // 腾讯财经股票API (已验证可用)
       '/stock': {
-        target: 'http://qt.gtimg.cn/q=sz',
+        target: 'http://qt.gtimg.cn',
         changeOrigin: true,
         rewrite: (path) => {
           // 将 /stock/sh123456 转换为 /q=sh123456
@@ -32,6 +32,13 @@ export default defineConfig({
           }
           return path.replace('/stock/', '/q=')
         }
+      },
+      // 新浪财经股票API (已验证可用，作为备选)
+      '/sina': {
+        target: 'https://hq.sinajs.cn',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/sina/, '/list=')
       }
     }
   }
