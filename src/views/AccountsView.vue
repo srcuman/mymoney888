@@ -174,10 +174,7 @@ const deleteAccount = (accountId) => {
   }
 }
 
-  // 生成唯一ID
-  const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 9)
-
-  onMounted(() => {
+onMounted(() => {
     // 从本地存储加载数据
     const savedAccounts = localStorage.getItem('accounts')
     if (savedAccounts) {
