@@ -682,44 +682,35 @@ const updateCreditCardBalance = async (cardName, amountChange) => {
 
 // 编辑交易
 const editTransaction = (editTransaction) => {
-  // 设置编辑模式
-  editingTransactionId.value = editTransaction.id
-  transactionType.value = editTransaction.type
-  transaction.value = {
-    amount: editTransaction.amount?.toString() || '',
-    category: editTransaction.category || '',
-    account: editTransaction.account?.toString() || '',
-    toAccount: editTransaction.toAccount ? editTransaction.toAccount.toString() : '',
-    description: editTransaction.description || '',
-    paymentChannel: editTransaction.paymentChannel || '',
-    member: editTransaction.member || '',
-    merchant: editTransaction.merchant || '',
-    tag: editTransaction.tag || ''
-  }
-  
-  // 滚动到表单区域（如果需要）
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  // 派发事件让App.vue打开快速记账弹窗
+  window.dispatchEvent(new CustomEvent('openQuickAdd', {
+    detail: {
+      data: editTransaction,
+      title: '编辑交易'
+    }
+  }))
 }
 
 // 复制交易（创建新交易，填充表单）
 const copyTransaction = (copyTransaction) => {
-  // 重置编辑模式（新交易）
-  editingTransactionId.value = null
-  transactionType.value = copyTransaction.type
-  transaction.value = {
-    amount: copyTransaction.amount?.toString() || '',
-    category: copyTransaction.category || '',
-    account: copyTransaction.account?.toString() || '',
-    toAccount: copyTransaction.toAccount ? copyTransaction.toAccount.toString() : '',
-    description: copyTransaction.description || '',
-    paymentChannel: copyTransaction.paymentChannel || '',
-    member: copyTransaction.member || '',
-    merchant: copyTransaction.merchant || '',
-    tag: copyTransaction.tag || ''
-  }
-  
-  // 滚动到表单区域
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  // 派发事件让App.vue打开快速记账弹窗，data设置为null表示新交易但预填数据
+  window.dispatchEvent(new CustomEvent('openQuickAdd', {
+    detail: {
+      data: {
+        type: copyTransaction.type,
+        amount: copyTransaction.amount,
+        category: copyTransaction.category,
+        account: copyTransaction.account,
+        toAccount: copyTransaction.toAccount,
+        description: copyTransaction.description,
+        paymentChannel: copyTransaction.paymentChannel,
+        member: copyTransaction.member,
+        merchant: copyTransaction.merchant,
+        tag: copyTransaction.tag
+      },
+      title: '复制交易'
+    }
+  }))
 }
 
 // 金额计算功能
@@ -826,6 +817,7 @@ onMounted(() => {
   window.addEventListener('showBillDetail', (e) => {
     if (e.detail && e.detail.billId) {
       const bills = loadCreditCardBills()
+      // 使用 String() 转换进行类型安全比较
       const bill = bills.find(b => String(b.id) === String(e.detail.billId))
       if (bill) {
         // 获取账套特定的交易数据
@@ -841,6 +833,7 @@ onMounted(() => {
           }
         }
         
+        // 使用 String() 转换进行类型安全比较
         const billTransactions = allTransactions.filter(t => String(t.creditCardBillId) === String(e.detail.billId))
         billDetail.value = { ...bill, transactions: billTransactions }
         showBillModal.value = true
@@ -900,17 +893,20 @@ const showBillDetail = (transaction) => {
   if (!transaction.creditCardBillId) return
   
   const bills = loadCreditCardBills()
-  const bill = bills.find(b => b.id === transaction.creditCardBillId)
+  // 使用 String() 转换进行类型安全比较
+  const bill = bills.find(b => String(b.id) === String(transaction.creditCardBillId))
   
   if (bill) {
     // 查找该账单下的所有交易
-    const billTransactions = transactions.value.filter(t => t.creditCardBillId === transaction.creditCardBillId)
+    const billTransactions = transactions.value.filter(t => String(t.creditCardBillId) === String(transaction.creditCardBillId))
     
     billDetail.value = {
       ...bill,
       transactions: billTransactions
     }
     showBillModal.value = true
+  } else {
+    console.warn('未找到账单:', transaction.creditCardBillId)
   }
 }
 

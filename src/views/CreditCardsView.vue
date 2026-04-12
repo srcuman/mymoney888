@@ -217,8 +217,8 @@ const editCard = (card) => {
 // 保存信用卡
 const saveCard = async () => {
   if (showEditCardModal.value) {
-    // 更新现有信用卡
-    const index = creditCards.value.findIndex(c => c.id === formData.value.id)
+    // 更新现有信用卡 - 使用 String() 转换进行类型安全比较
+    const index = creditCards.value.findIndex(c => String(c.id) === String(formData.value.id))
     if (index !== -1) {
       creditCards.value[index] = { ...formData.value }
     }
@@ -274,7 +274,8 @@ const saveCard = async () => {
 // 删除信用卡
 const deleteCard = async (cardId) => {
   if (confirm('确定要删除此信用卡吗？')) {
-    creditCards.value = creditCards.value.filter(c => c.id !== cardId)
+    // 使用 String() 转换进行类型安全比较
+    creditCards.value = creditCards.value.filter(c => String(c.id) !== String(cardId))
     // 保存到本地存储
     localStorage.setItem('creditCards', JSON.stringify(creditCards.value))
     // 同步到数据库
@@ -289,7 +290,8 @@ const deleteCard = async (cardId) => {
 // 还款
 const payBill = async (bill) => {
   if (confirm(`确定要偿还 ${bill.cardName} 的账单吗？金额：¥${bill.remainingAmount.toFixed(2)}`)) {
-    const index = creditCardBills.value.findIndex(b => b.id === bill.id)
+    // 使用 String() 转换进行类型安全比较
+    const index = creditCardBills.value.findIndex(b => String(b.id) === String(bill.id))
     if (index !== -1) {
       creditCardBills.value[index].paidAmount = bill.amount
       creditCardBills.value[index].remainingAmount = 0
@@ -332,8 +334,20 @@ onMounted(() => {
 // 获取账单关联的交易
 const getBillTransactions = (billId) => {
   try {
-    const transactions = JSON.parse(localStorage.getItem('transactions') || '[]')
-    return transactions.filter(t => t.creditCardBillId === billId)
+    // 获取账套特定的交易数据
+    const currentLedgerId = localStorage.getItem('currentLedgerId') || 'default'
+    let transactions = []
+    const savedTransactions = localStorage.getItem(`transactions_${currentLedgerId}`)
+    if (savedTransactions) {
+      transactions = JSON.parse(savedTransactions)
+    } else {
+      const oldTransactions = localStorage.getItem('transactions')
+      if (oldTransactions) {
+        transactions = JSON.parse(oldTransactions)
+      }
+    }
+    // 使用 String() 转换进行类型安全比较
+    return transactions.filter(t => String(t.creditCardBillId) === String(billId))
   } catch (e) {
     return []
   }

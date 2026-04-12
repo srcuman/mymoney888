@@ -113,7 +113,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch, defineProps } from 'vue'
+
+const props = defineProps({
+  // 初始数据，用于编辑或复制
+  initialData: {
+    type: Object,
+    default: null
+  }
+})
 
 const emit = defineEmits(['close'])
 
@@ -308,8 +316,65 @@ const paymentChannels = ref([])
 // 交易记录
 const transactions = ref([])
 
-// 添加交易
+// 是否为编辑模式
+const isEditMode = computed(() => props.initialData && props.initialData.id)
+
+// 更新账户余额（还原旧交易影响）
+const reverseAccountBalance = (trans) => {
+  if (trans.type === 'transfer') {
+    const fromAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
+    const toAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.toAccount))
+    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
+      accounts.value[fromAccountIndex].balance += trans.amount
+      accounts.value[toAccountIndex].balance -= trans.amount
+    }
+  } else {
+    const accountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
+    if (accountIndex !== -1) {
+      if (trans.type === 'income') {
+        accounts.value[accountIndex].balance -= trans.amount
+      } else {
+        accounts.value[accountIndex].balance += trans.amount
+      }
+    }
+  }
+}
+
+// 更新账户余额（应用新交易影响）
+const applyAccountBalance = (trans) => {
+  if (trans.type === 'transfer') {
+    const fromAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
+    const toAccountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.toAccount))
+    if (fromAccountIndex !== -1 && toAccountIndex !== -1) {
+      accounts.value[fromAccountIndex].balance -= trans.amount
+      accounts.value[toAccountIndex].balance += trans.amount
+    }
+  } else {
+    const accountIndex = accounts.value.findIndex(a => String(a.id) === String(trans.account))
+    if (accountIndex !== -1) {
+      if (trans.type === 'income') {
+        accounts.value[accountIndex].balance += trans.amount
+      } else {
+        accounts.value[accountIndex].balance -= trans.amount
+      }
+    }
+  }
+}
+
+// 添加/更新交易
 const addTransaction = () => {
+  // 验证必填字段
+  if (!transaction.value.amount || parseFloat(transaction.value.amount) <= 0) {
+    alert('请输入有效金额')
+    return
+  }
+  
+  // 验证分类（支出和收入必须选择分类）
+  if (transactionType.value !== 'transfer' && !transaction.value.category) {
+    alert('请选择分类')
+    return
+  }
+  
   // 确保金额是数字类型
   let amount = transaction.value.amount
   if (typeof amount === 'string') {
@@ -318,8 +383,8 @@ const addTransaction = () => {
     amount = parseFloat(transaction.value.amount) || 0
   }
   
-  const newTransaction = {
-    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+  const transactionData = {
+    id: props.initialData?.id || (Date.now().toString() + Math.random().toString(36).substr(2, 9)),
     type: transactionType.value,
     amount: amount,
     category: transaction.value.category,
@@ -332,7 +397,31 @@ const addTransaction = () => {
     description: transaction.value.description,
     date: new Date().toISOString().split('T')[0]
   }
-  transactions.value.unshift(newTransaction)
+  
+  // 如果是编辑模式，先还原旧交易的影响
+  if (isEditMode.value) {
+    const oldTransaction = transactions.value.find(t => t.id === props.initialData.id)
+    if (oldTransaction) {
+      reverseAccountBalance(oldTransaction)
+    }
+  }
+  
+  // 添加或更新交易
+  if (isEditMode.value) {
+    // 编辑模式：在原位置更新
+    const index = transactions.value.findIndex(t => t.id === props.initialData.id)
+    if (index !== -1) {
+      transactions.value[index] = transactionData
+    } else {
+      transactions.value.unshift(transactionData)
+    }
+  } else {
+    // 添加模式
+    transactions.value.unshift(transactionData)
+  }
+  
+  // 应用新交易的影响
+  applyAccountBalance(transactionData)
   
   // 更新账户余额
   if (transactionType.value === 'transfer') {
@@ -357,6 +446,10 @@ const addTransaction = () => {
   
   // 保存到本地存储
   saveLedgerData()
+  
+  // 通知其他组件交易数据已更新
+  window.dispatchEvent(new CustomEvent('transactionsUpdated'))
+  window.dispatchEvent(new CustomEvent('accountsUpdated'))
   
   // 重置表单
   transaction.value = {
@@ -424,5 +517,24 @@ onMounted(() => {
     loadCreditCards()
     loadLoans()
   })
+  
+  // 如果有初始数据（编辑或复制），填充表单
+  if (props.initialData) {
+    const data = props.initialData
+    transactionType.value = data.type || 'expense'
+    transaction.value = {
+      amount: data.amount?.toString() || '',
+      category: data.category || '',
+      account: data.account?.toString() || '',
+      toAccount: data.toAccount ? data.toAccount.toString() : '',
+      member: data.member || '',
+      merchant: data.merchant || '',
+      tag: data.tag || '',
+      paymentChannel: data.paymentChannel || '',
+      description: data.description || ''
+    }
+    selectedCategory.value = data.category || ''
+  }
 })
+
 </script>

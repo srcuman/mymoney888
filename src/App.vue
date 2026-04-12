@@ -97,7 +97,7 @@
               快速记账
             </button>
             <!-- 当前版本 -->
-            <span class="text-sm text-gray-600 dark:text-gray-400">v3.5.8</span>
+            <span class="text-sm text-gray-600 dark:text-gray-400">v3.6.2</span>
           </div>
         </div>
       </header>
@@ -116,12 +116,12 @@
     <div v-if="showQuickAddModal && isAuthenticated" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl">
         <div class="flex justify-between items-center mb-4">
-          <h3 class="text-xl font-bold text-gray-900 dark:text-white">快速记账</h3>
-          <button @click="showQuickAddModal = false" class="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400">
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white">{{ quickAddTitle }}</h3>
+          <button @click="closeQuickAddModal" class="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400">
             <span class="text-xl">×</span>
           </button>
         </div>
-        <QuickAddComponent @close="showQuickAddModal = false" />
+        <QuickAddComponent :initialData="quickAddInitialData" @close="closeQuickAddModal" />
       </div>
     </div>
 
@@ -138,11 +138,27 @@ const router = useRouter()
 const route = useRoute()
 const isAuthenticated = ref(false)
 const showQuickAddModal = ref(false)
+const quickAddInitialData = ref(null)
+const quickAddTitle = ref('快速记账')
 
 // 账套相关状态
 const ledgers = ref([])
 const currentLedgerId = ref(null)
 const showLedgerDropdown = ref(false)
+
+// 关闭快速记账弹窗并重置数据
+const closeQuickAddModal = () => {
+  showQuickAddModal.value = false
+  quickAddInitialData.value = null
+  quickAddTitle.value = '快速记账'
+}
+
+// 打开快速记账弹窗
+const openQuickAddModal = (data = null, title = '快速记账') => {
+  quickAddInitialData.value = data
+  quickAddTitle.value = title
+  showQuickAddModal.value = true
+}
 
 const checkAuth = () => {
   const user = localStorage.getItem('user')
@@ -243,6 +259,12 @@ onMounted(() => {
   window.addEventListener('ledgerChanged', (event) => {
     const { ledgerId } = event.detail
     currentLedgerId.value = ledgerId
+  })
+  
+  // 监听打开快速记账弹窗事件（来自HomeView的编辑/复制功能）
+  window.addEventListener('openQuickAdd', (event) => {
+    const { data, title } = event.detail || {}
+    openQuickAddModal(data, title || '快速记账')
   })
 })
 
