@@ -564,6 +564,7 @@
 <script setup>
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import Chart from 'chart.js/auto'
+import syncService from '../services/sync-service.js'
 
 // 投资账户列表
 const investmentAccounts = ref([])
@@ -1047,7 +1048,8 @@ const addInvestmentDetail = () => {
   investmentDetails.value.push(newDetail)
   updateAccountAsset(newInvestmentDetail.value.accountId)
   saveInvestmentDetails()
-  recordNetValue(newDetail)
+  // 异步记录净值历史（不阻塞UI）
+  recordNetValue(newDetail).catch(err => console.error('记录净值失败:', err))
   showAddInvestmentDetailModal.value = false
 }
 
@@ -1111,21 +1113,56 @@ const saveInvestmentDetails = () => {
   localStorage.setItem('investmentDetails', JSON.stringify(investmentDetails.value))
 }
 
-// 保存历史净值记录
-const saveNetValueHistory = () => {
+// 保存历史净值记录（本地+数据库）
+const saveNetValueHistory = async () => {
+  // 保存到本地
   localStorage.setItem('netValueHistory', JSON.stringify(netValueHistory.value))
+  
+  // 同步到数据库
+  try {
+    const user = JSON.parse(localStorage.getItem('user'))
+    if (user && user.id && navigator.onLine) {
+      await syncService.updateServerData('netValueHistory', user.id, netValueHistory.value)
+      console.log('净值历史已同步到数据库')
+    }
+  } catch (error) {
+    console.error('同步净值历史到数据库失败:', error)
+  }
 }
 
-// 加载历史净值记录
-const loadNetValueHistory = () => {
+// 加载历史净值记录（优先本地，合并数据库数据）
+const loadNetValueHistory = async () => {
+  // 先从本地加载
   const saved = localStorage.getItem('netValueHistory')
   if (saved) {
     netValueHistory.value = JSON.parse(saved)
   }
+  
+  // 尝试从数据库获取更新的数据
+  try {
+    const user = JSON.parse(localStorage.getItem('user'))
+    if (user && user.id && navigator.onLine) {
+      const serverData = await syncService.getServerData('netValueHistory', user.id, null)
+      if (serverData && serverData.length > 0) {
+        // 合并本地和服务器数据
+        const localIds = new Set(netValueHistory.value.map(h => `${h.code}-${h.date}`))
+        const newRecords = serverData.filter(h => !localIds.has(`${h.code}-${h.date}`))
+        
+        if (newRecords.length > 0) {
+          netValueHistory.value = [...netValueHistory.value, ...newRecords]
+          netValueHistory.value.sort((a, b) => new Date(b.date) - new Date(a.date))
+          localStorage.setItem('netValueHistory', JSON.stringify(netValueHistory.value))
+          console.log(`从数据库同步了 ${newRecords.length} 条净值记录`)
+        }
+      }
+    }
+  } catch (error) {
+    console.error('从数据库加载净值历史失败:', error)
+  }
 }
 
-// 记录净值到历史
-const recordNetValue = (detail) => {
+// 记录净值到历史（异步保存到本地和数据库）
+const recordNetValue = async (detail) => {
   const today = new Date().toISOString().split('T')[0]
   const existing = netValueHistory.value.find(
     h => h.code === detail.code && h.date === today
@@ -1143,7 +1180,7 @@ const recordNetValue = (detail) => {
       updateTime: new Date().toISOString()
     })
   }
-  saveNetValueHistory()
+  await saveNetValueHistory()
 }
 
 // 刷新所有净值
@@ -1405,7 +1442,7 @@ const updateProfitAnalysisChart = () => {
 }
 
 // 从本地存储加载数据
-const loadData = () => {
+const loadData = async () => {
   const savedAccounts = localStorage.getItem('investmentAccounts')
   const savedDetails = localStorage.getItem('investmentDetails')
   
@@ -1417,7 +1454,7 @@ const loadData = () => {
     investmentDetails.value = JSON.parse(savedDetails)
   }
   
-  loadNetValueHistory()
+  await loadNetValueHistory()
 }
 
 // 定时更新持仓产品净值
@@ -1506,8 +1543,8 @@ watch([investmentAccounts, investmentDetails], () => {
 }, { deep: true })
 
 // 组件挂载时启动定时更新
-onMounted(() => {
-  loadData()
+onMounted(async () => {
+  await loadData()
   initCharts()
   scheduleNetValueUpdate()
 })

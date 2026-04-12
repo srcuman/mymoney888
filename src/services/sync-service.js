@@ -57,6 +57,7 @@ class SyncService {
       'repaymentPlans',
       'investmentAccounts',
       'investmentDetails',
+      'netValueHistory',
       'dimensions',
       'defaults',
       'ledgers',
