@@ -780,14 +780,19 @@ const fetchSingleAPI = async (url, source) => {
 // 解析天天基金数据 (UTF-8 JSON)
 const parseTianTianFundData = (data) => {
   try {
+    console.log('天天基金原始数据:', data?.substring?.(0, 100) || data)
     // 格式: jsonpgz({...});
     const match = data.match(/jsonpgz\((.+)\)/)
-    if (!match) return null
+    if (!match) {
+      console.log('天天基金: 无法匹配jsonpgz格式')
+      return null
+    }
     
     const fundData = JSON.parse(match[1])
+    console.log('天天基金解析数据:', fundData)
     if (!fundData.name) return null
     
-    // gsz是估算净值(分)，dwjz是昨日净值
+    // gsz是估算净值，dwjz是昨日净值
     const price = parseFloat(fundData.gsz) || parseFloat(fundData.dwjz) || 0
     
     return {
@@ -880,19 +885,13 @@ const fetchInvestmentInfo = async (code, userSelectedType = null) => {
     })
   }
   
-  // 2. 基金 - 使用代理API（解决CORS问题）
+  // 2. 基金 - 天天基金API（实时估值）
   if (userWantsFund || (isPossibleFund && !userWantsStock)) {
     // 排除6/3开头(明显是股票)
     if (!code.startsWith('6') && !code.startsWith('3')) {
       apiTasks.push({
         url: `/fund/${code}.js?rt=1`,
         source: '天天基金',
-        type: 'fund'
-      })
-      // 也添加东方财富基金API作为备选
-      apiTasks.push({
-        url: `/api/fund?fundCode=${code}&pageIndex=1&pageSize=1`,
-        source: '东方财富基金',
         type: 'fund'
       })
     }
