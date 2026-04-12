@@ -1391,8 +1391,137 @@ UNIQUE KEY unique_account_investment (account_id, code)
 
 ---
 
+## 数据存储架构 (v3.6.0+)
+
+### 设计原则
+
+1. **单一数据源 (Single Source of Truth)**
+   - 每种核心数据只存储一份
+   - 衍生数据（如余额）通过计算得出
+   - 避免数据冗余和同步不一致
+
+2. **计算派生**
+   - 账户余额 = 初始余额 + 收入 - 支出
+   - 信用卡可用额度 = 总额度 - 已用额度
+   - 贷款未还金额 = 贷款总额 - 已还金额
+   - 投资账户余额 = Σ(份额 × 当前价格)
+
+3. **中央数据存储层 (DataStore)**
+   - 统一管理所有数据的读写
+   - 提供计算属性自动派生数据
+   - 自动同步到数据库
+   - 事件通知所有监听者
+
+### 数据关系图
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      交易记录 (transactions)                     │
+│  唯一事实来源，记录所有收支、转账、还款等交易                     │
+└─────────────────────────────────────────────────────────────────┘
+         │
+         ├──────────────────────┬──────────────────────┬──────────┐
+         │                      │                      │          │
+         ▼                      ▼                      ▼          ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│  普通账户余额   │  │ 信用卡可用额度  │  │  贷款已还金额   │  │ 投资账户余额   │
+│  (accounts)    │  │ (creditCards)   │  │    (loans)      │  │ (investments)  │
+│                 │  │                 │  │                 │  │                 │
+│ 计算公式:       │  │ 计算公式:       │  │ 计算公式:       │  │ 计算公式:       │
+│ 初始余额        │  │ 总额度          │  │ 贷款总额        │  │ Σ(份额×价格)   │
+│ + 收入          │  │ - 已用额度      │  │ - 已还金额      │  │                 │
+│ - 支出          │  │ = 可用额度      │  │ = 未还金额      │  │                 │
+└─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────────┘
+         │                      │                      │                  │
+         └──────────────────────┴──────────────────────┴──────────────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │  账户管理视图        │
+                         │  (AccountsView)      │
+                         │  展示所有账户余额    │
+                         └─────────────────────┘
+```
+
+### DataStore API
+
+```javascript
+import dataStore from '../services/data-store.js'
+
+// 获取原始数据
+const accounts = dataStore.get('accounts')
+const transactions = dataStore.get('transactions')
+
+// 设置数据（自动保存和同步）
+await dataStore.set('accounts', newAccounts)
+
+// 添加数据项
+await dataStore.add('accounts', newAccount)
+
+// 更新数据项
+await dataStore.update('accounts', id, updates)
+
+// 删除数据项
+await dataStore.remove('accounts', id)
+
+// 计算账户余额
+const balance = dataStore.computedAccountBalance(accountId)
+
+// 计算信用卡可用额度
+const creditBalance = dataStore.computedCreditCardBalance(cardName)
+
+// 计算投资账户余额
+const investmentBalance = dataStore.computedInvestmentAccountBalance(accountId)
+
+// 计算贷款已还金额
+const paidAmount = dataStore.computedLoanPaidAmount(loanId)
+
+// 监听数据变更
+window.addEventListener('dataStoreChanged', (e) => {
+  console.log('数据变更:', e.detail.key)
+})
+```
+
+### 数据同步流程
+
+```
+用户操作 (交易录入/信用卡还款/投资买入)
+         │
+         ▼
+   DataStore.set() ──────────────────────┐
+         │                              │
+         ├─ 保存到 localStorage         │
+         │                              │
+         ├─ 同步到 MySQL 数据库          │
+         │                              │
+         └─ 派发 dataStoreChanged 事件  │
+                                        │
+                                        ▼
+                              AccountsView 监听到事件
+                                        │
+                                        ▼
+                              计算属性重新计算余额
+                                        │
+                                        ▼
+                              页面自动刷新显示最新余额
+```
+
+### 优势
+
+| 特性 | 旧架构 | 新架构 |
+|------|--------|--------|
+| 数据存储 | 多份副本 | 单一数据源 |
+| 余额计算 | 分散在各模块 | 集中计算 |
+| 同步机制 | 事件驱动（易遗漏） | 统一存储层 |
+| 数据一致性 | 难以保证 | 自动保证 |
+| 新功能扩展 | 需处理多处同步 | 只需更新计算逻辑 |
+
+---
+
 ## 总结
 
 本数据库设计文档详细描述了MyMoney888系统的数据库结构，包括表结构、索引设计、视图设计、触发器设计、存储过程设计、数据同步机制、数据完整性约束和性能优化建议。
 
 该设计支持用户管理、账套管理、账户管理、分类管理、交易记录、信用卡管理、贷款管理、分期管理、商家管理、项目管理、成员管理和投资管理等核心功能，为系统提供了稳定、高效、可扩展的数据存储基础。
+
+**v3.6.0+ 更新**：引入中央数据存储层 (DataStore)，实现单一数据源和计算派生机制，确保数据一致性和可持续维护性。

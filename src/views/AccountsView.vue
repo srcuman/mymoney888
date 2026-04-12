@@ -73,7 +73,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import dataStore from '../services/data-store.js'
 
 // 账户类别列表
 const accountCategories = [
@@ -85,13 +86,86 @@ const accountCategories = [
   { value: 'other', label: '其他' }
 ]
 
-// 账户列表
-const accounts = ref([
-  { id: 1, name: '现金', balance: 1000, category: 'cash' },
-  { id: 2, name: '银行卡', balance: 5000, category: 'bank' },
-  { id: 3, name: '支付宝', balance: 2000, category: 'other' },
-  { id: 4, name: '微信', balance: 1500, category: 'other' }
-])
+// 基础账户列表（只包含手动创建的账户）
+const baseAccounts = ref([])
+
+// 数据版本号（用于触发响应式更新）
+const dataVersion = ref(0)
+
+// 计算属性：融合基础账户和衍生账户
+const accounts = computed(() => {
+  // 访问 version 触发响应式
+  const version = dataVersion.value
+  void version
+  
+  const result = [...baseAccounts.value]
+  
+  // 添加信用卡账户（从 creditCards 计算）
+  const creditCards = dataStore.getRaw('creditCards')
+  creditCards.forEach(card => {
+    const totalCredit = card.totalCredit || card.creditLimit || 0
+    const balance = dataStore.computedCreditCardBalance(card.name)
+    const usedAmount = totalCredit - balance
+    
+    const existing = result.find(a => a.name === card.name && a.category === 'credit_card')
+    if (existing) {
+      existing.balance = usedAmount
+    } else {
+      result.push({
+        id: `credit_card_${card.id || card.name}`,
+        name: card.name,
+        balance: usedAmount,
+        category: 'credit_card',
+        sourceType: 'creditCard',
+        sourceId: card.id || card.name
+      })
+    }
+  })
+  
+  // 添加投资账户（从 investmentAccounts 计算）
+  const investmentAccounts = dataStore.getRaw('investmentAccounts')
+  investmentAccounts.forEach(account => {
+    const balance = dataStore.computedInvestmentAccountBalance(account.id)
+    
+    const existing = result.find(a => a.name === account.name && a.category === 'investment')
+    if (existing) {
+      existing.balance = balance
+    } else {
+      result.push({
+        id: `investment_${account.id}`,
+        name: account.name,
+        balance: balance,
+        category: 'investment',
+        sourceType: 'investmentAccount',
+        sourceId: account.id
+      })
+    }
+  })
+  
+  // 添加贷款账户（从 loans 计算）
+  const loans = dataStore.getRaw('loans')
+  loans.forEach(loan => {
+    const paidAmount = dataStore.computedLoanPaidAmount(loan.id)
+    const totalAmount = loan.totalAmount || loan.amount || 0
+    const remainingAmount = totalAmount - paidAmount
+    
+    const existing = result.find(a => a.name === loan.name && a.category === 'loan')
+    if (existing) {
+      existing.balance = -remainingAmount
+    } else {
+      result.push({
+        id: `loan_${loan.id}`,
+        name: loan.name,
+        balance: -remainingAmount,
+        category: 'loan',
+        sourceType: 'loan',
+        sourceId: loan.id
+      })
+    }
+  })
+  
+  return result
+})
 
 // 按类别分组账户
 const accountsByCategory = computed(() => {
@@ -127,8 +201,12 @@ const resetForm = () => {
   }
 }
 
-// 编辑账户
+// 编辑账户（只编辑基础账户，不编辑衍生账户）
 const editAccount = (account) => {
+  if (account.sourceType) {
+    alert('这是从其他模块同步的账户，请在对应的管理页面修改')
+    return
+  }
   formData.value = { ...account }
   showEditAccountModal.value = true
   showAddAccountModal.value = false
@@ -137,27 +215,32 @@ const editAccount = (account) => {
 // 生成唯一ID
 const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 9)
 
-// 保存账户
-const saveAccount = () => {
+// 保存账户（只保存基础账户）
+const saveAccount = async () => {
+  if (formData.value.sourceType) {
+    alert('这是从其他模块同步的账户，不能直接编辑')
+    return
+  }
+  
   if (showEditAccountModal.value) {
-    // 更新现有账户
-    const index = accounts.value.findIndex(a => a.id === formData.value.id)
+    const index = baseAccounts.value.findIndex(a => a.id === formData.value.id)
     if (index !== -1) {
-      accounts.value[index] = { ...formData.value }
+      baseAccounts.value[index] = { ...formData.value }
     }
   } else {
-    // 添加新账户
     const newAccount = {
       id: generateId(),
       name: formData.value.name,
       balance: formData.value.balance,
-      category: formData.value.category
+      category: formData.value.category,
+      initialBalance: formData.value.balance,
+      sourceType: 'manual'
     }
-    accounts.value.push(newAccount)
+    baseAccounts.value.push(newAccount)
   }
   
-  // 保存到本地存储
-  localStorage.setItem('accounts', JSON.stringify(accounts.value))
+  // 保存到 DataStore
+  await dataStore.set('accounts', baseAccounts.value)
   
   // 关闭模态框并重置表单
   showAddAccountModal.value = false
@@ -165,178 +248,63 @@ const saveAccount = () => {
   resetForm()
 }
 
-// 删除账户
-const deleteAccount = (accountId) => {
-  if (confirm('确定要删除此账户吗？')) {
-    accounts.value = accounts.value.filter(a => a.id !== accountId)
-    // 保存到本地存储
-    localStorage.setItem('accounts', JSON.stringify(accounts.value))
+// 删除账户（只删除基础账户）
+const deleteAccount = async (accountId) => {
+  const account = baseAccounts.value.find(a => a.id === accountId)
+  if (account && account.sourceType) {
+    alert('这是从其他模块同步的账户，不能直接删除')
+    return
   }
+  
+  if (confirm('确定要删除此账户吗？')) {
+    baseAccounts.value = baseAccounts.value.filter(a => a.id !== accountId)
+    await dataStore.set('accounts', baseAccounts.value)
+  }
+}
+
+// 监听数据变更
+const handleDataStoreChange = () => {
+  dataVersion.value++
+}
+
+// 监听其他模块的更新事件
+const handleOtherModuleUpdate = () => {
+  dataVersion.value++
 }
 
 onMounted(() => {
-    // 从本地存储加载数据
-    const savedAccounts = localStorage.getItem('accounts')
-    if (savedAccounts) {
-      accounts.value = JSON.parse(savedAccounts)
-    } else {
-      accounts.value = []
-    }
-    
-    // 加载信用卡数据
-    const savedCreditCards = localStorage.getItem('creditCards')
-    if (savedCreditCards) {
+  // 从 DataStore 加载基础账户
+  const savedAccounts = dataStore.getRaw('accounts')
+  if (savedAccounts && savedAccounts.length > 0) {
+    baseAccounts.value = savedAccounts
+  } else {
+    const legacyAccounts = localStorage.getItem('accounts')
+    if (legacyAccounts) {
       try {
-        const creditCards = JSON.parse(savedCreditCards)
-        creditCards.forEach(card => {
-          // 检查是否已存在相同名称的账户
-          if (!accounts.value.some(account => account.name === card.name && account.category === 'credit_card')) {
-            accounts.value.push({
-              id: generateId(),
-              name: card.name,
-              balance: card.creditLimit - card.availableCredit,
-              category: 'credit_card'
-            })
-          }
-        })
-      } catch (error) {
-        console.error('解析信用卡数据失败:', error)
+        baseAccounts.value = JSON.parse(legacyAccounts)
+      } catch (e) {
+        baseAccounts.value = []
       }
     }
-    
-    // 加载贷款数据
-    const savedLoans = localStorage.getItem('loans')
-    if (savedLoans) {
-      try {
-        const loans = JSON.parse(savedLoans)
-        loans.forEach(loan => {
-          // 检查是否已存在相同名称的账户
-          if (!accounts.value.some(account => account.name === loan.name && account.category === 'loan')) {
-            accounts.value.push({
-              id: generateId(),
-              name: loan.name,
-              balance: -loan.remainingAmount, // 贷款余额为负数
-              category: 'loan'
-            })
-          }
-        })
-      } catch (error) {
-        console.error('解析贷款数据失败:', error)
-      }
-    }
-    
-    // 加载投资账户数据
-    const savedInvestmentAccounts = localStorage.getItem('investmentAccounts')
-    if (savedInvestmentAccounts) {
-      try {
-        const investmentAccounts = JSON.parse(savedInvestmentAccounts)
-        investmentAccounts.forEach(account => {
-          // 检查是否已存在相同名称的账户
-          if (!accounts.value.some(a => a.name === account.name && a.category === 'investment')) {
-            accounts.value.push({
-              id: generateId(),
-              name: account.name,
-              balance: account.totalAsset || 0,
-              category: 'investment'
-            })
-          }
-        })
-      } catch (error) {
-        console.error('解析投资账户数据失败:', error)
-      }
-    }
-    
-    // 保存到本地存储
-    localStorage.setItem('accounts', JSON.stringify(accounts.value))
-    
-    // 监听投资账户更新事件
-    window.addEventListener('investmentAccountsUpdated', refreshInvestmentAccounts)
-    
-    // 监听信用卡更新事件
-    window.addEventListener('creditCardsUpdated', refreshCreditCards)
-    
-    // 监听贷款更新事件
-    window.addEventListener('loanAccountsUpdated', refreshLoans)
-  })
-
-// 刷新投资账户余额
-const refreshInvestmentAccounts = () => {
-  const savedInvestmentAccounts = localStorage.getItem('investmentAccounts')
-  if (savedInvestmentAccounts) {
-    try {
-      const investmentAccounts = JSON.parse(savedInvestmentAccounts)
-      investmentAccounts.forEach(account => {
-        const existingAccount = accounts.value.find(a => a.name === account.name && a.category === 'investment')
-        if (existingAccount) {
-          existingAccount.balance = account.totalAsset || 0
-        } else {
-          accounts.value.push({
-            id: generateId(),
-            name: account.name,
-            balance: account.totalAsset || 0,
-            category: 'investment'
-          })
-        }
-      })
-      // 保存更新后的数据
-      localStorage.setItem('accounts', JSON.stringify(accounts.value))
-    } catch (error) {
-      console.error('刷新投资账户数据失败:', error)
-    }
   }
-}
+  
+  // 监听 DataStore 变更事件
+  window.addEventListener('dataStoreChanged', handleDataStoreChange)
+  
+  // 监听其他模块的更新事件
+  window.addEventListener('investmentAccountsUpdated', handleOtherModuleUpdate)
+  window.addEventListener('creditCardsUpdated', handleOtherModuleUpdate)
+  window.addEventListener('loanAccountsUpdated', handleOtherModuleUpdate)
+  window.addEventListener('transactionsUpdated', handleOtherModuleUpdate)
+  window.addEventListener('accountsUpdated', handleOtherModuleUpdate)
+})
 
-// 刷新信用卡余额
-const refreshCreditCards = () => {
-  const savedCreditCards = localStorage.getItem('creditCards')
-  if (savedCreditCards) {
-    try {
-      const creditCards = JSON.parse(savedCreditCards)
-      creditCards.forEach(card => {
-        const existingAccount = accounts.value.find(a => a.name === card.name && a.category === 'credit_card')
-        if (existingAccount) {
-          existingAccount.balance = card.creditLimit - card.availableCredit
-        } else {
-          accounts.value.push({
-            id: generateId(),
-            name: card.name,
-            balance: card.creditLimit - card.availableCredit,
-            category: 'credit_card'
-          })
-        }
-      })
-      // 保存更新后的数据
-      localStorage.setItem('accounts', JSON.stringify(accounts.value))
-    } catch (error) {
-      console.error('刷新信用卡数据失败:', error)
-    }
-  }
-}
-
-// 刷新贷款余额
-const refreshLoans = () => {
-  const savedLoans = localStorage.getItem('loans')
-  if (savedLoans) {
-    try {
-      const loans = JSON.parse(savedLoans)
-      loans.forEach(loan => {
-        const existingAccount = accounts.value.find(a => a.name === loan.name && a.category === 'loan')
-        if (existingAccount) {
-          existingAccount.balance = -loan.remainingAmount
-        } else {
-          accounts.value.push({
-            id: generateId(),
-            name: loan.name,
-            balance: -loan.remainingAmount,
-            category: 'loan'
-          })
-        }
-      })
-      // 保存更新后的数据
-      localStorage.setItem('accounts', JSON.stringify(accounts.value))
-    } catch (error) {
-      console.error('刷新贷款数据失败:', error)
-    }
-  }
-}
+onUnmounted(() => {
+  window.removeEventListener('dataStoreChanged', handleDataStoreChange)
+  window.removeEventListener('investmentAccountsUpdated', handleOtherModuleUpdate)
+  window.removeEventListener('creditCardsUpdated', handleOtherModuleUpdate)
+  window.removeEventListener('loanAccountsUpdated', handleOtherModuleUpdate)
+  window.removeEventListener('transactionsUpdated', handleOtherModuleUpdate)
+  window.removeEventListener('accountsUpdated', handleOtherModuleUpdate)
+})
 </script>
