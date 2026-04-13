@@ -216,7 +216,7 @@ class DataStore {
         })
       })
       
-      // 同步到 MySQL
+      // 同步到 PostgreSQL
       this._scheduleSync(key)
       
     } catch (error) {

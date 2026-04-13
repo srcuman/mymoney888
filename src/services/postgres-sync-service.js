@@ -1,5 +1,5 @@
 /**
- * MySQL 同步服务
+ * PostgreSQL 同步服务
  * 
  * =============================================================================
  * 设计理念：★★★ 数据为核心，标签化存储，无损迭代 ★★★
@@ -7,7 +7,7 @@
  * 
  * 功能说明：
  * - 独立的数据同步模块
- * - 支持前端 DataStore 与 MySQL 的双向同步
+ * - 支持前端 DataStore 与 PostgreSQL 的双向同步
  * - 遵循"衍生数据不存储"原则
  * - 自动处理同步冲突
  * 
@@ -20,21 +20,23 @@
  * - loans: 贷款定义（不含剩余金额）
  * - loan_payments: 贷款还款记录
  * - investment_accounts: 投资账户定义（不含总资产）
- * - investment_details: 投资明细
- * - net_value_history: 净值历史记录
+ * - investment_holdings: 投资明细（持仓）
+ * - nav_history: 净值历史
+ * - investment_transfers: 投资内部转账
+ * - investment_profit_records: 投资损益记录
  * - dimensions: 维度配置
  * - ledgers: 账套
  * - users: 用户
  * - user_settings: 用户设置
  * 
  * =============================================================================
- * 版本: 3.9.0
+ * 版本: 3.9.0 (PostgreSQL)
  * =============================================================================
  */
 
 import apiService from './api-service.js'
 
-class MySQLSyncService {
+class PostgresSyncService {
   constructor() {
     // 同步状态
     this.isSyncing = false
@@ -67,8 +69,9 @@ class MySQLSyncService {
       this.startAutoSync()
     }
     
-    console.log('[MySQLSync] v3.9.0 初始化完成')
-    console.log('[MySQLSync] 架构: 数据为核心，标签化存储')
+    console.log('[PostgresSync] v3.9.0 初始化完成')
+    console.log('[PostgresSync] 数据库: PostgreSQL')
+    console.log('[PostgresSync] 架构: 数据为核心，标签化存储')
   }
 
   // =========================================================================
@@ -87,7 +90,7 @@ class MySQLSyncService {
       }
     }, this.config.syncInterval)
     
-    console.log('[MySQLSync] 自动同步已启动')
+    console.log('[PostgresSync] 自动同步已启动')
   }
 
   /**
@@ -98,7 +101,7 @@ class MySQLSyncService {
       clearInterval(this._syncTimer)
       this._syncTimer = null
     }
-    console.log('[MySQLSync] 自动同步已停止')
+    console.log('[PostgresSync] 自动同步已停止')
   }
 
   /**
@@ -122,12 +125,12 @@ class MySQLSyncService {
    */
   async sync(tables = null) {
     if (this.isSyncing) {
-      console.log('[MySQLSync] 同步已在进行中')
+      console.log('[PostgresSync] 同步已在进行中')
       return
     }
 
     if (!navigator.onLine) {
-      console.log('[MySQLSync] 离线状态，跳过同步')
+      console.log('[PostgresSync] 离线状态，跳过同步')
       return
     }
 
@@ -140,7 +143,7 @@ class MySQLSyncService {
       const ledgerId = localStorage.getItem('currentLedgerId') || 'default'
 
       if (!userId) {
-        console.log('[MySQLSync] 用户未登录，跳过同步')
+        console.log('[PostgresSync] 用户未登录，跳过同步')
         return
       }
 
@@ -153,7 +156,7 @@ class MySQLSyncService {
         try {
           results[table] = await this._syncTable(table, userId, ledgerId)
         } catch (error) {
-          console.error(`[MySQLSync] 同步表 ${table} 失败:`, error)
+          console.error(`[PostgresSync] 同步表 ${table} 失败:`, error)
           results[table] = { success: false, error: error.message }
           this.syncErrors.push({ table, error: error.message })
         }
@@ -164,11 +167,11 @@ class MySQLSyncService {
       // 保存同步状态
       this._saveSyncState()
       
-      console.log('[MySQLSync] 同步完成:', results)
+      console.log('[PostgresSync] 同步完成:', results)
       return results
 
     } catch (error) {
-      console.error('[MySQLSync] 同步失败:', error)
+      console.error('[PostgresSync] 同步失败:', error)
       throw error
     } finally {
       this.isSyncing = false
@@ -217,8 +220,9 @@ class MySQLSyncService {
         'creditCards': 'credit_cards',
         'creditCardBills': 'credit_card_bills',
         'investmentAccounts': 'investment_accounts',
-        'investmentDetails': 'investment_details',
-        'netValueHistory': 'net_value_history',
+        'investmentHoldings': 'investment_holdings',
+        'navHistory': 'nav_history',
+        'investmentTransfers': 'investment_transfers',
         'loanPayments': 'loan_payments',
         'installmentTemplates': 'installment_templates'
       }
@@ -237,7 +241,7 @@ class MySQLSyncService {
    */
   async pull(userId = null, ledgerId = null) {
     if (!navigator.onLine) {
-      console.log('[MySQLSync] 离线状态，跳过拉取')
+      console.log('[PostgresSync] 离线状态，跳过拉取')
       return
     }
 
@@ -245,7 +249,7 @@ class MySQLSyncService {
     ledgerId = ledgerId || localStorage.getItem('currentLedgerId') || 'default'
 
     if (!userId) {
-      console.log('[MySQLSync] 用户未登录，跳过拉取')
+      console.log('[PostgresSync] 用户未登录，跳过拉取')
       return
     }
 
@@ -258,12 +262,12 @@ class MySQLSyncService {
           this._updateLocalData(table, data)
         }
         
-        console.log('[MySQLSync] 拉取完成')
+        console.log('[PostgresSync] 拉取完成')
         return response.data
       }
 
     } catch (error) {
-      console.error('[MySQLSync] 拉取失败:', error)
+      console.error('[PostgresSync] 拉取失败:', error)
       throw error
     }
   }
@@ -283,8 +287,9 @@ class MySQLSyncService {
         'credit_cards': 'creditCards',
         'credit_card_bills': 'creditCardBills',
         'investment_accounts': 'investmentAccounts',
-        'investment_details': 'investmentDetails',
-        'net_value_history': 'netValueHistory',
+        'investment_holdings': 'investmentHoldings',
+        'nav_history': 'navHistory',
+        'investment_transfers': 'investmentTransfers',
         'loan_payments': 'loanPayments',
         'installment_templates': 'installmentTemplates'
       }
@@ -306,7 +311,7 @@ class MySQLSyncService {
     // 触发数据更新事件
     window.dispatchEvent(new CustomEvent('dataSynced'))
     
-    console.log('[MySQLSync] 全量同步完成')
+    console.log('[PostgresSync] 全量同步完成')
   }
 
   // =========================================================================
@@ -333,8 +338,9 @@ class MySQLSyncService {
       
       // 投资
       'investment_accounts',
-      'investment_details',
-      'net_value_history',
+      'investment_holdings',
+      'nav_history',
+      'investment_transfers',
       'investment_profit_records',
       
       // 分期
@@ -364,7 +370,8 @@ class MySQLSyncService {
   _saveSyncState() {
     localStorage.setItem('syncState', JSON.stringify({
       lastSyncTime: this.lastSyncTime,
-      syncErrors: this.syncErrors
+      syncErrors: this.syncErrors,
+      dbType: 'postgresql'
     }))
   }
 
@@ -388,12 +395,13 @@ class MySQLSyncService {
       isSyncing: this.isSyncing,
       lastSyncTime: this.lastSyncTime,
       syncErrors: this.syncErrors,
-      isOnline: navigator.onLine
+      isOnline: navigator.onLine,
+      dbType: 'postgresql'
     }
   }
 }
 
 // 导出单例
-const mysqlSyncService = new MySQLSyncService()
-export default mysqlSyncService
-export { MySQLSyncService }
+const postgresSyncService = new PostgresSyncService()
+export default postgresSyncService
+export { PostgresSyncService }

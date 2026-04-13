@@ -72,10 +72,10 @@ mymoney888/
 │   │   └── Login, Register, UserManagement, LedgerManagement
 │   │
 │   ├── services/
-│   │   ├── core-data-store.js     # 核心数据存储
-│   │   ├── mysql-sync-service.js  # MySQL同步服务
-│   │   ├── sync-service.js        # 同步服务（旧）
-│   │   └── api-service.js         # API服务
+│   │   ├── core-data-store.js        # 核心数据存储
+│   │   ├── postgres-sync-service.js  # PostgreSQL同步服务
+│   │   ├── sync-service.js           # 同步服务（旧）
+│   │   └── api-service.js            # API服务
 │   │
 │   ├── router/
 │   │   └── index.js
@@ -120,7 +120,7 @@ mymoney888/
                                           │
                                           ▼ 异步同步
 ┌─────────────────────────────────────────────────────────────┐
-│                    MySQL (服务器备份)                          │
+│                    PostgreSQL (服务器备份)                          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -138,7 +138,7 @@ mymoney888/
 
 ## 📊 数据存储架构
 
-### 存储架构：DataStore（本地）+ MySQL（远程备份）
+### 存储架构：DataStore（本地）+ PostgreSQL（远程备份）
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -162,7 +162,7 @@ mymoney888/
 │  │                                                                     │   │
 │  │   /api/datastore/save ────► DATA_DIR/ledgers/{ledgerId}/*.json      │   │
 │  │                                                                     │   │
-│  │   /api/sync ──────────────► MySQL (远程备份)                         │   │
+│  │   /api/sync ──────────────► PostgreSQL (远程备份)                    │   │
 │  │                                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
@@ -170,7 +170,7 @@ mymoney888/
 
 数据流：
 1. 用户操作 → CoreDataStore → API → DATA_DIR 文件
-2. 同时 → 同步到 MySQL 远程备份
+2. 同时 → 同步到 PostgreSQL 远程备份
 3. 读取时 ← 计算衍生数据（不读取存储的余额）
 ```
 
@@ -241,7 +241,7 @@ DATA_DIR/
         └── ...
 ```
 
-### MySQL 服务器存储
+### PostgreSQL 服务器存储
 
 通过 `user_id` + `ledger_id` 隔离用户和账套数据。详见 [DATABASE_DESIGN.md](DATABASE_DESIGN.md)。
 
@@ -251,8 +251,11 @@ DATA_DIR/
 |------|------|--------|
 | `DATA_DIR` | 本地数据存储目录 | `./data` |
 | `PORT` | API 服务端口 | `8888` |
-| `MYSQL_HOST` | MySQL 主机 | `localhost` |
-| `MYSQL_DATABASE` | 数据库名 | `mymoney888` |
+| `DB_HOST` | PostgreSQL 主机 | `localhost` |
+| `DB_PORT` | PostgreSQL 端口 | `5432` |
+| `DB_NAME` | 数据库名 | `mymoney888` |
+| `DB_USER` | 数据库用户 | `postgres` |
+| `DB_PASSWORD` | 数据库密码 | - |
 
 ---
 
@@ -339,8 +342,8 @@ DATA_DIR/
 - **UI 框架**: Tailwind CSS
 - **图表库**: Chart.js
 - **后端**: Node.js + Express
-- **数据库**: MySQL
-- **数据持久化**: 本地文件 + MySQL 双重备份
+- **数据库**: PostgreSQL 12+
+- **数据持久化**: 本地文件 + PostgreSQL 双重备份
 
 ---
 
@@ -356,10 +359,10 @@ npm install
 
 ```bash
 # 创建数据库和表结构
-mysql -u root -p < database/init-db.sql
+psql -U postgres -d mymoney888 -f database/init-db.sql
 
 # 初始化预置数据（账户、分类、成员等）
-mysql -u root -p mymoney888 < database/init-default-data.sql
+psql -U postgres -d mymoney888 -f database/init-default-data.sql
 ```
 
 ### 3. 配置环境变量
@@ -369,10 +372,11 @@ mysql -u root -p mymoney888 < database/init-default-data.sql
 cp .env.example .env
 
 # 编辑配置
-MYSQL_HOST=localhost
-MYSQL_USER=root
-MYSQL_PASSWORD=your_password
-MYSQL_DATABASE=mymoney888
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=mymoney888
+DB_USER=postgres
+DB_PASSWORD=your_password
 ```
 
 ### 4. 启动服务
@@ -445,19 +449,19 @@ await coreDataStore.addInvestmentAccount(accountData)
 await coreDataStore.updateNetValue(accountId, newValue)
 ```
 
-### 使用 MySQL 同步服务
+### 使用 PostgreSQL 同步服务
 
 ```javascript
-import mysqlSyncService from '../services/mysql-sync-service.js'
+import postgresSyncService from '../services/postgres-sync-service.js'
 
 // 手动同步
-await mysqlSyncService.sync()
+await postgresSyncService.sync()
 
 // 全量同步（推送+拉取）
-await mysqlSyncService.fullSync()
+await postgresSyncService.fullSync()
 
 // 获取同步状态
-const status = mysqlSyncService.getStatus()
+const status = postgresSyncService.getStatus()
 ```
 
 ---
@@ -501,7 +505,7 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 ---
 
 **版本历史**:
-- **v3.8.0** - 模块化重构，DataStore + MySQL 双份存储，数据引用机制
+- **v3.8.0** - 模块化重构，DataStore + PostgreSQL 双份存储，数据引用机制
 - **v3.7.0** - 统一数据存储架构
 - **v3.6.x** - 投资管理、贷款管理等功能完善
 - **v3.5.x** - 多账套支持

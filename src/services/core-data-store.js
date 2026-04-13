@@ -387,7 +387,7 @@ class CoreDataStore {
     // 保存到 API
     await this._save(key)
     
-    // 同步到 MySQL
+    // 同步到 PostgreSQL
     this._scheduleSync(key)
     
     // 更新引用表
@@ -441,7 +441,7 @@ class CoreDataStore {
     // 保存到 API
     await this._save(key)
     
-    // 同步到 MySQL
+    // 同步到 PostgreSQL
     this._scheduleSync(key)
     
     // 清理引用表
@@ -1177,7 +1177,7 @@ class CoreDataStore {
   // =========================================================================
 
   /**
-   * 安排同步到 MySQL
+   * 安排同步到 PostgreSQL
    */
   _scheduleSync(key) {
     // 延迟同步，避免频繁请求
@@ -1191,7 +1191,7 @@ class CoreDataStore {
   }
 
   /**
-   * 同步到 MySQL
+   * 同步到 PostgreSQL
    */
   async syncToServer() {
     if (!this._isOnline) return

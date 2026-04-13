@@ -1,16 +1,16 @@
-# MyMoney888 v3.6.0 数据架构检查报告
+# MyMoney888 v3.9.0 数据架构检查报告
 
 ## 版本信息
-- **前端版本**: 3.6.0
-- **数据库版本**: 3.6.0
-- **检查日期**: 2026-04-12
+- **前端版本**: 3.9.0
+- **数据库版本**: 3.9.0 (PostgreSQL)
+- **检查日期**: 2026-04-13
 
 ---
 
 ## 1. 数据库表结构检查
 
-| 表名 | 前端 localStorage | MySQL 表 | 字段完整性 | 说明 |
-|------|-------------------|----------|-----------|------|
+| 表名 | 前端 localStorage | PostgreSQL 表 | 字段完整性 | 说明 |
+|------|-------------------|---------------|-----------|------|
 | accounts | ✅ | ✅ accounts | ✅ | 账户表 |
 | transactions | ✅ | ✅ transactions | ✅ | 交易记录表 |
 | categories | ✅ | ✅ categories | ✅ | 分类表 |
@@ -31,9 +31,9 @@
 
 ## 2. 字段映射关系
 
-### 前端 -> MySQL
+### 前端 -> PostgreSQL
 
-| 前端字段 | MySQL 字段 | 数据类型 | 映射说明 |
+| 前端字段 | PostgreSQL 字段 | 数据类型 | 映射说明 |
 |----------|-----------|---------|---------|
 | id | id | INT/VARCHAR | 主键 |
 | name | name | VARCHAR(100) | 名称 |
@@ -55,7 +55,7 @@
 
 ## 3. 数据同步检查
 
-### 前端 -> MySQL (Push)
+### 前端 -> PostgreSQL (Push)
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
@@ -67,7 +67,7 @@
 | 投资操作 | ✅ | syncService.syncOnDataChange('investmentAccounts') |
 | DataStore 同步 | ✅ | dataStore._syncToServer() |
 
-### MySQL -> 前端 (Pull)
+### PostgreSQL -> 前端 (Pull)
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
@@ -92,7 +92,7 @@
 ### 数据流向
 
 ```
-用户操作 → localStorage → DataStore → MySQL
+用户操作 → localStorage → DataStore → PostgreSQL
                 ↓
          事件通知 → 各组件更新显示
 ```
@@ -132,14 +132,14 @@ VITE_API_URL=/api           # 前端 API 地址
 ### 数据库初始化
 
 ```bash
-# 1. 创建数据库用户
-CREATE USER 'mymoney888'@'%' IDENTIFIED BY 'your_password';
+# 1. 创建数据库用户 (PostgreSQL)
+# psql -U postgres -c "CREATE USER mymoney888 WITH PASSWORD 'your_password';"
 
-# 2. 授予权限
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, REFERENCES ON mymoney888.* TO 'mymoney888'@'%';
+# 2. 创建数据库
+# psql -U postgres -c "CREATE DATABASE mymoney888 OWNER mymoney888;"
 
 # 3. 初始化数据库
-mysql -u mymoney888 -p mymoney888 < database/init-db.sql
+psql -U postgres -d mymoney888 -f database/init-db.sql
 ```
 
 ### Docker 部署
@@ -150,8 +150,9 @@ npm run build-docker
 
 # 运行容器
 docker run -d -p 8888:8888 \
-  -e DB_HOST=mysql-host \
-  -e DB_USER=mymoney888 \
+  -e DB_HOST=postgres-host \
+  -e DB_PORT=5432 \
+  -e DB_USER=postgres \
   -e DB_PASSWORD=xxx \
   mymoney888:latest
 ```

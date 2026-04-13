@@ -1,16 +1,18 @@
-// MyMoney888 数据同步服务器
+// MyMoney888 数据同步服务器 (PostgreSQL)
 // 版本: 3.9.0
 // 架构: 数据为核心，标签化存储，无损迭代
-// 支持本地数据与MySQL数据库的双向同步
+// 支持本地数据与PostgreSQL数据库的双向同步
 // 支持本地文件备份（双重持久化）
 
 import express from 'express'
 import cors from 'cors'
-import mysql from 'mysql2/promise'
+import pg from 'pg'
 import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
 import dotenv from 'dotenv'
+
+const { Pool } = pg
 
 // 加载环境变量
 dotenv.config()
@@ -138,14 +140,9 @@ async function backupAllData() {
   const results = {}
   for (const table of SYNC_TABLES) {
     try {
-      const connection = await pool.getConnection()
-      try {
-        const [rows] = await pool.execute(`SELECT * FROM ${table}`)
-        await backupToFile(table, rows)
-        results[table] = { success: true, count: rows.length }
-      } finally {
-        connection.release()
-      }
+      const result = await pool.query(`SELECT * FROM ${table}`)
+      await backupToFile(table, result.rows)
+      results[table] = { success: true, count: result.rows.length }
     } catch (error) {
       results[table] = { success: false, error: error.message }
     }
@@ -158,28 +155,27 @@ app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
-// 数据库连接池
-const pool = mysql.createPool({
+// PostgreSQL 连接池
+const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'mymoney888',
+  port: parseInt(process.env.DB_PORT || '5432'),
+  user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'mymoney888',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  charset: 'utf8mb4'
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
 })
 
 // 测试数据库连接
 async function testConnection() {
   try {
-    const connection = await pool.getConnection()
-    console.log('✅ 数据库连接成功')
-    connection.release()
+    const client = await pool.connect()
+    client.release()
+    console.log('✅ PostgreSQL 数据库连接成功')
     return true
   } catch (error) {
-    console.error('❌ 数据库连接失败:', error.message)
+    console.error('❌ PostgreSQL 数据库连接失败:', error.message)
     return false
   }
 }
@@ -199,12 +195,11 @@ const SYNC_TABLES = [
   'loan_payments',
   'installment_templates',
   'installments',
-  'merchants',
-  'projects',
-  'members',
   'investment_accounts',
-  'investment_details',
-  'net_value_history',
+  'investment_holdings',
+  'nav_history',
+  'investment_transfers',
+  'investment_profit_records',
   'dimensions',
   'ledgers',
   'user_defaults',
@@ -215,9 +210,9 @@ const SYNC_TABLES = [
 // 同步日志
 async function logSync(userId, tableName, type, recordCount, status, errorMessage = null) {
   try {
-    await pool.execute(
+    await pool.query(
       `INSERT INTO sync_logs (user_id, sync_type, table_name, record_count, status, error_message) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [userId, type, tableName, recordCount, status, errorMessage]
     )
   } catch (error) {
@@ -231,12 +226,17 @@ async function logSync(userId, tableName, type, recordCount, status, errorMessag
 
 // 健康检查
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), dbType: 'postgresql' })
 })
 
 // 版本信息
 app.get('/api/version', (req, res) => {
-  res.json({ version: '3.9.0', name: 'MyMoney888', arch: 'data-centric, tagged-storage' })
+  res.json({ 
+    version: '3.9.0', 
+    name: 'MyMoney888', 
+    arch: 'data-centric, tagged-storage',
+    dbType: 'postgresql'
+  })
 })
 
 // 数据目录信息
@@ -274,14 +274,9 @@ app.post('/api/backup/:table', async (req, res) => {
   }
   
   try {
-    const connection = await pool.getConnection()
-    try {
-      const [rows] = await pool.execute(`SELECT * FROM ${table}`)
-      await backupToFile(table, rows)
-      res.json({ success: true, table, count: rows.length })
-    } finally {
-      connection.release()
-    }
+    const result = await pool.query(`SELECT * FROM ${table}`)
+    await backupToFile(table, result.rows)
+    res.json({ success: true, table, count: result.rows.length })
   } catch (error) {
     res.status(500).json({ success: false, error: error.message })
   }
@@ -310,43 +305,42 @@ app.post('/api/restore/:table', async (req, res) => {
     
     // 如果需要同步到数据库
     if (toDb) {
-      const connection = await pool.getConnection()
+      const client = await pool.connect()
       try {
-        await connection.beginTransaction()
+        await client.query('BEGIN')
         
         for (const item of restoreData) {
           const id = item.id
           const fields = Object.keys(item).filter(k => k !== 'id')
           const values = fields.map(k => item[k])
           
-          const [existing] = await connection.execute(
-            `SELECT id FROM ${table} WHERE id = ?`,
+          // 检查记录是否存在
+          const existing = await client.query(
+            `SELECT id FROM ${table} WHERE id = $1`,
             [id]
           )
           
-          if (existing.length > 0) {
-            const setClause = fields.map(f => `${f} = ?`).join(', ')
-            await connection.execute(
-              `UPDATE ${table} SET ${setClause}, updated_at = NOW() WHERE id = ?`,
-              [...values, id]
-            )
+          if (existing.rows.length > 0) {
+            // 更新 - PostgreSQL 语法
+            const setClause = fields.map((f, i) => `${f} = $${i + 2}`).join(', ')
+            const query = `UPDATE ${table} SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $1`
+            await client.query(query, [id, ...values])
           } else {
+            // 插入 - PostgreSQL 语法
             const fieldList = ['id', ...fields].join(', ')
-            const placeholders = ['?', ...fields.map(() => '?')].join(', ')
-            await connection.execute(
-              `INSERT INTO ${table} (${fieldList}) VALUES (${placeholders})`,
-              [id, ...values]
-            )
+            const placeholders = fields.map((_, i) => `$${i + 2}`).join(', ')
+            const query = `INSERT INTO ${table} (id, ${fieldList}) VALUES ($1, ${placeholders})`
+            await client.query(query, [id, ...values])
           }
         }
         
-        await connection.commit()
+        await client.query('COMMIT')
         res.json({ success: true, table, count: restoreData.length, toDb: true })
       } catch (error) {
-        await connection.rollback()
+        await client.query('ROLLBACK')
         throw error
       } finally {
-        connection.release()
+        client.release()
       }
     } else {
       res.json({ success: true, table, count: restoreData.length, toDb: false })
@@ -359,9 +353,9 @@ app.post('/api/restore/:table', async (req, res) => {
 // 数据库连接测试
 app.get('/api/db/test', async (req, res) => {
   try {
-    const connection = await pool.getConnection()
-    connection.release()
-    res.json({ status: 'connected', message: '数据库连接正常' })
+    const client = await pool.connect()
+    client.release()
+    res.json({ status: 'connected', message: 'PostgreSQL 数据库连接正常', dbType: 'postgresql' })
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message })
   }
@@ -376,7 +370,7 @@ app.get('/api/sync/tables', (req, res) => {
   res.json({ tables: SYNC_TABLES })
 })
 
-// 同步数据到数据库 (Local -> MySQL)
+// 同步数据到数据库 (Local -> PostgreSQL)
 app.post('/api/sync', async (req, res) => {
   const { userId, table, data, ledgerId } = req.body
   
@@ -402,10 +396,10 @@ app.post('/api/sync', async (req, res) => {
     
     // 单表同步逻辑
     try {
-      const connection = await pool.getConnection()
+      const client = await pool.connect()
       
       try {
-        await connection.beginTransaction()
+        await client.query('BEGIN')
         
         let successCount = 0
         let errorCount = 0
@@ -415,30 +409,30 @@ app.post('/api/sync', async (req, res) => {
         
         for (const item of dataArray) {
           try {
-            // 构建 UPSERT 语句
+            // 构建 UPSERT 语句 - PostgreSQL 使用 ON CONFLICT
             const id = item.id
             const fields = Object.keys(item).filter(k => k !== 'id')
             const values = fields.map(k => item[k])
             
             // 检查记录是否存在
-            const [existing] = await connection.execute(
-              `SELECT id FROM ${table} WHERE id = ?`,
+            const existing = await client.query(
+              `SELECT id FROM ${table} WHERE id = $1`,
               [id]
             )
             
-            if (existing.length > 0) {
-              // 更新
-              const setClause = fields.map(f => `${f} = ?`).join(', ')
-              await connection.execute(
-                `UPDATE ${table} SET ${setClause}, updated_at = NOW() WHERE id = ?`,
-                [...values, id]
+            if (existing.rows.length > 0) {
+              // 更新 - PostgreSQL 语法
+              const setClause = fields.map((f, i) => `${f} = $${i + 2}`).join(', ')
+              await client.query(
+                `UPDATE ${table} SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+                [id, ...values]
               )
             } else {
-              // 插入
+              // 插入 - PostgreSQL 语法
               const fieldList = ['id', ...fields].join(', ')
-              const placeholders = ['?', ...fields.map(() => '?')].join(', ')
-              await connection.execute(
-                `INSERT INTO ${table} (${fieldList}) VALUES (${placeholders})`,
+              const placeholders = fields.map((_, i) => `$${i + 2}`).join(', ')
+              await client.query(
+                `INSERT INTO ${table} (id, ${fieldList}) VALUES ($1, ${placeholders})`,
                 [id, ...values]
               )
             }
@@ -449,7 +443,7 @@ app.post('/api/sync', async (req, res) => {
           }
         }
         
-        await connection.commit()
+        await client.query('COMMIT')
         
         // 记录同步日志
         await logSync(
@@ -465,11 +459,11 @@ app.post('/api/sync', async (req, res) => {
         let backupSuccess = false
         if (AUTO_BACKUP_ON_CHANGE && successCount > 0) {
           try {
-            const [rows] = await pool.execute(
-              `SELECT * FROM ${table} WHERE user_id = ?`,
+            const result = await pool.query(
+              `SELECT * FROM ${table} WHERE user_id = $1`,
               [userId]
             )
-            backupSuccess = await backupToFile(table, rows)
+            backupSuccess = await backupToFile(table, result.rows)
           } catch (backupError) {
             console.warn(`同步后备份失败: ${backupError.message}`)
           }
@@ -486,10 +480,10 @@ app.post('/api/sync', async (req, res) => {
         })
         
       } catch (error) {
-        await connection.rollback()
+        await client.query('ROLLBACK')
         throw error
       } finally {
-        connection.release()
+        client.release()
       }
       
     } catch (error) {
@@ -505,10 +499,10 @@ app.post('/api/sync', async (req, res) => {
   // 如果 data 是对象（多表数据格式），处理多表同步
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     const results = {}
-    const connection = await pool.getConnection()
+    const client = await pool.connect()
     
     try {
-      await connection.beginTransaction()
+      await client.query('BEGIN')
       
       for (const [tableName, tableData] of Object.entries(data)) {
         if (!SYNC_TABLES.includes(tableName)) continue
@@ -523,22 +517,22 @@ app.post('/api/sync', async (req, res) => {
             const fields = Object.keys(item).filter(k => k !== 'id')
             const values = fields.map(k => item[k])
             
-            const [existing] = await connection.execute(
-              `SELECT id FROM ${tableName} WHERE id = ?`,
+            const existing = await client.query(
+              `SELECT id FROM ${tableName} WHERE id = $1`,
               [id]
             )
             
-            if (existing.length > 0) {
-              const setClause = fields.map(f => `${f} = ?`).join(', ')
-              await connection.execute(
-                `UPDATE ${tableName} SET ${setClause}, updated_at = NOW() WHERE id = ?`,
-                [...values, id]
+            if (existing.rows.length > 0) {
+              const setClause = fields.map((f, i) => `${f} = $${i + 2}`).join(', ')
+              await client.query(
+                `UPDATE ${tableName} SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+                [id, ...values]
               )
             } else {
               const fieldList = ['id', ...fields].join(', ')
-              const placeholders = ['?', ...fields.map(() => '?')].join(', ')
-              await connection.execute(
-                `INSERT INTO ${tableName} (${fieldList}) VALUES (${placeholders})`,
+              const placeholders = fields.map((_, i) => `$${i + 2}`).join(', ')
+              await client.query(
+                `INSERT INTO ${tableName} (id, ${fieldList}) VALUES ($1, ${placeholders})`,
                 [id, ...values]
               )
             }
@@ -556,7 +550,7 @@ app.post('/api/sync', async (req, res) => {
         }
       }
       
-      await connection.commit()
+      await client.query('COMMIT')
       
       res.json({
         success: true,
@@ -566,14 +560,14 @@ app.post('/api/sync', async (req, res) => {
       })
       
     } catch (error) {
-      await connection.rollback()
+      await client.query('ROLLBACK')
       console.error('多表同步失败:', error)
       res.status(500).json({ 
         success: false, 
         error: error.message 
       })
     } finally {
-      connection.release()
+      client.release()
     }
     return
   }
@@ -593,7 +587,7 @@ app.post('/api/sync', async (req, res) => {
   })
 })
 
-// 从数据库获取数据 (MySQL -> Local)
+// 从数据库获取数据 (PostgreSQL -> Local)
 app.get('/api/sync', async (req, res) => {
   const { userId, table, lastSyncTime } = req.query
   
@@ -612,22 +606,22 @@ app.get('/api/sync', async (req, res) => {
   }
   
   try {
-    let query = `SELECT * FROM ${table} WHERE user_id = ?`
+    let query = `SELECT * FROM ${table} WHERE user_id = $1`
     const params = [userId]
     
     // 如果指定了上次同步时间，只获取更新的数据
     if (lastSyncTime) {
-      query += ` AND updated_at > ?`
+      query += ` AND updated_at > $2`
       params.push(lastSyncTime)
     }
     
-    const [rows] = await pool.execute(query, params)
+    const result = await pool.query(query, params)
     
     res.json({
       success: true,
       table,
-      count: rows.length,
-      data: rows
+      count: result.rows.length,
+      data: result.rows
     })
     
   } catch (error) {
@@ -655,19 +649,19 @@ app.get('/api/sync/all', async (req, res) => {
     
     for (const table of SYNC_TABLES) {
       try {
-        let query = `SELECT * FROM ${table} WHERE user_id = ?`
+        let query = `SELECT * FROM ${table} WHERE user_id = $1`
         const params = [userId]
         
         if (lastSyncTime) {
-          query += ` AND updated_at > ?`
+          query += ` AND updated_at > $2`
           params.push(lastSyncTime)
         }
         
-        const [rows] = await pool.execute(query, params)
+        const queryResult = await pool.query(query, params)
         result[table] = {
           success: true,
-          count: rows.length,
-          data: rows
+          count: queryResult.rows.length,
+          data: queryResult.rows
         }
       } catch (tableError) {
         result[table] = {
@@ -709,27 +703,27 @@ app.get('/api/accounts/balance', async (req, res) => {
   
   try {
     // 使用视图获取账户余额
-    const [rows] = await pool.execute(
-      `SELECT * FROM v_account_balance WHERE user_id = ?`,
+    const result = await pool.query(
+      `SELECT * FROM v_account_balance WHERE user_id = $1`,
       [userId]
     )
     
     res.json({
       success: true,
-      accounts: rows
+      accounts: result.rows
     })
     
   } catch (error) {
     // 如果视图不存在，使用简单查询
     try {
-      const [accounts] = await pool.execute(
-        `SELECT * FROM accounts WHERE user_id = ?`,
+      const accounts = await pool.query(
+        `SELECT * FROM accounts WHERE user_id = $1`,
         [userId]
       )
       
       res.json({
         success: true,
-        accounts,
+        accounts: accounts.rows,
         note: '视图不可用，使用账户表数据'
       })
     } catch (fallbackError) {
@@ -751,12 +745,12 @@ app.get('/api/users/:id', async (req, res) => {
   const { id } = req.params
   
   try {
-    const [rows] = await pool.execute(
-      `SELECT id, name, email, created_at, last_login_at, is_active FROM users WHERE id = ?`,
+    const result = await pool.query(
+      `SELECT id, name, email, created_at, last_login_at, is_active FROM users WHERE id = $1`,
       [id]
     )
     
-    if (rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ 
         success: false, 
         error: '用户不存在' 
@@ -765,7 +759,7 @@ app.get('/api/users/:id', async (req, res) => {
     
     res.json({
       success: true,
-      user: rows[0]
+      user: result.rows[0]
     })
     
   } catch (error) {
@@ -782,8 +776,8 @@ app.post('/api/users/:id/login', async (req, res) => {
   const { id } = req.params
   
   try {
-    await pool.execute(
-      `UPDATE users SET last_login_at = NOW() WHERE id = ?`,
+    await pool.query(
+      `UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1`,
       [id]
     )
     
@@ -830,7 +824,7 @@ app.post('/api/datastore/save', async (req, res) => {
     // 保存完整数据
     const fullDataPath = path.join(ledgerDir, 'datastore.json')
     const fullData = {
-      version: '3.8.1',
+      version: '3.9.0',
       ledgerId,
       savedAt: timestamp,
       data
@@ -998,13 +992,13 @@ app.get('*', (req, res) => {
 
 async function startServer() {
   console.log('🚀 MyMoney888 数据同步服务器启动中...')
-  console.log(`📦 版本: 3.8.2`)
+  console.log(`📦 版本: 3.9.0 (PostgreSQL)`)
   console.log(`📁 数据目录: ${DATA_DIR}`)
   
   // 测试数据库连接
   const dbConnected = await testConnection()
   if (!dbConnected) {
-    console.warn('⚠️  数据库连接失败，服务器将以离线模式启动')
+    console.warn('⚠️  PostgreSQL 数据库连接失败，服务器将以离线模式启动')
     console.log('💡 提示: 可使用 /api/backup 从文件恢复数据')
   }
   
