@@ -14,16 +14,16 @@ services:
     ports:
       - "${APP_PORT:-8888}:8888"
     restart: always
-    env_file:
-      - .env
     environment:
       - NODE_ENV=production
       - VITE_API_URL=${VITE_API_URL:-http://localhost:8888/api}
-      - DB_HOST=${DB_HOST:-postgres}
-      - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-mymoney888}
-      - DB_NAME=${DB_NAME:-mymoney888}
+      # ============ 数据库配置（修改这里） ============
+      - DB_HOST=${DB_HOST:-postgres}           # PostgreSQL 主机地址
+      - DB_PORT=${DB_PORT:-5432}              # PostgreSQL 端口
+      - DB_USER=${DB_USER:-postgres}          # PostgreSQL 用户名
+      - DB_PASSWORD=${DB_PASSWORD:-mymoney888} # PostgreSQL 密码
+      - DB_NAME=${DB_NAME:-mymoney888}        # 数据库名称
+      # ============================================
       - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
       # 数据持久化配置
       - DATA_DIR=/data
@@ -56,12 +56,12 @@ services:
     image: postgres:16-alpine
     container_name: mymoney888-postgres
     restart: always
-    env_file:
-      - .env
     environment:
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-mymoney888}
-      - POSTGRES_DB=${DB_NAME:-mymoney888}
-      - POSTGRES_USER=${DB_USER:-postgres}
+      # ============ 数据库配置（修改这里） ============
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-mymoney888} # PostgreSQL 密码
+      - POSTGRES_DB=${DB_NAME:-mymoney888}           # 数据库名称
+      - POSTGRES_USER=${DB_USER:-postgres}           # 用户名
+      # ============================================
     ports:
       - "${DB_EXTERNAL_PORT:-5432}:5432"
     volumes:

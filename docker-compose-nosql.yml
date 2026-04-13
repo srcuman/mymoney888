@@ -12,16 +12,18 @@ services:
     image: mymoney888:latest
     container_name: mymoney888
     ports:
-      - "8888:8888"
+      - "${APP_PORT:-8888}:8888"
     restart: always
     environment:
       - NODE_ENV=production
-      - VITE_API_URL=http://localhost:3000/api
-      - DB_HOST=${DB_HOST:-host.docker.internal}  # PostgreSQL主机地址，默认宿主机
-      - DB_PORT=${DB_PORT:-5432}  # PostgreSQL端口，默认5432
-      - DB_USER=${DB_USER:-postgres}  # PostgreSQL用户名，默认postgres
-      - DB_PASSWORD=${DB_PASSWORD:-mymoney888}  # PostgreSQL密码，默认mymoney888
-      - DB_NAME=${DB_NAME:-mymoney888}  # 数据库名称，默认mymoney888
+      - VITE_API_URL=http://localhost:8888/api
+      # ============ 数据库配置（修改这里） ============
+      - DB_HOST=${DB_HOST:-host.docker.internal}  # PostgreSQL 主机地址
+      - DB_PORT=${DB_PORT:-5432}                  # PostgreSQL 端口
+      - DB_USER=${DB_USER:-postgres}              # PostgreSQL 用户名
+      - DB_PASSWORD=${DB_PASSWORD:-mymoney888}    # PostgreSQL 密码
+      - DB_NAME=${DB_NAME:-mymoney888}           # 数据库名称
+      # ============================================
       - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
     extra_hosts:
       - "host.docker.internal:host-gateway"
