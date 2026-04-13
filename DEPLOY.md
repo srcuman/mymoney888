@@ -6,14 +6,14 @@
 
 本系统支持两种部署方式：
 
-1. **使用内置MySQL数据库**（推荐用于开发和测试）
-2. **使用外部MySQL数据库**（推荐用于生产环境）
+1. **使用内置PostgreSQL数据库**（推荐用于开发和测试）
+2. **使用外部PostgreSQL数据库**（推荐用于生产环境）
 
 ## 前置要求
 
 - Docker 20.10+
 - Docker Compose 2.0+
-- MySQL 8.0+（如果使用外部数据库）
+- PostgreSQL 12+（如果使用外部数据库）
 
 ## 快速开始
 
@@ -36,33 +36,29 @@ cp .env.example .env
 
 ```env
 # 数据库配置
-DB_HOST=mysql                    # 数据库主机（使用外部数据库时修改）
-DB_PORT=3306                     # 数据库端口
-DB_USER=root                     # 数据库用户
-DB_PASSWORD=mymoney888           # 数据库密码
-DB_NAME=mymoney888              # 数据库名称
+DB_HOST=postgres                 # 数据库主机（使用外部数据库时修改）
+DB_PORT=5432                    # 数据库端口
+DB_USER=postgres                # 数据库用户
+DB_PASSWORD=mymoney888          # 数据库密码
+DB_NAME=mymoney888             # 数据库名称
 
 # 应用配置
 NODE_ENV=production              # 运行环境
 VITE_API_URL=http://localhost:3000/api  # API地址
 APP_PORT=8888                   # 应用端口
 
-# MySQL服务配置（仅在使用内置MySQL时需要）
-MYSQL_ROOT_PASSWORD=mymoney888   # MySQL root密码
-MYSQL_DATABASE=mymoney888        # MySQL数据库名
-MYSQL_USER=mymoney              # MySQL用户
-MYSQL_PASSWORD=mymoney888       # MySQL密码
-MYSQL_PORT=3306                 # MySQL端口映射
+# PostgreSQL服务配置（仅在使用内置PostgreSQL时需要）
+DB_EXTERNAL_PORT=5432           # PostgreSQL端口映射
 ```
 
 ### 3. 选择部署方式
 
-#### 方式一：使用内置MySQL数据库
+#### 方式一：使用内置PostgreSQL数据库
 
 这是最简单的部署方式，适合开发和测试环境。
 
 ```bash
-# 启动服务（包含内置MySQL）
+# 启动服务（包含内置PostgreSQL）
 docker-compose --profile internal up -d
 
 # 查看日志
@@ -72,16 +68,16 @@ docker-compose logs -f
 docker-compose down
 ```
 
-#### 方式二：使用外部MySQL数据库
+#### 方式二：使用外部PostgreSQL数据库
 
 这是推荐的部署方式，适合生产环境。
 
-1. **准备外部MySQL数据库**
+1. **准备外部PostgreSQL数据库**
 
-确保你的MySQL服务器已创建数据库：
+确保你的PostgreSQL服务器已创建数据库：
 
 ```sql
-CREATE DATABASE mymoney888 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE mymoney888;
 ```
 
 2. **修改环境变量**
@@ -89,11 +85,11 @@ CREATE DATABASE mymoney888 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 编辑 `.env` 文件，修改数据库配置：
 
 ```env
-DB_HOST=your-mysql-host          # 你的MySQL主机地址
-DB_PORT=3306                      # 你的MySQL端口
-DB_USER=your-mysql-user          # 你的MySQL用户名
-DB_PASSWORD=your-mysql-password  # 你的MySQL密码
-DB_NAME=mymoney888               # 数据库名称
+DB_HOST=your-postgres-host        # 你的PostgreSQL主机地址
+DB_PORT=5432                      # 你的PostgreSQL端口
+DB_USER=postgres                   # 你的PostgreSQL用户名
+DB_PASSWORD=your-password          # 你的PostgreSQL密码
+DB_NAME=mymoney888                # 数据库名称
 ```
 
 3. **初始化数据库**
@@ -114,7 +110,7 @@ chmod +x scripts/init-database.sh
 4. **启动应用**
 
 ```bash
-# 启动服务（不包含MySQL）
+# 启动服务（不包含PostgreSQL）
 docker-compose up -d
 
 # 查看日志
@@ -140,15 +136,15 @@ docker-compose -f docker-compose.cn.yml --profile internal up -d
 
 ### 自动初始化
 
-- **使用内置MySQL**：数据库会在首次启动时自动初始化
-- **使用外部MySQL**：需要手动运行初始化脚本
+- **使用内置PostgreSQL**：数据库会在首次启动时自动初始化
+- **使用外部PostgreSQL**：需要手动运行初始化脚本
 
 ### 手动初始化
 
 如果自动初始化失败，可以手动执行SQL脚本：
 
 ```bash
-mysql -h your-host -u your-user -p your-database < database/init-db.sql
+psql -h your-host -U your-user -d your-database -f database/init-db.sql
 ```
 
 ### 验证初始化
@@ -165,6 +161,9 @@ mysql -h your-host -u your-user -p your-database < database/init-db.sql
 - loan_payments（贷款还款记录表）
 - installment_templates（分期模板表）
 - installments（分期记录表）
+- investment_holdings（投资持仓表）
+- nav_history（净值历史表）
+- investment_transfers（投资转账表）
 - sync_logs（同步日志表）
 - user_settings（用户设置表）
 
@@ -176,7 +175,7 @@ mysql -h your-host -u your-user -p your-database < database/init-db.sql
 
 ```bash
 # 测试数据库连接
-mysql -h $DB_HOST -P $DB_PORT -u $DB_USER -p$DB_PASSWORD
+psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME
 ```
 
 ### 2. 端口冲突
@@ -192,23 +191,22 @@ APP_PORT=8889
 检查数据库是否包含所有必要的表：
 
 ```bash
-mysql -h $DB_HOST -P $DB_PORT -u $DB_USER -p$DB_PASSWORD $DB_NAME -e "SHOW TABLES"
+psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "\\dt"
 ```
 
 如果表不存在，重新运行初始化脚本。
 
 ### 4. 权限问题
 
-确保MySQL用户有足够的权限：
+确保PostgreSQL用户有足够的权限：
 
 ```sql
-GRANT ALL PRIVILEGES ON mymoney888.* TO 'your-user'@'%';
-FLUSH PRIVILEGES;
+GRANT ALL PRIVILEGES ON DATABASE mymoney888 TO postgres;
 ```
 
 ## 生产环境建议
 
-1. **使用外部MySQL数据库**，不要使用内置MySQL
+1. **使用外部PostgreSQL数据库**，不要使用内置PostgreSQL
 2. **修改默认密码**，不要使用示例密码
 3. **配置HTTPS**，使用反向代理（如Nginx）
 4. **定期备份数据库**
@@ -220,13 +218,13 @@ FLUSH PRIVILEGES;
 ### 备份数据库
 
 ```bash
-docker exec mymoney888-mysql mysqldump -u root -p mymoney888 > backup.sql
+docker exec mymoney888-postgres pg_dump -U postgres mymoney888 > backup.sql
 ```
 
 ### 恢复数据库
 
 ```bash
-docker exec -i mymoney888-mysql mysql -u root -p mymoney888 < backup.sql
+docker exec -i mymoney888-postgres psql -U postgres mymoney888 < backup.sql
 ```
 
 ## 升级指南

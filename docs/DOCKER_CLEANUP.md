@@ -2,7 +2,7 @@
 
 ## 问题描述
 
-当用户尝试清空 `/data` 文件夹和 MySQL 数据库后重新构建 Docker 容器时，仍有之前测试数据残留。
+当用户尝试清空 `/data` 文件夹和 PostgreSQL 数据库后重新构建 Docker 容器时，仍有之前测试数据残留。
 
 ## 原因分析
 
@@ -70,7 +70,7 @@ docker volume prune
 docker volume ls
 
 # 查看特定卷的详细信息
-docker volume inspect mymoney888_mysql_data
+docker volume inspect mymoney888_postgres_data
 docker volume inspect mymoney888_app_data
 ```
 
@@ -137,18 +137,17 @@ docker volume ls | grep mymoney888
 
 ### Q: 可以在不删除卷的情况下重置数据吗？
 
-**A:** 可以通过进入 MySQL 容器手动清空数据：
+**A:** 可以通过进入 PostgreSQL 容器手动清空数据：
 
 ```bash
-# 进入 MySQL 容器
-docker exec -it mymoney888-mysql mysql -u root -p
+# 进入 PostgreSQL 容器
+docker exec -it mymoney888-postgres psql -U postgres
 
-# 在 MySQL 中执行
-USE mymoney888;
+# 在 PostgreSQL 中执行
+\c mymoney888;
 DELETE FROM transactions;
 DELETE FROM accounts;
 -- 其他表...
-FLUSH TABLES;
 ```
 
 ## 生产环境建议

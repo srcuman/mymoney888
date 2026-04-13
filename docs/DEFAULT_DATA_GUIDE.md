@@ -127,7 +127,7 @@ mysql -u root -p < database/init-default-data.sql
 
 ```bash
 # 如果数据库已存在，只加载预置数据
-mysql -u root -p mymoney888 < database/init-default-data.sql
+psql -U postgres -d mymoney888 -f database/init-default-data.sql
 ```
 
 #### 方式3: 程序自动初始化
@@ -231,7 +231,7 @@ SOURCE database/init-default-data.sql;
 
 ### 场景2: 换手机/重装应用
 
-1. 导出 MySQL 数据备份
+1. 导出 PostgreSQL 数据备份
 2. 重新安装应用
 3. 导入备份数据
 4. 预置数据自动保留（因为使用 `INSERT IGNORE`）

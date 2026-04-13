@@ -196,7 +196,7 @@ latestValue = MAX(net_value_history where account_id = 'inv_xxx' order by date)
 
 ## 存储架构
 
-### 双重存储：DataStore（本地）+ MySQL（远程备份）
+### 双重存储：DataStore（本地）+ PostgreSQL（远程备份）
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -431,4 +431,4 @@ calculateLoanRemaining(loanId) {
 | 版本 | 日期 | 变更 |
 |------|------|------|
 | 3.9.0 | 2026-04-12 | 确立"数据为核心，标签化存储"架构 |
-| 3.8.x | 2026-04-12 | DataStore + MySQL 双存储 |
+| 3.9.x | 2026-04-13 | DataStore + PostgreSQL 双存储 |

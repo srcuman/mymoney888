@@ -19,9 +19,9 @@ services:
     environment:
       - NODE_ENV=production
       - VITE_API_URL=${VITE_API_URL:-http://localhost:8888/api}
-      - DB_HOST=${DB_HOST:-mysql}
-      - DB_PORT=${DB_PORT:-3306}
-      - DB_USER=${DB_USER:-mymoney888}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-mymoney888}
       - DB_NAME=${DB_NAME:-mymoney888}
       - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
@@ -49,28 +49,27 @@ services:
           cpus: '0.5'
           memory: 256M
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
 
-  mysql:
-    image: mysql:8.0
-    container_name: mymoney888-mysql
+  postgres:
+    image: postgres:16-alpine
+    container_name: mymoney888-postgres
     restart: always
     env_file:
       - .env
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-mymoney888}
-      - MYSQL_DATABASE=${DB_NAME:-mymoney888}
-      - MYSQL_USER=${DB_USER:-mymoney888}
-      - MYSQL_PASSWORD=${DB_PASSWORD:-mymoney888}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-mymoney888}
+      - POSTGRES_DB=${DB_NAME:-mymoney888}
+      - POSTGRES_USER=${DB_USER:-postgres}
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "${DB_EXTERNAL_PORT:-5432}:5432"
     volumes:
-      # 持久化MySQL数据
-      - mysql_data:/var/lib/mysql
+      # 持久化PostgreSQL数据
+      - postgres_data:/var/lib/postgresql/data
       - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-mymoney888}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-mymoney888}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -80,14 +79,14 @@ services:
       resources:
         limits:
           cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
           memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
 volumes:
-  # MySQL数据持久化卷
-  mysql_data:
+  # PostgreSQL数据持久化卷
+  postgres_data:
     driver: local
   # 应用数据持久化卷（DataStore文件备份）
   app_data:
