@@ -155,27 +155,47 @@ app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
-// PostgreSQL 连接池
-const pool = new Pool({
+// PostgreSQL 连接配置
+const DB_CONFIG = {
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'mymoney888',
+}
+
+// 打印连接配置（不打印密码）
+console.log('🔧 数据库连接配置:')
+console.log(`   - Host: ${DB_CONFIG.host}`)
+console.log(`   - Port: ${DB_CONFIG.port}`)
+console.log(`   - User: ${DB_CONFIG.user}`)
+console.log(`   - Database: ${DB_CONFIG.database}`)
+console.log(`   - Password: ${DB_CONFIG.password ? '***' : '(空)'}`)
+
+// PostgreSQL 连接池
+const pool = new Pool({
+  ...DB_CONFIG,
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 5000,
 })
 
 // 测试数据库连接
 async function testConnection() {
   try {
     const client = await pool.connect()
+    const result = await client.query('SELECT version()')
     client.release()
     console.log('✅ PostgreSQL 数据库连接成功')
+    console.log(`   - 版本: ${result.rows[0].version.substring(0, 50)}...`)
     return true
   } catch (error) {
-    console.error('❌ PostgreSQL 数据库连接失败:', error.message)
+    console.error('❌ PostgreSQL 数据库连接失败:')
+    console.error(`   - Host: ${DB_CONFIG.host}:${DB_CONFIG.port}`)
+    console.error(`   - User: ${DB_CONFIG.user}`)
+    console.error(`   - Database: ${DB_CONFIG.database}`)
+    console.error(`   - 错误: ${error.message}`)
+    console.error(`   - 代码: ${error.code}`)
     return false
   }
 }
