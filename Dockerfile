@@ -1,6 +1,5 @@
-# 使用阿里云容器镜像加速的 Node.js
-# registry.docker-cn.com 是 Docker Hub 国内镜像
-FROM registry.docker-cn.com/library/node:25.8.0-alpine
+# 使用Node.js 25.8.0-alpine版本
+FROM node:25.8.0-alpine
 
 # 安装bash
 RUN apk add --no-cache bash
@@ -8,7 +7,7 @@ RUN apk add --no-cache bash
 # 设置工作目录
 WORKDIR /app
 
-# 设置npm镜像源为淘宝
+# 设置npm镜像源
 RUN npm config set registry https://registry.npmmirror.com
 
 # 复制package.json和package-lock.json
