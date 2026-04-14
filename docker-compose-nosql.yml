@@ -2,29 +2,33 @@ version: '3.8'
 
 services:
   mymoney888:
-    # 从GitHub仓库构建
+    # 从本地构建（修改代码后需要重新构建）
+    # 如需从 GitHub 构建，注释下面 3 行，取消注释后面的 context 和 dockerfile
     build:
-      context: https://github.com/srcuman/mymoney888.git
+      context: .
       dockerfile: Dockerfile
-      # 国内用户如遇到镜像拉取问题，可取消注释以下配置使用镜像源
-      # args:
-      #   - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:25.8.0-alpine
-    image: mymoney888:latest
+    
+    # 从 GitHub 仓库构建（取消注释下面 3 行）
+    # build:
+    #   context: https://github.com/srcuman/mymoney888.git
+    #   dockerfile: Dockerfile
+    
+    image: mymoney888-nosql:latest
     container_name: mymoney888
     ports:
       - "${APP_PORT:-8888}:8888"
     restart: always
     environment:
       - NODE_ENV=production
-      - VITE_API_URL=http://localhost:8888/api
-      # ============ 数据库配置（修改这里） ============
-      - DB_HOST=${DB_HOST:-host.docker.internal}  # PostgreSQL 主机地址
-      - DB_PORT=${DB_PORT:-5432}                  # PostgreSQL 端口
-      - DB_USER=${DB_USER:-postgres}              # PostgreSQL 用户名
-      - DB_PASSWORD=${DB_PASSWORD:-mymoney888}    # PostgreSQL 密码
-      - DB_NAME=${DB_NAME:-mymoney888}           # 数据库名称
-      # ============================================
-      - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+      - VITE_API_URL=http://localhost:${APP_PORT:-8888}/api
+      # ============ 数据库配置 ============
+      # 直接修改下面的值，或通过命令行 -e 参数覆盖
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME:-mymoney888}
+      # ===================================
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # 健康检查
@@ -48,6 +52,3 @@ services:
 networks:
   default:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
