@@ -1,6 +1,9 @@
 # 使用Node.js 25.8.0-alpine版本
 FROM node:25.8.0-alpine
 
+# 先切换Alpine镜像源为阿里云（解决TLS错误）
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
 # 安装bash
 RUN apk add --no-cache bash
 
