@@ -6,7 +6,7 @@
 FROM node:25.8.0-alpine
 
 # 安装PostgreSQL客户端（Alpine需要指定版本）和bash（用于数据库初始化）
-RUN apk add --no-cache bash postgresql15-client
+RUN apk add --no-cache bash postgresql18-client
 
 # 设置工作目录
 WORKDIR /app
