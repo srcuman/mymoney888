@@ -19,8 +19,11 @@ COPY package*.json ./
 # 安装依赖
 RUN npm install
 
-# 复制所有文件
+# 复制所有文件（排除 .env 文件）
 COPY . .
+
+# 删除可能存在的 .env 文件（防止旧配置污染）
+RUN rm -f /app/.env
 
 # 设置脚本执行权限
 RUN chmod +x /app/scripts/start-app.sh /app/scripts/upgrade.sh /app/scripts/upgrade-command.sh
