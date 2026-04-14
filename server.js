@@ -14,8 +14,10 @@ import dotenv from 'dotenv'
 
 const { Pool } = pg
 
-// 加载环境变量
-dotenv.config()
+// 加载环境变量（在 Docker 环境中跳过 .env 文件）
+if (process.env.NODE_ENV !== 'production' && !process.env.DB_HOST) {
+  dotenv.config()
+}
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
