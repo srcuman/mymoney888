@@ -1,6 +1,5 @@
 # 独立部署模式 - 仅使用本地文件存储
 # 适用于不需要 PostgreSQL 的场景，数据完全保存在本地文件系统
-
 version: '3.8'
 
 services:
@@ -11,46 +10,29 @@ services:
     image: mymoney888:latest
     container_name: mymoney888
     ports:
-      - "${APP_PORT:-8888}:8888"
+      - "8888:8888"
     restart: always
-    env_file:
-      - .env
     environment:
       - NODE_ENV=production
       - VITE_API_URL=http://localhost:8888/api
-      # 使用本地文件存储模式（不连接MySQL）
+      # 不连接数据库，使用本地文件存储
       - DB_HOST=
       - DB_PORT=
-      # 数据持久化配置
       - DATA_DIR=/data
-      - AUTO_BACKUP_INTERVAL=${AUTO_BACKUP_INTERVAL:-5}
-      - AUTO_BACKUP_ON_CHANGE=${AUTO_BACKUP_ON_CHANGE:-true}
+      - AUTO_BACKUP_INTERVAL=5
+      - AUTO_BACKUP_ON_CHANGE=true
     volumes:
-      # 持久化所有数据到宿主机
       - app_data:/data
-    # 健康检查
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    # 资源限制
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
 
 volumes:
-  # 应用数据持久化卷
   app_data:
-    driver: local
 
-# 网络配置
 networks:
   default:
     driver: bridge

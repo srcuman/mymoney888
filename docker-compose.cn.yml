@@ -1,55 +1,38 @@
-# 国内网络环境专用Docker Compose配置
-# 使用国内镜像源加速构建和部署
-
+# 国内网络环境专用配置
 version: '3.8'
 
 services:
   mymoney888:
     build:
-      context: https://github.com/srcuman/mymoney888.git
+      context: .
       dockerfile: Dockerfile
-      args:
-        # 使用国内Node.js镜像源（25.8.0-alpine版本）
-        - NODE_IMAGE=docker.mirrors.sjtug.sjtu.edu.cn/library/node:25.8.0-alpine
     image: mymoney888:latest
     container_name: mymoney888
     ports:
-      - "${APP_PORT:-8888}:8888"
+      - "8888:8888"
     restart: always
     environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - VITE_API_URL=${VITE_API_URL:-http://localhost:8888/api}
+      - NODE_ENV=production
+      - VITE_API_URL=http://localhost:8888/api
       # ============ 数据库配置（修改这里） ============
-      - DB_HOST=${DB_HOST:-postgres}           # PostgreSQL 主机地址
-      - DB_PORT=${DB_PORT:-5432}              # PostgreSQL 端口
-      - DB_USER=${DB_USER:-postgres}          # PostgreSQL 用户名
-      - DB_PASSWORD=${DB_PASSWORD:-mymoney888} # PostgreSQL 密码
-      - DB_NAME=${DB_NAME:-mymoney888}        # 数据库名称
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=mymoney888
+      - DB_NAME=mymoney888
       # ============================================
-      - NPM_CONFIG_REGISTRY=${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
-      # 数据持久化配置
+      - NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
       - DATA_DIR=/data
-      - AUTO_BACKUP_INTERVAL=${AUTO_BACKUP_INTERVAL:-30}
-      - AUTO_BACKUP_ON_CHANGE=${AUTO_BACKUP_ON_CHANGE:-true}
+      - AUTO_BACKUP_INTERVAL=30
+      - AUTO_BACKUP_ON_CHANGE=true
     volumes:
-      # 持久化DataStore备份数据
       - app_data:/data
-    # 健康检查
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    # 资源限制
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,46 +43,26 @@ services:
     restart: always
     environment:
       # ============ 数据库配置（修改这里） ============
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-mymoney888} # PostgreSQL 密码
-      - POSTGRES_DB=${DB_NAME:-mymoney888}           # 数据库名称
-      - POSTGRES_USER=${DB_USER:-postgres}           # 用户名
+      - POSTGRES_PASSWORD=mymoney888
+      - POSTGRES_DB=mymoney888
+      - POSTGRES_USER=postgres
       # ============================================
     ports:
-      - "${DB_EXTERNAL_PORT:-5432}:5432"
+      - "5432:5432"
     volumes:
-      # 持久化PostgreSQL数据
       - postgres_data:/var/lib/postgresql/data
       - ./database/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-mymoney888}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mymoney888"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-    # 资源限制
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-    profiles:
-      - internal
 
 volumes:
-  # PostgreSQL数据持久化卷
   postgres_data:
-    driver: local
-  # 应用数据持久化卷（DataStore文件备份）
   app_data:
-    driver: local
 
-# 网络配置 - 显式定义桥接网络
 networks:
   default:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.24.0.0/16
