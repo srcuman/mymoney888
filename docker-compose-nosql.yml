@@ -2,35 +2,27 @@ version: '3.8'
 
 services:
   mymoney888:
-    # 使用 nosql 环境配置（不加载主 .env 文件）
-    env_file:
-      - .env.nosql
-    
     # 从本地构建（修改代码后需要重新构建）
-    # 如需从 GitHub 构建，注释下面 3 行，取消注释后面的 context 和 dockerfile
     build:
       context: .
       dockerfile: Dockerfile
     
-    # 从 GitHub 仓库构建（取消注释下面 3 行）
-    # build:
-    #   context: https://github.com/srcuman/mymoney888.git
-    #   dockerfile: Dockerfile
-    
     image: mymoney888-nosql:latest
     container_name: mymoney888
     ports:
-      - "${APP_PORT:-8888}:8888"
+      - "8888:8888"
     restart: always
     environment:
       - NODE_ENV=production
-      - VITE_API_URL=http://localhost:${APP_PORT:-8888}/api
-      # 数据库配置从 .env.nosql 读取
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
+      - VITE_API_URL=http://localhost:8888/api
+      # ============ 数据库配置 ============
+      # 修改下面的值匹配你的 PostgreSQL 配置
+      - DB_HOST=localhost
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=mymoney888
+      # ===================================
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # 健康检查
@@ -40,17 +32,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    # 资源限制
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
 
-# 网络配置 - 显式定义桥接网络
+# 网络配置
 networks:
   default:
     driver: bridge
