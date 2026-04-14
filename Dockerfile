@@ -5,8 +5,8 @@
 # FROM docker.mirrors.ustc.edu.cn/library/node:25.8.0-alpine
 FROM node:25.8.0-alpine
 
-# 安装PostgreSQL客户端和bash（用于数据库初始化）
-RUN apk add --no-cache bash postgresql-client
+# 安装PostgreSQL客户端（Alpine需要指定版本）和bash（用于数据库初始化）
+RUN apk add --no-cache bash postgresql15-client
 
 # 设置工作目录
 WORKDIR /app
