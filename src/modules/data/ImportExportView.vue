@@ -44,7 +44,6 @@
 <script setup>
 import { ref } from 'vue'
 import coreDataStore from '../../services/core-data-store.js'
-import mysqlSyncService from '../../services/mysql-sync-service.js'
 
 // 选中的文件
 const selectedFile = ref(null)
