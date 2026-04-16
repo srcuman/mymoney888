@@ -17,17 +17,19 @@ RUN npm config set registry https://registry.npmmirror.com
 # 复制package.json和package-lock.json
 COPY package*.json ./
 
-# 安装所有依赖（包括 devDependencies）
-RUN npm install
-
 # 复制所有源代码
 COPY . .
 
 # 删除可能存在的 .env 文件
 RUN rm -f /app/.env
 
-# 构建前端（在服务器启动时进行）
-RUN npm run build
+# 安装所有依赖（包括 devDependencies）
+RUN echo "开始安装依赖..."
+RUN npm install --verbose --no-fund --no-audit
+
+# 构建前端
+RUN echo "开始构建前端..."
+RUN npm run build --verbose
 
 # 设置脚本执行权限
 RUN chmod +x /app/scripts/start-app.sh /app/scripts/upgrade.sh /app/scripts/upgrade-command.sh
