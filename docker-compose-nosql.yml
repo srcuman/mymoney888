@@ -2,11 +2,9 @@ version: '3.8'
 
 services:
   mymoney888:
-    # 从本地构建（修改代码后需要重新构建）
     build:
       context: .
       dockerfile: Dockerfile
-    
     image: mymoney888-nosql:latest
     container_name: mymoney888
     ports:
@@ -25,7 +23,6 @@ services:
       # ===================================
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # 健康检查
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8888', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
       interval: 30s
@@ -33,7 +30,6 @@ services:
       retries: 3
       start_period: 60s
 
-# 网络配置
 networks:
   default:
     driver: bridge

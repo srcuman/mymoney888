@@ -7,6 +7,14 @@ echo "========================================="
 echo "MyMoney888 启动脚本 (PostgreSQL)"
 echo "========================================="
 
+# ========== 强制清理残留配置 ==========
+# 删除可能存在的 .env 文件，防止旧配置污染
+rm -f /app/.env 2>/dev/null
+rm -f /app/.env.local 2>/dev/null
+rm -f /app/.env.production 2>/dev/null
+echo "✓ 已清理残留配置文件"
+# =====================================
+
 # 检查是否配置了数据库
 if [ -n "$DB_HOST" ] && [ -n "$DB_USER" ] && [ -n "$DB_PASSWORD" ] && [ -n "$DB_NAME" ]; then
     echo "检测到数据库配置: $DB_USER@$DB_HOST:${DB_PORT:-5432}/$DB_NAME"
