@@ -8,6 +8,14 @@ echo "MyMoney888 启动脚本 (PostgreSQL)"
 echo "========================================="
 
 # ========== 强制写入正确配置 ==========
+# 清理可能存储旧配置的位置
+rm -f /app/.env 2>/dev/null
+rm -f /app/.env.local 2>/dev/null
+rm -f /app/.env.production 2>/dev/null
+rm -f /data/.env 2>/dev/null
+rm -f /data/config.json 2>/dev/null
+rm -f /data/config.yaml 2>/dev/null
+
 # 创建新的 .env 文件，使用当前环境变量的值覆盖任何旧配置
 cat > /app/.env << 'ENVEOF'
 # 数据库配置（自动生成，禁止手动修改）
