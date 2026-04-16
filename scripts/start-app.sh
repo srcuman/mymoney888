@@ -7,12 +7,20 @@ echo "========================================="
 echo "MyMoney888 启动脚本 (PostgreSQL)"
 echo "========================================="
 
-# ========== 强制清理残留配置 ==========
-# 删除可能存在的 .env 文件，防止旧配置污染
-rm -f /app/.env 2>/dev/null
-rm -f /app/.env.local 2>/dev/null
-rm -f /app/.env.production 2>/dev/null
-echo "✓ 已清理残留配置文件"
+# ========== 强制写入正确配置 ==========
+# 创建新的 .env 文件，使用当前环境变量的值覆盖任何旧配置
+cat > /app/.env << 'ENVEOF'
+# 数据库配置（自动生成，禁止手动修改）
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_USER=${DB_USER}
+DB_PASSWORD=${DB_PASSWORD}
+DB_NAME=${DB_NAME}
+NODE_ENV=production
+ENVEOF
+
+echo "✓ 已写入新的配置文件"
+echo "   当前配置: ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 # =====================================
 
 # 检查是否配置了数据库
