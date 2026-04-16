@@ -157,21 +157,29 @@ app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
-// PostgreSQL 连接配置
+// PostgreSQL 连接配置 - 强制使用环境变量，不允许默认值覆盖
 const DB_CONFIG = {
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  user: process.env.DB_USER || 'postgres',
+  host: process.env.DB_HOST || '',
+  port: parseInt(process.env.DB_PORT || '0'),
+  user: process.env.DB_USER || '',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'mymoney888',
+  database: process.env.DB_NAME || '',
 }
+
+// 打印原始环境变量（诊断用）
+console.log('🔍 原始环境变量:')
+console.log(`   DB_HOST=${process.env.DB_HOST || '(未设置)'}`)
+console.log(`   DB_PORT=${process.env.DB_PORT || '(未设置)'}`)
+console.log(`   DB_USER=${process.env.DB_USER || '(未设置)'}`)
+console.log(`   DB_PASSWORD=${process.env.DB_PASSWORD ? '***' : '(未设置)'}`)
+console.log(`   DB_NAME=${process.env.DB_NAME || '(未设置)'}`)
 
 // 打印连接配置（不打印密码）
 console.log('🔧 数据库连接配置:')
-console.log(`   - Host: ${DB_CONFIG.host}`)
-console.log(`   - Port: ${DB_CONFIG.port}`)
-console.log(`   - User: ${DB_CONFIG.user}`)
-console.log(`   - Database: ${DB_CONFIG.database}`)
+console.log(`   - Host: ${DB_CONFIG.host || '(空)'}`)
+console.log(`   - Port: ${DB_CONFIG.port || '(空)'}`)
+console.log(`   - User: ${DB_CONFIG.user || '(空)'}`)
+console.log(`   - Database: ${DB_CONFIG.database || '(空)'}`)
 console.log(`   - Password: ${DB_CONFIG.password ? '***' : '(空)'}`)
 
 // PostgreSQL 连接池
