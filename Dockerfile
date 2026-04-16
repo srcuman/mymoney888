@@ -5,25 +5,20 @@ FROM node:25.8.0-alpine
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
     sed -i 's/http:\/\//https:\/\//g' /etc/apk/repositories
 
-# 安装bash、git和构建前端所需的依赖
+# 安装bash、git
 RUN apk add --no-cache bash git
 
 # 设置工作目录
 WORKDIR /app
 
-# 设置npm镜像源（使用多个备选源）
-RUN npm config set registry https://registry.npmmirror.com && \
-    npm config set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ && \
-    npm config set sass_binary_site=https://npmmirror.com/mirrors/node-sass/ && \
-    npm config set puppeteer_download_host=https://npmmirror.com/mirrors/ && \
-    npm config set timeout=120000
+# 设置npm镜像源（只设置必需的）
+RUN npm config set registry https://registry.npmmirror.com
 
 # 复制package.json和package-lock.json
 COPY package*.json ./
 
-# 安装所有依赖（包括 devDependencies，用于构建前端）
-# 添加 --prefer-offline 优先使用缓存
-RUN npm install --prefer-offline || npm install
+# 安装所有依赖（包括 devDependencies）
+RUN npm install
 
 # 复制前端构建所需的文件
 COPY vite.config.js ./
@@ -32,11 +27,10 @@ COPY postcss.config.js ./
 COPY index.html ./
 COPY src ./src
 
-# 构建前端（添加更多错误输出）
-RUN echo "=== 开始构建前端 ===" && \
-    npm run build 2>&1 || (echo "=== 构建失败，查看依赖 ===" && npm ls && echo "=== 查看 node_modules ===" && ls -la node_modules/ | head -20 && exit 1)
+# 构建前端
+RUN npm run build
 
-# 删除可能存在的 .env 文件（防止旧配置污染）
+# 删除可能存在的 .env 文件
 RUN rm -f /app/.env
 
 # 复制其余文件
