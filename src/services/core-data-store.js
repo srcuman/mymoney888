@@ -213,6 +213,9 @@ class CoreDataStore {
       // 初始化空数据结构
       this._data.value = this._getEmptyDataStructure()
       console.log(`[CoreDataStore] 账套 ${ledgerId} 初始化空数据`)
+      
+      // 初始化预置数据
+      await this._initDefaultData()
     }
     
     // 确保核心数据存在
@@ -280,6 +283,87 @@ class CoreDataStore {
   }
 
   /**
+   * 初始化预置数据
+   * 当账套为空时，加载基础数据，确保开箱即用
+   */
+  async _initDefaultData() {
+    console.log('[CoreDataStore] 初始化预置数据...')
+    
+    // 1. 初始化账户数据
+    const defaultAccounts = [
+      // 现金类
+      { id: '1001', name: '我的钱包', category: 'cash', currency: 'CNY', initialBalance: 0, description: '现金账户' },
+      // 银行卡类
+      { id: '1002', name: '中国工商银行储蓄卡', category: 'bank', currency: 'CNY', initialBalance: 0, description: '工资卡' },
+      { id: '1003', name: '中国建设银行储蓄卡', category: 'bank', currency: 'CNY', initialBalance: 0, description: '日常消费卡' },
+      // 支付宝类
+      { id: '1005', name: '支付宝', category: 'alipay', currency: 'CNY', initialBalance: 0, description: '支付宝余额' },
+      { id: '1006', name: '余额宝', category: 'alipay', currency: 'CNY', initialBalance: 0, description: '支付宝理财产品' },
+      // 微信类
+      { id: '1007', name: '微信支付', category: 'wechat', currency: 'CNY', initialBalance: 0, description: '微信零钱' },
+      { id: '1008', name: '微信理财通', category: 'wechat', currency: 'CNY', initialBalance: 0, description: '微信理财' },
+      // 信用卡类
+      { id: '1009', name: '招商银行信用卡', category: 'credit_card', currency: 'CNY', initialBalance: 0, description: '主用信用卡' },
+      // 投资账户类
+      { id: '1011', name: '天天基金账户', category: 'investment', currency: 'CNY', initialBalance: 0, description: '基金投资账户' },
+      { id: '1012', name: '证券账户', category: 'investment', currency: 'CNY', initialBalance: 0, description: '股票投资账户' }
+    ]
+    
+    for (const account of defaultAccounts) {
+      await this.add('accounts', account)
+    }
+    
+    // 2. 初始化分类数据
+    const defaultCategories = [
+      // 支出分类（一级）
+      { id: '2001', name: '餐饮', type: 'expense', parentId: null },
+      { id: '2002', name: '购物', type: 'expense', parentId: null },
+      { id: '2003', name: '居住', type: 'expense', parentId: null },
+      { id: '2004', name: '交通', type: 'expense', parentId: null },
+      { id: '2005', name: '医疗', type: 'expense', parentId: null },
+      { id: '2006', name: '教育', type: 'expense', parentId: null },
+      { id: '2007', name: '娱乐', type: 'expense', parentId: null },
+      { id: '2008', name: '人情', type: 'expense', parentId: null },
+      { id: '2009', name: '金融', type: 'expense', parentId: null },
+      { id: '2010', name: '其他', type: 'expense', parentId: null },
+      // 支出分类（二级）
+      { id: '200101', name: '早午晚餐', type: 'expense', parentId: '2001' },
+      { id: '200102', name: '外卖', type: 'expense', parentId: '2001' },
+      { id: '200201', name: '服装鞋包', type: 'expense', parentId: '2002' },
+      { id: '200202', name: '日用百货', type: 'expense', parentId: '2002' },
+      { id: '200301', name: '房租', type: 'expense', parentId: '2003' },
+      { id: '200302', name: '房贷', type: 'expense', parentId: '2003' },
+      { id: '200401', name: '公共交通', type: 'expense', parentId: '2004' },
+      { id: '200402', name: '打车', type: 'expense', parentId: '2004' },
+      // 收入分类（一级）
+      { id: '3001', name: '工资', type: 'income', parentId: null },
+      { id: '3002', name: '经营', type: 'income', parentId: null },
+      { id: '3003', name: '投资', type: 'income', parentId: null },
+      { id: '3004', name: '其他收入', type: 'income', parentId: null },
+      // 收入分类（二级）
+      { id: '300101', name: '基本工资', type: 'income', parentId: '3001' },
+      { id: '300102', name: '奖金', type: 'income', parentId: '3001' },
+      { id: '300301', name: '基金收益', type: 'income', parentId: '3003' },
+      { id: '300302', name: '股票收益', type: 'income', parentId: '3003' }
+    ]
+    
+    for (const category of defaultCategories) {
+      await this.add('categories', category)
+    }
+    
+    // 3. 初始化账套数据
+    await this.add('ledgers', {
+      id: this.currentLedgerId.value,
+      name: '我的账本',
+      description: '默认记账账本',
+      isDefault: true,
+      isActive: true
+    })
+    
+    console.log('[CoreDataStore] 预置数据初始化完成')
+  }
+
+  /**
    * 重建引用表（ID → 对象映射）
    */
   _rebuildRefs() {
@@ -311,7 +395,7 @@ class CoreDataStore {
     
     this._refs.value = refs
   }
-  
+
   /**
    * 从交易中提取维度使用情况
    * 
