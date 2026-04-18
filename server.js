@@ -265,11 +265,29 @@ async function executeSqlFile(filePath) {
             j++
           }
           const delimiter = cleanContent.substring(i, j)
-          if (j < cleanContent.length && cleanContent[j] !== ' ' && cleanContent[j] !== '\n' && cleanContent[j] !== '\t') {
+          // 检查是否是美元引号定界符（可以是简单的$$）
+          if (delimiter === '$$' || (j < cleanContent.length && cleanContent[j] !== ' ' && cleanContent[j] !== '\n' && cleanContent[j] !== '\t')) {
             // 这是一个美元引号定界符
             inDollarQuote = true
             dollarQuoteDelimiter = delimiter
             currentStatement += delimiter
+            // 如果是带命名的美元引号，跳过命名部分
+            if (delimiter !== '$$' && j < cleanContent.length) {
+              while (j < cleanContent.length && cleanContent[j] !== '$') {
+                j++
+              }
+              if (j < cleanContent.length) {
+                let k = j
+                while (k < cleanContent.length && cleanContent[k] === '$') {
+                  k++
+                }
+                const closingDelimiter = cleanContent.substring(j, k)
+                if (closingDelimiter === delimiter) {
+                  currentStatement += cleanContent.substring(j, k)
+                  j = k - 1
+                }
+              }
+            }
             i = j - 1
           } else {
             currentStatement += char
