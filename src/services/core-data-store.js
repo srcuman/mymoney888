@@ -186,8 +186,11 @@ class CoreDataStore {
     
     this.currentLedgerId.value = ledgerId
     sessionStorage.setItem('currentLedgerId', ledgerId)
+    
+    // 先加载数据
     this.loadAllData()
     
+    // 然后再派发事件，让组件知道账套已切换
     window.dispatchEvent(new CustomEvent('ledgerChanged', {
       detail: { ledgerId }
     }))
@@ -224,9 +227,11 @@ class CoreDataStore {
         await this._initDefaultData()
       }
     } catch (error) {
-      // API请求失败，保持当前数据结构不变
+      // API请求失败，初始化空数据结构并加载预置数据
       console.error(`[CoreDataStore] 加载数据失败:`, error)
-      console.log(`[CoreDataStore] 保持当前数据结构不变`)
+      console.log(`[CoreDataStore] 初始化预置数据`)
+      this._data.value = this._getEmptyDataStructure()
+      await this._initDefaultData()
     }
     
     // 确保核心数据存在
@@ -271,7 +276,15 @@ class CoreDataStore {
       ledgers: [],
       users: [],
       user_settings: [],
-      user_defaults: []
+      user_defaults: [],
+      
+      // 维度数据（成员、商家、标签、支付渠道）- 独立存储
+      dimensions: {
+        members: [],
+        merchants: [],
+        tags: [],
+        paymentChannels: []
+      }
     }
   }
   
@@ -289,6 +302,16 @@ class CoreDataStore {
     for (const key of requiredKeys) {
       if (!this._data.value[key]) {
         this._data.value[key] = []
+      }
+    }
+    
+    // 确保维度数据结构完整
+    if (!this._data.value.dimensions) {
+      this._data.value.dimensions = {
+        members: [],
+        merchants: [],
+        tags: [],
+        paymentChannels: []
       }
     }
   }
@@ -371,6 +394,16 @@ class CoreDataStore {
       isActive: true
     })
     
+    // 4. 初始化维度数据（成员、商家、标签、支付渠道）
+    this._data.value.dimensions = {
+      members: ['我自己', '家人'],
+      merchants: [],
+      tags: ['重要', '日常'],
+      paymentChannels: ['现金', '支付宝', '微信', '银行卡']
+    }
+    // 保存维度数据
+    await this._save('dimensions')
+    
     console.log('[CoreDataStore] 预置数据初始化完成')
   }
 
@@ -414,14 +447,17 @@ class CoreDataStore {
    */
   _extractDimensionUsage() {
     const transactions = this._data.value.transactions || []
+    const storedDimensions = this._data.value.dimensions || { members: [], merchants: [], tags: [], paymentChannels: [] }
     
+    // 从已存储的维度数据初始化
     const usage = {
-      members: new Set(),
-      merchants: new Set(),
-      tags: new Set(),
-      paymentChannels: new Set()
+      members: new Set(storedDimensions.members || []),
+      merchants: new Set(storedDimensions.merchants || []),
+      tags: new Set(storedDimensions.tags || []),
+      paymentChannels: new Set(storedDimensions.paymentChannels || [])
     }
     
+    // 从交易中提取使用的维度，合并到已存储的维度中
     for (const t of transactions) {
       if (t.member) usage.members.add(t.member)
       if (t.merchant) usage.merchants.add(t.merchant)
@@ -435,13 +471,19 @@ class CoreDataStore {
       if (t.paymentChannel) usage.paymentChannels.add(t.paymentChannel)
     }
     
-    // 转换为对象并更新响应式数据
-    this._dimensionUsage.value = {
+    // 转换为数组
+    const dimensionData = {
       members: Array.from(usage.members),
       merchants: Array.from(usage.merchants),
       tags: Array.from(usage.tags),
       paymentChannels: Array.from(usage.paymentChannels)
     }
+    
+    // 更新响应式数据
+    this._dimensionUsage.value = dimensionData
+    
+    // 保存到持久化存储
+    this._data.value.dimensions = dimensionData
   }
 
   // =========================================================================
@@ -769,33 +811,38 @@ class CoreDataStore {
   }
 
   /**
-   * 添加维度（通过添加使用该维度的交易）
+   * 添加维度（直接保存到dimensions，不创建临时交易）
    */
   async addDimension(type, data) {
-    // 创建临时交易来关联新维度，确保维度能够持久化
-    const fieldName = type === 'paymentChannels' ? 'paymentChannel' : type === 'tags' ? 'tag' : type
-    
-    const tempTransaction = {
-      id: this._generateId(),
-      date: new Date().toISOString().split('T')[0],
-      type: 'expense',
-      amount: 0,
-      account: this._data.value.accounts[0]?.id || '1001',
-      category: this._data.value.categories.find(c => c.type === 'expense')?.id || '2001',
-      [fieldName]: data.name,
-      isDimensionPlaceholder: true // 标记为维度占位交易
+    // 直接添加到dimensions数组
+    if (!this._data.value.dimensions) {
+      this._data.value.dimensions = {
+        members: [],
+        merchants: [],
+        tags: [],
+        paymentChannels: []
+      }
     }
-
-    await this.add('transactions', tempTransaction)
     
-    // 重新提取维度使用情况
-    this._extractDimensionUsage()
+    const fieldName = type === 'paymentChannels' ? 'paymentChannels' : type
+    if (!this._data.value.dimensions[fieldName].includes(data.name)) {
+      this._data.value.dimensions[fieldName].push(data.name)
+    }
+    
+    // 更新响应式数据
+    this._dimensionUsage.value = { ...this._data.value.dimensions }
+    
+    // 保存维度数据
+    await this._save('dimensions')
+    
+    // 同步到 PostgreSQL
+    this._scheduleSync('dimensions')
     
     return { success: true, id: `dim_${type}_${Date.now()}` }
   }
 
   /**
-   * 更新维度（更新维度使用情况）
+   * 更新维度（更新维度数据）
    */
   async updateDimension(type, id, updates) {
     const fieldName = type === 'paymentChannels' ? 'paymentChannels' : type
@@ -804,16 +851,22 @@ class CoreDataStore {
     
     if (oldName === newName) return { success: true }
     
-    // 更新维度使用情况
-    const currentItems = this._dimensionUsage.value[fieldName]
+    // 更新维度数据
+    const currentItems = this._data.value.dimensions[fieldName] || []
     const index = currentItems.indexOf(oldName)
     if (index > -1) {
       currentItems[index] = newName
-      this._dimensionUsage.value[fieldName] = [...currentItems]
+      this._data.value.dimensions[fieldName] = [...currentItems]
     }
     
-    // 保存数据
-    await this._save('transactions')
+    // 更新响应式数据
+    this._dimensionUsage.value = { ...this._data.value.dimensions }
+    
+    // 保存维度数据
+    await this._save('dimensions')
+    
+    // 同步到 PostgreSQL
+    this._scheduleSync('dimensions')
     
     return { success: true }
   }
@@ -829,16 +882,22 @@ class CoreDataStore {
       return { success: false, message: '该维度已被交易使用，无法删除' }
     }
     
-    // 从维度使用情况中移除
-    const currentItems = this._dimensionUsage.value[fieldName]
+    // 从维度数据中移除
+    const currentItems = this._data.value.dimensions[fieldName] || []
     const index = currentItems.indexOf(name)
     if (index > -1) {
       currentItems.splice(index, 1)
-      this._dimensionUsage.value[fieldName] = [...currentItems]
+      this._data.value.dimensions[fieldName] = [...currentItems]
     }
     
-    // 保存数据
-    await this._save('transactions')
+    // 更新响应式数据
+    this._dimensionUsage.value = { ...this._data.value.dimensions }
+    
+    // 保存维度数据
+    await this._save('dimensions')
+    
+    // 同步到 PostgreSQL
+    this._scheduleSync('dimensions')
     
     return { success: true }
   }

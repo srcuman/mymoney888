@@ -41,55 +41,97 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import coreDataStore from '../../services/core-data-store.js'
 
-// 账户列表
-const accounts = ref([
-  { id: 1, name: '现金', balance: 1000 },
-  { id: 2, name: '银行卡', balance: 5000 },
-  { id: 3, name: '支付宝', balance: 2000 },
-  { id: 4, name: '微信', balance: 1500 }
-])
+// 数据版本号（用于触发响应式更新）
+const dataVersion = ref(0)
+
+// 监听数据变更
+const handleDataChanged = () => {
+  dataVersion.value++
+}
+
+// 账户列表（从 coreDataStore 获取实时数据）
+const accounts = computed(() => {
+  // 访问 version 触发响应式
+  const version = dataVersion.value
+  void version
+  
+  const result = []
+  
+  // 1. 基础账户（手动创建的账户，排除信用卡关联账户）
+  const baseAccounts = coreDataStore.getRaw('accounts') || []
+  const creditCards = coreDataStore.getRaw('credit_cards') || []
+  const creditCardLinkedAccountIds = creditCards.map(card => card.linkedAccountId)
+  
+  baseAccounts.forEach(account => {
+    if (!creditCardLinkedAccountIds.includes(account.id)) {
+      // 计算账户余额
+      const balance = coreDataStore.calculateAccountBalance(account.id)
+      result.push({ ...account, balance })
+    }
+  })
+  
+  // 2. 添加信用卡账户
+  creditCards.forEach(card => {
+    const usedCredit = card.usedCredit || (card.creditLimit - card.availableCredit)
+    result.push({
+      id: card.id,
+      name: card.name,
+      balance: -usedCredit,
+      category: 'credit_card'
+    })
+  })
+  
+  return result
+})
 
 // 交易记录
-const transactions = ref([
-  { id: 1, type: 'expense', amount: 50, category: '餐饮', account: 1, description: '午餐', date: '2026-03-01' },
-  { id: 2, type: 'income', amount: 5000, category: '工资', account: 2, description: '月薪', date: '2026-03-01' },
-  { id: 3, type: 'expense', amount: 200, category: '购物', account: 3, description: '超市购物', date: '2026-02-29' },
-  { id: 4, type: 'expense', amount: 30, category: '交通', account: 4, description: '打车', date: '2026-02-29' }
-])
+const transactions = computed(() => {
+  const version = dataVersion.value
+  void version
+  return coreDataStore.getRaw('transactions') || []
+})
 
-// 计算总资产
+// 计算总资产（排除负债）
 const totalAssets = computed(() => {
-  return accounts.value.reduce((total, account) => total + account.balance, 0)
+  const version = dataVersion.value
+  void version
+  return accounts.value
+    .filter(a => a.category !== 'credit_card' && a.category !== 'loan')
+    .reduce((total, account) => total + (account.balance || 0), 0)
 })
 
 // 计算本月收入
 const monthlyIncome = computed(() => {
+  const version = dataVersion.value
+  void version
   const currentMonth = new Date().toISOString().slice(0, 7)
   return transactions.value
-    .filter(t => t.type === 'income' && t.date.startsWith(currentMonth))
-    .reduce((total, t) => total + t.amount, 0)
+    .filter(t => t.type === 'income' && t.date && t.date.startsWith(currentMonth))
+    .reduce((total, t) => total + (t.amount || 0), 0)
 })
 
 // 计算本月支出
 const monthlyExpense = computed(() => {
+  const version = dataVersion.value
+  void version
   const currentMonth = new Date().toISOString().slice(0, 7)
   return transactions.value
-    .filter(t => t.type === 'expense' && t.date.startsWith(currentMonth))
-    .reduce((total, t) => total + t.amount, 0)
+    .filter(t => t.type === 'expense' && t.date && t.date.startsWith(currentMonth))
+    .reduce((total, t) => total + (t.amount || 0), 0)
 })
 
 onMounted(() => {
-  // 从本地存储加载数据
-  const savedAccounts = JSON.stringify(coreDataStore.getRaw('accounts'))
-  const savedTransactions = JSON.stringify(coreDataStore.getRaw('transactions'))
-  if (savedAccounts) {
-    accounts.value = JSON.parse(savedAccounts)
-  }
-  if (savedTransactions) {
-    transactions.value = JSON.parse(savedTransactions)
-  }
+  window.addEventListener('dataChanged', handleDataChanged)
+  window.addEventListener('transactionsUpdated', handleDataChanged)
+  window.addEventListener('accountsUpdated', handleDataChanged)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('dataChanged', handleDataChanged)
+  window.removeEventListener('transactionsUpdated', handleDataChanged)
+  window.removeEventListener('accountsUpdated', handleDataChanged)
 })
 </script>
