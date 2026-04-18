@@ -249,11 +249,63 @@ async function executeSqlFile(filePath) {
       // 移除多行注释
       cleanContent = cleanContent.replace(/\/\*[\s\S]*?\*\//g, '')
       
-      // 分割SQL语句并执行
-      const statements = cleanContent
-        .split(';')
-        .map(stmt => stmt.trim())
-        .filter(stmt => stmt.length > 0)
+      // 正确分割SQL语句，处理函数定义中的分号
+      const statements = []
+      let currentStatement = ''
+      let inDollarQuote = false
+      let dollarQuoteDelimiter = ''
+      
+      for (let i = 0; i < cleanContent.length; i++) {
+        const char = cleanContent[i]
+        
+        // 检查是否进入或退出美元引号
+        if (!inDollarQuote && char === '$') {
+          let j = i + 1
+          while (j < cleanContent.length && cleanContent[j] === '$') {
+            j++
+          }
+          const delimiter = cleanContent.substring(i, j)
+          if (j < cleanContent.length && cleanContent[j] !== ' ' && cleanContent[j] !== '\n' && cleanContent[j] !== '\t') {
+            // 这是一个美元引号定界符
+            inDollarQuote = true
+            dollarQuoteDelimiter = delimiter
+            currentStatement += delimiter
+            i = j - 1
+          } else {
+            currentStatement += char
+          }
+        } else if (inDollarQuote && char === '$') {
+          let j = i + 1
+          while (j < cleanContent.length && cleanContent[j] === '$') {
+            j++
+          }
+          const delimiter = cleanContent.substring(i, j)
+          if (delimiter === dollarQuoteDelimiter) {
+            // 退出美元引号
+            inDollarQuote = false
+            dollarQuoteDelimiter = ''
+            currentStatement += delimiter
+            i = j - 1
+          } else {
+            currentStatement += char
+          }
+        } else if (!inDollarQuote && char === ';') {
+          // 遇到分号，结束当前语句
+          currentStatement = currentStatement.trim()
+          if (currentStatement.length > 0) {
+            statements.push(currentStatement)
+            currentStatement = ''
+          }
+        } else {
+          currentStatement += char
+        }
+      }
+      
+      // 处理最后一条语句
+      currentStatement = currentStatement.trim()
+      if (currentStatement.length > 0) {
+        statements.push(currentStatement)
+      }
       
       console.log(`📋 找到 ${statements.length} 条SQL语句`)
       
