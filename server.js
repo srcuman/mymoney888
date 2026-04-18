@@ -612,34 +612,66 @@ app.post('/api/sync', async (req, res) => {
         
         const dataArray = Array.isArray(data) ? data : []
         
+        // dimensions 表特殊处理：使用 (ledger_id, type, name) 作为唯一键
+        const isDimensionsTable = table === 'dimensions'
+        
         for (const item of dataArray) {
           try {
             // 构建 UPSERT 语句 - PostgreSQL 使用 ON CONFLICT
-            const id = item.id
+            let id = item.id
             const fields = Object.keys(item).filter(k => k !== 'id')
             const values = fields.map(k => item[k])
             
-            // 检查记录是否存在
-            const existing = await client.query(
-              `SELECT id FROM ${table} WHERE id = $1`,
-              [id]
-            )
-            
-            if (existing.rows.length > 0) {
-              // 更新 - PostgreSQL 语法
-              const setClause = fields.map((f, i) => `${f} = $${i + 2}`).join(', ')
-              await client.query(
-                `UPDATE ${table} SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-                [id, ...values]
+            // dimensions 表使用唯一键查询
+            if (isDimensionsTable) {
+              const ledgerId = item.ledger_id || effectiveLedgerId
+              const type = item.type
+              const name = item.name
+              
+              const existing = await client.query(
+                `SELECT id FROM ${table} WHERE ledger_id = $1 AND type = $2 AND name = $3`,
+                [ledgerId, type, name]
               )
+              
+              if (existing.rows.length > 0) {
+                // 更新
+                const setClause = fields.map((f, i) => `${f} = $${i + 2}`).join(', ')
+                await client.query(
+                  `UPDATE ${table} SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+                  [existing.rows[0].id, ...values]
+                )
+              } else {
+                // 插入时不指定 id，使用默认序列值
+                const fieldList = fields.join(', ')
+                const placeholders = fields.map((_, i) => `$${i + 1}`).join(', ')
+                await client.query(
+                  `INSERT INTO ${table} (${fieldList}) VALUES (${placeholders})`,
+                  [...values]
+                )
+              }
             } else {
-              // 插入 - PostgreSQL 语法
-              const fieldList = ['id', ...fields].join(', ')
-              const placeholders = fields.map((_, i) => `$${i + 2}`).join(', ')
-              await client.query(
-                `INSERT INTO ${table} (id, ${fieldList}) VALUES ($1, ${placeholders})`,
-                [id, ...values]
+              // 其他表使用 id 查询
+              const existing = await client.query(
+                `SELECT id FROM ${table} WHERE id = $1`,
+                [id]
               )
+              
+              if (existing.rows.length > 0) {
+                // 更新 - PostgreSQL 语法
+                const setClause = fields.map((f, i) => `${f} = $${i + 2}`).join(', ')
+                await client.query(
+                  `UPDATE ${table} SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+                  [id, ...values]
+                )
+              } else {
+                // 插入 - PostgreSQL 语法
+                const fieldList = ['id', ...fields].join(', ')
+                const placeholders = fields.map((_, i) => `$${i + 2}`).join(', ')
+                await client.query(
+                  `INSERT INTO ${table} (id, ${fieldList}) VALUES ($1, ${placeholders})`,
+                  [id, ...values]
+                )
+              }
             }
             successCount++
           } catch (itemError) {

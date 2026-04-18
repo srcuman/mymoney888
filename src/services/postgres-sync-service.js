@@ -203,10 +203,36 @@ class PostgresSyncService {
 
   /**
    * 获取本地数据（从 DataStore）
+   * 注意：dimensions 在 CoreDataStore 中是对象格式 {members:[],merchants:[],...}
+   *       在 PostgreSQL 中是行格式 {type, name, ...}
    */
   _getLocalData(table) {
     // 尝试从 CoreDataStore 获取
     if (window.coreDataStore) {
+      // 特殊处理 dimensions 表
+      if (table === 'dimensions') {
+        const dims = window.coreDataStore.getRaw('dimensions')
+        if (dims) {
+          // 将 CoreDataStore 格式转换为 PostgreSQL 格式（行格式）
+          const rows = []
+          for (const [type, names] of Object.entries(dims)) {
+            if (Array.isArray(names)) {
+              for (const name of names) {
+                rows.push({
+                  id: `dim_${type}_${name}`,
+                  type,
+                  name,
+                  user_id: parseInt(localStorage.getItem('userId')) || 1,
+                  ledger_id: localStorage.getItem('currentLedgerId') || 'default'
+                })
+              }
+            }
+          }
+          return rows
+        }
+        return null
+      }
+      
       const data = window.coreDataStore.getRaw(table)
       if (data && data.length > 0) {
         return data
@@ -278,7 +304,20 @@ class PostgresSyncService {
   _updateLocalData(table, data) {
     // 更新到 CoreDataStore
     if (window.coreDataStore) {
-      window.coreDataStore._data.value[table] = data
+      // 特殊处理 dimensions 表（PostgreSQL行格式 -> CoreDataStore对象格式）
+      if (table === 'dimensions' && Array.isArray(data)) {
+        const dims = { members: [], merchants: [], tags: [], paymentChannels: [] }
+        for (const row of data) {
+          const type = row.type
+          const name = row.name
+          if (type && name && dims[type]) {
+            dims[type].push(name)
+          }
+        }
+        window.coreDataStore._data.value.dimensions = dims
+      } else {
+        window.coreDataStore._data.value[table] = data
+      }
     }
     
     // 更新到旧版 DataStore
