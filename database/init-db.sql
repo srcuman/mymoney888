@@ -762,6 +762,11 @@ CREATE TRIGGER update_user_defaults_updated_at BEFORE UPDATE ON user_defaults FO
 -- 初始化默认数据
 -- ============================================
 
+-- 插入默认用户（user_id = 0 表示系统预设）
+INSERT INTO users (id, name, email, password_hash) VALUES
+(0, 'System', 'system@mymoney888.com', 'system')
+ON CONFLICT DO NOTHING;
+
 -- 插入默认分类（user_id = 0 表示系统预设）
 INSERT INTO categories (id, user_id, ledger_id, name, type, icon, color, is_default, sort_order) VALUES
 -- 默认支出分类
