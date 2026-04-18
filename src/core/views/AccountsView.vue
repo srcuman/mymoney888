@@ -90,88 +90,99 @@ const accountCategories = [
 const dataVersion = ref(0)
 
 // 计算属性：融合基础账户和衍生账户
-const accounts = computed(() => {
-  // 访问 version 触发响应式
-  const version = dataVersion.value
-  void version
-  
-  const result = []
-  
-  // 1. 基础账户（手动创建的账户）
-  const baseAccounts = coreDataStore.getRaw('accounts') || []
-  baseAccounts.forEach(account => {
-    result.push({ ...account })
+  const accounts = computed(() => {
+    // 访问 version 触发响应式
+    const version = dataVersion.value
+    void version
+    
+    const result = []
+    
+    // 1. 基础账户（手动创建的账户，排除信用卡关联账户）
+    const baseAccounts = coreDataStore.getRaw('accounts') || []
+    const creditCards = coreDataStore.getRaw('credit_cards') || []
+    const creditCardLinkedAccountIds = creditCards.map(card => card.linkedAccountId)
+    
+    baseAccounts.forEach(account => {
+      // 排除信用卡关联账户，因为它们会在信用卡处理部分被更新和显示
+      if (!creditCardLinkedAccountIds.includes(account.id)) {
+        result.push({ ...account })
+      }
+    })
+    
+    // 2. 添加信用卡账户（从 credit_cards 计算，但显示为独立账户）
+    creditCards.forEach(card => {
+      // 查找是否已存在关联账户（通过 linkedAccountId）
+      const existingLinkedAccount = result.find(a => a.id === card.linkedAccountId)
+      if (existingLinkedAccount) {
+        // 关联账户已存在，更新余额和名称
+        existingLinkedAccount.balance = card.usedCredit || (card.creditLimit - card.availableCredit)
+        existingLinkedAccount.name = card.name
+        existingLinkedAccount.sourceType = 'creditCard'
+        existingLinkedAccount.linkedCreditCardId = card.id
+        existingLinkedAccount.creditLimit = card.creditLimit
+        existingLinkedAccount.availableCredit = card.availableCredit
+      } else {
+        // 创建关联的账户（用于在账户管理页面展示）
+        result.push({
+          id: card.id,
+          name: card.name,
+          balance: card.usedCredit || (card.creditLimit - card.availableCredit),
+          category: 'credit_card',
+          sourceType: 'creditCard',
+          linkedCreditCardId: card.id,
+          creditLimit: card.creditLimit,
+          availableCredit: card.availableCredit
+        })
+      }
+    })
+    
+    // 3. 添加投资账户（从 investment_accounts 计算）
+    const investmentAccounts = coreDataStore.getRaw('investment_accounts') || []
+    investmentAccounts.forEach(account => {
+      // 查找是否已存在关联账户（通过 linkedAccountId）
+      const existingLinkedAccount = result.find(a => a.id === account.linkedAccountId)
+      if (existingLinkedAccount) {
+        // 关联账户已存在，更新余额
+        existingLinkedAccount.balance = account.totalValue || 0
+        existingLinkedAccount.sourceType = 'investmentAccount'
+        existingLinkedAccount.linkedInvestmentAccountId = account.id
+      } else {
+        // 创建关联的账户
+        result.push({
+          id: account.id,
+          name: account.name,
+          balance: account.totalValue || 0,
+          category: 'investment',
+          sourceType: 'investmentAccount',
+          linkedInvestmentAccountId: account.id
+        })
+      }
+    })
+    
+    // 4. 添加贷款账户（从 loans 计算）
+    const loans = coreDataStore.getRaw('loans') || []
+    loans.forEach(loan => {
+      // 查找是否已存在（通过 linkedLoanId 关联）
+      const existingByLink = result.find(a => a.linkedLoanId === loan.id)
+      if (existingByLink) {
+        // 关联账户已存在，更新余额
+        existingByLink.balance = -(loan.remainingAmount || loan.amount)
+      } else {
+        // 创建关联的账户（贷款余额为负表示负债）
+        result.push({
+          id: loan.id,
+          name: loan.name,
+          balance: -(loan.remainingAmount || loan.amount),
+          category: 'loan',
+          sourceType: 'loan',
+          linkedLoanId: loan.id,
+          totalAmount: loan.amount
+        })
+      }
+    })
+    
+    return result
   })
-  
-  // 2. 添加信用卡账户（从 credit_cards 计算，但显示为独立账户）
-  const creditCards = coreDataStore.getRaw('credit_cards') || []
-  creditCards.forEach(card => {
-    // 查找是否已存在（通过 linkedCreditCardId 关联）
-    const existingByLink = result.find(a => a.linkedCreditCardId === card.id)
-    if (existingByLink) {
-      // 关联账户已存在，更新余额
-      existingByLink.balance = card.usedCredit || (card.creditLimit - card.availableCredit)
-      existingByLink.name = card.name
-    } else {
-      // 创建关联的账户（用于在账户管理页面展示）
-      result.push({
-        id: card.id,
-        name: card.name,
-        balance: card.usedCredit || (card.creditLimit - card.availableCredit),
-        category: 'credit_card',
-        sourceType: 'creditCard',
-        linkedCreditCardId: card.id,
-        creditLimit: card.creditLimit,
-        availableCredit: card.availableCredit
-      })
-    }
-  })
-  
-  // 3. 添加投资账户（从 investment_accounts 计算）
-  const investmentAccounts = coreDataStore.getRaw('investment_accounts') || []
-  investmentAccounts.forEach(account => {
-    // 查找是否已存在（通过 linkedInvestmentAccountId 关联）
-    const existingByLink = result.find(a => a.linkedInvestmentAccountId === account.id)
-    if (existingByLink) {
-      // 关联账户已存在，更新余额
-      existingByLink.balance = account.totalValue || 0
-    } else {
-      // 创建关联的账户
-      result.push({
-        id: account.id,
-        name: account.name,
-        balance: account.totalValue || 0,
-        category: 'investment',
-        sourceType: 'investmentAccount',
-        linkedInvestmentAccountId: account.id
-      })
-    }
-  })
-  
-  // 4. 添加贷款账户（从 loans 计算）
-  const loans = coreDataStore.getRaw('loans') || []
-  loans.forEach(loan => {
-    // 查找是否已存在（通过 linkedLoanId 关联）
-    const existingByLink = result.find(a => a.linkedLoanId === loan.id)
-    if (existingByLink) {
-      // 关联账户已存在，更新余额
-      existingByLink.balance = -(loan.remainingAmount || loan.amount)
-    } else {
-      // 创建关联的账户（贷款余额为负表示负债）
-      result.push({
-        id: loan.id,
-        name: loan.name,
-        balance: -(loan.remainingAmount || loan.amount),
-        category: 'loan',
-        sourceType: 'loan',
-        linkedLoanId: loan.id,
-        totalAmount: loan.amount
-      })
-    }
-  })
-  
-  return result
-})
 
 // 按类别分组账户
 const accountsByCategory = computed(() => {

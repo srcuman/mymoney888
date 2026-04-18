@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-8">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">交易流水查询</h2>
+      <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">全部交易查询</h2>
       <div class="space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -331,10 +331,10 @@ const expenseCategories = computed(() => coreDataStore.getRaw('categories')?.fil
 const incomeCategories = computed(() => coreDataStore.getRaw('categories')?.filter(c => c.type === 'income') || [])
 
 // 账户列表
-const accounts = computed(() => coreDataStore.get('accounts').value || [])
+const accounts = computed(() => coreDataStore.getData('accounts').value || [])
 
 // 交易记录
-const transactions = computed(() => coreDataStore.get('transactions').value || [])
+const transactions = computed(() => coreDataStore.getData('transactions').value || [])
 
 // 筛选条件
 const filters = ref({
@@ -726,7 +726,7 @@ const handleLedgerChange = () => {
 // 监听交易数据更新事件（来自 DataStore）
 const handleDataChanged = (e) => {
   // 触发 Vue 响应式更新
-  coreDataStore.refresh(e.detail?.key)
+  // 由于使用了计算属性，数据会自动更新
 }
 
 onMounted(() => {
@@ -739,11 +739,11 @@ onMounted(() => {
   // 监听从信用卡管理跳转过来的事件
   window.addEventListener('showBillDetail', (e) => {
     if (e.detail && e.detail.billId) {
-      const allBills = coreDataStore.get('creditCardBills').value || []
+      const allBills = coreDataStore.getRaw('credit_card_bills') || []
       // 使用 String() 转换进行类型安全比较
       const bill = allBills.find(b => String(b.id) === String(e.detail.billId))
       if (bill) {
-        const allTransactions = coreDataStore.get('transactions').value || []
+        const allTransactions = coreDataStore.getRaw('transactions') || []
         // 使用 String() 转换进行类型安全比较
         const billTransactions = allTransactions.filter(t => String(t.creditCardBillId) === String(e.detail.billId))
         billDetail.value = { ...bill, transactions: billTransactions }
@@ -767,7 +767,7 @@ const billDetail = ref(null)
 
 // 获取信用卡账单数据
 const loadCreditCardBills = () => {
-  return coreDataStore.get('creditCardBills').value || []
+  return coreDataStore.getRaw('credit_card_bills') || []
 }
 
 // 显示分期详情

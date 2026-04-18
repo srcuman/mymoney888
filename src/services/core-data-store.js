@@ -66,7 +66,7 @@
  * =============================================================================
  */
 
-import { ref, shallowRef } from 'vue'
+import { ref, shallowRef, computed } from 'vue'
 import { APP_VERSION } from '../config/version.js'
 
 /**
@@ -131,7 +131,12 @@ class CoreDataStore {
     this._isOnline = navigator.onLine
     
     // 维度使用情况（从交易中提取）
-    this._dimensionUsage = {}
+    this._dimensionUsage = ref({
+      members: [],
+      merchants: [],
+      tags: [],
+      paymentChannels: []
+    })
     
     // 初始化
     this._init()
@@ -203,19 +208,25 @@ class CoreDataStore {
   async loadAllData() {
     const ledgerId = this.currentLedgerId.value
     
-    // 从 API 加载
-    const response = await apiRequest(`/api/datastore/load?ledgerId=${encodeURIComponent(ledgerId)}`)
-    
-    if (response.success && response.data) {
-      this._data.value = response.data
-      console.log(`[CoreDataStore] 加载账套: ${ledgerId}`)
-    } else {
-      // 初始化空数据结构
-      this._data.value = this._getEmptyDataStructure()
-      console.log(`[CoreDataStore] 账套 ${ledgerId} 初始化空数据`)
+    try {
+      // 从 API 加载
+      const response = await apiRequest(`/api/datastore/load?ledgerId=${encodeURIComponent(ledgerId)}`)
       
-      // 初始化预置数据
-      await this._initDefaultData()
+      if (response.success && response.data) {
+        this._data.value = response.data
+        console.log(`[CoreDataStore] 加载账套: ${ledgerId}`)
+      } else {
+        // API响应成功但数据为空，初始化空数据结构
+        this._data.value = this._getEmptyDataStructure()
+        console.log(`[CoreDataStore] 账套 ${ledgerId} 初始化空数据`)
+        
+        // 初始化预置数据
+        await this._initDefaultData()
+      }
+    } catch (error) {
+      // API请求失败，保持当前数据结构不变
+      console.error(`[CoreDataStore] 加载数据失败:`, error)
+      console.log(`[CoreDataStore] 保持当前数据结构不变`)
     }
     
     // 确保核心数据存在
@@ -270,7 +281,7 @@ class CoreDataStore {
   _ensureCoreData() {
     const requiredKeys = [
       'transactions', 'accounts', 'categories',
-      'credit_cards', 'credit_cards_bills',
+      'credit_cards', 'credit_card_bills',
       'loans', 'loan_payments',
       'investment_accounts', 'investment_details', 'net_value_history'
     ]
@@ -424,8 +435,8 @@ class CoreDataStore {
       if (t.paymentChannel) usage.paymentChannels.add(t.paymentChannel)
     }
     
-    // 转换为对象
-    this._dimensionUsage = {
+    // 转换为对象并更新响应式数据
+    this._dimensionUsage.value = {
       members: Array.from(usage.members),
       merchants: Array.from(usage.merchants),
       tags: Array.from(usage.tags),
@@ -466,7 +477,8 @@ class CoreDataStore {
     item.updatedAt = new Date().toISOString()
     
     data.push(item)
-    this._data.value[key] = data
+    // 创建新数组以确保Vue检测到变化
+    this._data.value[key] = [...data]
     
     // 保存到 API
     await this._save(key)
@@ -730,11 +742,105 @@ class CoreDataStore {
    */
   getDimensions() {
     return {
-      members: this._dimensionUsage.members || [],
-      merchants: this._dimensionUsage.merchants || [],
-      tags: this._dimensionUsage.tags || [],
-      paymentChannels: this._dimensionUsage.paymentChannels || []
+      members: this._dimensionUsage.value.members || [],
+      merchants: this._dimensionUsage.value.merchants || [],
+      tags: this._dimensionUsage.value.tags || [],
+      paymentChannels: this._dimensionUsage.value.paymentChannels || []
     }
+  }
+
+  /**
+   * 获取维度项目列表（用于下拉选择）
+   */
+  getDimensionItems(type) {
+    const items = this._dimensionUsage.value[type] || []
+    return items.map((name, index) => ({
+      id: `dim_${type}_${index}`,
+      name
+    }))
+  }
+
+  /**
+   * 检查维度是否被使用
+   */
+  isDimensionUsed(type, name) {
+    const items = this._dimensionUsage.value[type] || []
+    return items.includes(name)
+  }
+
+  /**
+   * 添加维度（通过添加使用该维度的交易）
+   */
+  async addDimension(type, data) {
+    // 创建临时交易来关联新维度，确保维度能够持久化
+    const fieldName = type === 'paymentChannels' ? 'paymentChannel' : type === 'tags' ? 'tag' : type
+    
+    const tempTransaction = {
+      id: this._generateId(),
+      date: new Date().toISOString().split('T')[0],
+      type: 'expense',
+      amount: 0,
+      account: this._data.value.accounts[0]?.id || '1001',
+      category: this._data.value.categories.find(c => c.type === 'expense')?.id || '2001',
+      [fieldName]: data.name,
+      isDimensionPlaceholder: true // 标记为维度占位交易
+    }
+
+    await this.add('transactions', tempTransaction)
+    
+    // 重新提取维度使用情况
+    this._extractDimensionUsage()
+    
+    return { success: true, id: `dim_${type}_${Date.now()}` }
+  }
+
+  /**
+   * 更新维度（更新维度使用情况）
+   */
+  async updateDimension(type, id, updates) {
+    const fieldName = type === 'paymentChannels' ? 'paymentChannels' : type
+    const oldName = id.split('_').slice(2).join('_')
+    const newName = updates.name
+    
+    if (oldName === newName) return { success: true }
+    
+    // 更新维度使用情况
+    const currentItems = this._dimensionUsage.value[fieldName]
+    const index = currentItems.indexOf(oldName)
+    if (index > -1) {
+      currentItems[index] = newName
+      this._dimensionUsage.value[fieldName] = [...currentItems]
+    }
+    
+    // 保存数据
+    await this._save('transactions')
+    
+    return { success: true }
+  }
+
+  /**
+   * 删除维度（只能删除未使用的维度）
+   */
+  async deleteDimension(type, id) {
+    const fieldName = type === 'paymentChannels' ? 'paymentChannels' : type
+    const name = id.split('_').slice(2).join('_')
+    
+    if (this.isDimensionUsed(type, name)) {
+      return { success: false, message: '该维度已被交易使用，无法删除' }
+    }
+    
+    // 从维度使用情况中移除
+    const currentItems = this._dimensionUsage.value[fieldName]
+    const index = currentItems.indexOf(name)
+    if (index > -1) {
+      currentItems.splice(index, 1)
+      this._dimensionUsage.value[fieldName] = [...currentItems]
+    }
+    
+    // 保存数据
+    await this._save('transactions')
+    
+    return { success: true }
   }
 
   // =========================================================================
@@ -882,25 +988,25 @@ class CoreDataStore {
   _updateDimensionUsage(mode, transaction) {
     if (mode === 'add') {
       if (transaction.member) {
-        if (!this._dimensionUsage.members.includes(transaction.member)) {
-          this._dimensionUsage.members.push(transaction.member)
+        if (!this._dimensionUsage.value.members.includes(transaction.member)) {
+          this._dimensionUsage.value.members.push(transaction.member)
         }
       }
       if (transaction.merchant) {
-        if (!this._dimensionUsage.merchants.includes(transaction.merchant)) {
-          this._dimensionUsage.merchants.push(transaction.merchant)
+        if (!this._dimensionUsage.value.merchants.includes(transaction.merchant)) {
+          this._dimensionUsage.value.merchants.push(transaction.merchant)
         }
       }
       if (transaction.paymentChannel) {
-        if (!this._dimensionUsage.paymentChannels.includes(transaction.paymentChannel)) {
-          this._dimensionUsage.paymentChannels.push(transaction.paymentChannel)
+        if (!this._dimensionUsage.value.paymentChannels.includes(transaction.paymentChannel)) {
+          this._dimensionUsage.value.paymentChannels.push(transaction.paymentChannel)
         }
       }
       if (transaction.tags) {
         const tags = Array.isArray(transaction.tags) ? transaction.tags : [transaction.tag]
         for (const tag of tags) {
-          if (tag && !this._dimensionUsage.tags.includes(tag)) {
-            this._dimensionUsage.tags.push(tag)
+          if (tag && !this._dimensionUsage.value.tags.includes(tag)) {
+            this._dimensionUsage.value.tags.push(tag)
           }
         }
       }
@@ -1087,6 +1193,33 @@ class CoreDataStore {
    */
   getInvestmentValue(accountId) {
     return this.calculateInvestmentValue(accountId)
+  }
+
+  /**
+   * 更新投资账户资产
+   */
+  async updateInvestmentAccount(id, updates) {
+    // 禁止直接更新余额，由投资明细计算得出
+    delete updates.balance
+    
+    // 更新投资账户
+    const result = await this.update('investment_accounts', id, updates)
+    
+    // 同步更新关联账户的余额
+    const investmentAccount = this.find('investment_accounts', id)
+    if (investmentAccount && investmentAccount.linkedAccountId) {
+      // 计算投资账户总价值
+      const accountDetails = this.filter('investment_details', d => String(d.accountId) === String(id))
+      const totalValue = accountDetails.reduce((total, d) => total + (d.shares || 0) * (d.currentPrice || 0), 0)
+      
+      // 更新关联账户的余额
+      await this.update('accounts', investmentAccount.linkedAccountId, {
+        balance: totalValue
+      })
+    }
+    
+    console.log('[CoreDataStore] 更新投资账户资产:', id)
+    return result
   }
 
   /**
