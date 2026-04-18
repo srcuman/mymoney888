@@ -220,9 +220,12 @@ async function isDatabaseEmpty() {
        WHERE table_schema = 'public'`
     )
     client.release()
-    const tableCount = result.rows[0].table_count
+    const tableCount = parseInt(result.rows[0].table_count, 10)
     console.log(`当前表数量: ${tableCount}`)
-    return tableCount === 0
+    console.log(`tableCount类型: ${typeof tableCount}`)
+    const isEmpty = tableCount === 0
+    console.log(`isEmpty: ${isEmpty}`)
+    return isEmpty
   } catch (error) {
     console.error('检查数据库表数量失败:', error.message)
     // 出错时不假设数据库非空，而是重新抛出错误让调用方处理
