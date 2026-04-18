@@ -210,6 +210,80 @@ async function testConnection() {
   }
 }
 
+// 检查数据库是否为空
+async function isDatabaseEmpty() {
+  try {
+    const client = await pool.connect()
+    const result = await client.query(
+      `SELECT COUNT(*) as table_count 
+       FROM information_schema.tables 
+       WHERE table_schema = 'public'`
+    )
+    client.release()
+    const tableCount = result.rows[0].table_count
+    console.log(`当前表数量: ${tableCount}`)
+    return tableCount === 0
+  } catch (error) {
+    console.error('检查数据库表数量失败:', error.message)
+    return false
+  }
+}
+
+// 执行SQL文件
+async function executeSqlFile(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8')
+    const client = await pool.connect()
+    
+    try {
+      await client.query('BEGIN')
+      
+      // 分割SQL语句并执行
+      const statements = content
+        .split(';')
+        .map(stmt => stmt.trim())
+        .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'))
+      
+      for (const statement of statements) {
+        await client.query(statement)
+      }
+      
+      await client.query('COMMIT')
+      console.log(`✅ 成功执行SQL文件: ${filePath}`)
+      return true
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+  } catch (error) {
+    console.error(`❌ 执行SQL文件失败: ${filePath}`, error.message)
+    return false
+  }
+}
+
+// 初始化数据库
+async function initDatabase() {
+  try {
+    const isEmpty = await isDatabaseEmpty()
+    if (isEmpty) {
+      console.log('检测到数据库为空，开始自动初始化...')
+      const initSqlPath = path.join(__dirname, 'database', 'init-db.sql')
+      const success = await executeSqlFile(initSqlPath)
+      if (success) {
+        console.log('✅ 数据库初始化成功')
+      } else {
+        console.error('❌ 数据库初始化失败')
+      }
+    } else {
+      console.log('数据库已存在表，跳过初始化')
+    }
+  } catch (error) {
+    console.error('数据库初始化过程出错:', error.message)
+  }
+}
+
 // 初始化数据目录
 ensureDataDir()
 
@@ -1030,6 +1104,9 @@ async function startServer() {
   if (!dbConnected) {
     console.warn('⚠️  PostgreSQL 数据库连接失败，服务器将以离线模式启动')
     console.log('💡 提示: 可使用 /api/backup 从文件恢复数据')
+  } else {
+    // 自动初始化数据库
+    await initDatabase()
   }
   
   // 启动自动备份定时器
