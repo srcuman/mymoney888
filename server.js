@@ -242,13 +242,24 @@ async function executeSqlFile(filePath) {
     try {
       await client.query('BEGIN')
       
+      // 移除注释，只保留实际的SQL语句
+      let cleanContent = content
+      // 移除单行注释
+      cleanContent = cleanContent.replace(/--.*$/gm, '')
+      // 移除多行注释
+      cleanContent = cleanContent.replace(/\/\*[\s\S]*?\*\//g, '')
+      
       // 分割SQL语句并执行
-      const statements = content
+      const statements = cleanContent
         .split(';')
         .map(stmt => stmt.trim())
-        .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'))
+        .filter(stmt => stmt.length > 0)
       
-      for (const statement of statements) {
+      console.log(`📋 找到 ${statements.length} 条SQL语句`)
+      
+      for (let i = 0; i < statements.length; i++) {
+        const statement = statements[i]
+        console.log(`📋 执行第 ${i + 1} 条SQL语句`)
         await client.query(statement)
       }
       
