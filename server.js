@@ -266,11 +266,16 @@ async function executeSqlFile(filePath) {
 
 // 初始化数据库
 async function initDatabase() {
+  console.log('🔄 开始数据库初始化流程...')
   try {
+    console.log('📋 检查数据库是否为空...')
     const isEmpty = await isDatabaseEmpty()
+    console.log(`📋 数据库空状态检查结果: ${isEmpty}`)
+    
     if (isEmpty) {
-      console.log('检测到数据库为空，开始自动初始化...')
+      console.log('📋 检测到数据库为空，开始自动初始化...')
       const initSqlPath = path.join(__dirname, 'database', 'init-db.sql')
+      console.log(`📋 准备执行SQL文件: ${initSqlPath}`)
       const success = await executeSqlFile(initSqlPath)
       if (success) {
         console.log('✅ 数据库初始化成功')
@@ -278,13 +283,14 @@ async function initDatabase() {
         console.error('❌ 数据库初始化失败')
       }
     } else {
-      console.log('数据库已存在表，跳过初始化')
+      console.log('📋 数据库已存在表，跳过初始化')
     }
   } catch (error) {
-    console.error('数据库初始化过程出错:', error.message)
+    console.error('❌ 数据库初始化过程出错:', error.message)
     // 出错时不跳过初始化，而是尝试执行初始化脚本
-    console.log('尝试执行数据库初始化脚本...')
+    console.log('🔄 尝试执行数据库初始化脚本...')
     const initSqlPath = path.join(__dirname, 'database', 'init-db.sql')
+    console.log(`📋 准备执行SQL文件: ${initSqlPath}`)
     const success = await executeSqlFile(initSqlPath)
     if (success) {
       console.log('✅ 数据库初始化成功')
@@ -292,6 +298,7 @@ async function initDatabase() {
       console.error('❌ 数据库初始化失败')
     }
   }
+  console.log('🔄 数据库初始化流程完成')
 }
 
 // 初始化数据目录
@@ -1115,6 +1122,7 @@ async function startServer() {
     console.warn('⚠️  PostgreSQL 数据库连接失败，服务器将以离线模式启动')
     console.log('💡 提示: 可使用 /api/backup 从文件恢复数据')
   } else {
+    console.log('🔍 数据库连接成功，开始检查数据库状态...')
     // 自动初始化数据库
     await initDatabase()
   }
