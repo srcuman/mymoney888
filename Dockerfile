@@ -13,7 +13,7 @@ WORKDIR /app
 
 # 从gitee仓库拉取代码
 ARG GIT_REPO=https://gitee.com/srcuman/mymoney888.git
-ARG GIT_BRANCH=main
+ARG GIT_BRANCH=test
 RUN git clone --branch ${GIT_BRANCH} ${GIT_REPO} .
 
 # 设置npm镜像源
