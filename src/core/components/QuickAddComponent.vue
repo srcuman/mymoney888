@@ -100,6 +100,24 @@
       <label for="description" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">备注</label>
       <input type="text" id="description" v-model="transaction.description" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
     </div>
+    <!-- 分期交易选项 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <input type="checkbox" v-model="isInstallment" class="mr-2">
+          分期交易
+        </label>
+      </div>
+      <div v-if="isInstallment">
+        <label for="installmentTotal" class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">分期期数</label>
+        <select id="installmentTotal" v-model="installmentTotal" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:text-white">
+          <option value="3">3期</option>
+          <option value="6">6期</option>
+          <option value="12">12期</option>
+          <option value="24">24期</option>
+        </select>
+      </div>
+    </div>
     <div class="flex justify-end space-x-3">
       <button type="button" @click="$emit('close')" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 rounded-md text-sm font-medium">
         取消
@@ -139,6 +157,10 @@ const transaction = ref({
   paymentChannel: '',
   description: ''
 })
+
+// 分期交易相关
+const isInstallment = ref(false)
+const installmentTotal = ref(3)
 
 // 分类折叠状态
 const expandedCategories = ref([])
@@ -281,32 +303,76 @@ const handleSubmit = async () => {
     amount = parseFloat(transaction.value.amount) || 0
   }
   
-  const transactionData = {
-    id: props.initialData?.id || undefined,
-    type: transactionType.value,
-    amount: amount,
-    category_id: transaction.value.category || '',
-    account_id: transaction.value.account,
-    to_account_id: transactionType.value === 'transfer' ? transaction.value.toAccount : null,
-    member: transaction.value.member,
-    merchant: transaction.value.merchant,
-    tags: transaction.value.tags ? [transaction.value.tags] : [],
-    payment_channel: transaction.value.paymentChannel,
-    description: transaction.value.description,
-    date: new Date().toISOString().split('T')[0]
-  }
-  
-  try {
-    if (isEditMode.value) {
-      await coreDataStore.updateTransaction(transactionData.id, transactionData)
-    } else {
-      await coreDataStore.addTransaction(transactionData)
+  if (isInstallment.value && !isEditMode.value) {
+    // 处理分期交易
+    const installmentId = 'ins_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9)
+    const totalAmount = amount
+    const monthlyAmount = totalAmount / parseInt(installmentTotal.value)
+    
+    try {
+      // 创建多笔分期交易
+      for (let i = 1; i <= parseInt(installmentTotal.value); i++) {
+        // 计算每期的日期（每月同一天）
+        const date = new Date()
+        date.setMonth(date.getMonth() + i - 1)
+        const transactionDate = date.toISOString().split('T')[0]
+        
+        const installmentTransaction = {
+          type: transactionType.value,
+          amount: monthlyAmount,
+          category_id: transaction.value.category || '',
+          account_id: transaction.value.account,
+          to_account_id: transactionType.value === 'transfer' ? transaction.value.toAccount : null,
+          member: transaction.value.member,
+          merchant: transaction.value.merchant,
+          tags: transaction.value.tags ? [transaction.value.tags] : [],
+          payment_channel: transaction.value.paymentChannel,
+          description: `${transaction.value.description || ''} [${i}/${installmentTotal.value}期]`,
+          date: transactionDate,
+          isInstallment: true,
+          installmentId: installmentId,
+          installmentIndex: i,
+          installmentTotal: parseInt(installmentTotal.value),
+          totalAmount: totalAmount
+        }
+        
+        await coreDataStore.addTransaction(installmentTransaction)
+      }
+      
+      emit('close')
+    } catch (error) {
+      console.error('保存分期交易失败:', error)
+      alert('保存失败: ' + error.message)
+    }
+  } else {
+    // 处理普通交易
+    const transactionData = {
+      id: props.initialData?.id || undefined,
+      type: transactionType.value,
+      amount: amount,
+      category_id: transaction.value.category || '',
+      account_id: transaction.value.account,
+      to_account_id: transactionType.value === 'transfer' ? transaction.value.toAccount : null,
+      member: transaction.value.member,
+      merchant: transaction.value.merchant,
+      tags: transaction.value.tags ? [transaction.value.tags] : [],
+      payment_channel: transaction.value.paymentChannel,
+      description: transaction.value.description,
+      date: new Date().toISOString().split('T')[0]
     }
     
-    emit('close')
-  } catch (error) {
-    console.error('保存交易失败:', error)
-    alert('保存失败: ' + error.message)
+    try {
+      if (isEditMode.value) {
+        await coreDataStore.updateTransaction(transactionData.id, transactionData)
+      } else {
+        await coreDataStore.addTransaction(transactionData)
+      }
+      
+      emit('close')
+    } catch (error) {
+      console.error('保存交易失败:', error)
+      alert('保存失败: ' + error.message)
+    }
   }
 }
 

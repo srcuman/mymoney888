@@ -184,7 +184,7 @@ const currentPageTitle = computed(() => {
     '/investments': '投资管理',
     '/annual-review': '年度回顾'
   }
-  return pageTitles[route.path] || 'MyMoney888'
+  return pageTitles[route.path] || '发发 - 轻量级记账系统'
 })
 
 // 检查路由是否激活

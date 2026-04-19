@@ -249,20 +249,29 @@ const deleteCard = async (cardId) => {
 // 还款
 const payBill = async (bill) => {
   if (confirm(`确定要偿还 ${bill.cardName} 的账单吗？金额：¥${(bill.remainingAmount || 0).toFixed(2)}`)) {
+    // 获取信用卡信息
+    const card = creditCards.value.find(c => c.name === bill.cardName)
+    if (!card) return
+    
+    // 创建还款交易（使用转账类型）
+    await coreDataStore.addTransaction({
+      type: 'transfer',
+      amount: bill.remainingAmount || 0,
+      date: new Date().toISOString().split('T')[0],
+      fromAccount: 'default', // 默认为默认账户，实际应该让用户选择
+      toAccount: card.linkedAccountId,
+      isRepayment: true,
+      creditCard: card.id,
+      creditCardBillId: bill.id,
+      description: `偿还 ${bill.cardName} 账单`
+    })
+    
     // 更新账单状态
     await coreDataStore.update('credit_card_bills', bill.id, {
       paidAmount: bill.amount,
       remainingAmount: 0,
       status: 'paid'
     })
-    
-    // 更新信用卡可用额度（还款后可用额度增加）
-    const card = creditCards.value.find(c => c.name === bill.cardName)
-    if (card) {
-      await coreDataStore.update('credit_cards', card.id, {
-        availableCredit: (card.availableCredit || 0) + (bill.remainingAmount || 0)
-      })
-    }
     
     forceUpdate()
   }

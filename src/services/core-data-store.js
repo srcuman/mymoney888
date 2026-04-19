@@ -243,6 +243,12 @@ class CoreDataStore {
     // 提取维度使用情况
     this._extractDimensionUsage()
     
+    // 派发数据加载完成事件，通知所有监听者
+    window.dispatchEvent(new CustomEvent('dataLoaded'))
+    window.dispatchEvent(new CustomEvent('creditCardsUpdated'))
+    window.dispatchEvent(new CustomEvent('investmentAccountsUpdated'))
+    window.dispatchEvent(new CustomEvent('accountsUpdated'))
+    
     console.log(`[CoreDataStore] 交易: ${(this._data.value.transactions || []).length} 条`)
   }
   
@@ -323,62 +329,92 @@ class CoreDataStore {
   async _initDefaultData() {
     console.log('[CoreDataStore] 初始化预置数据...')
     
+    const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 9)
+    
     // 1. 初始化账户数据
     const defaultAccounts = [
       // 现金类
-      { id: '1001', name: '我的钱包', category: 'cash', currency: 'CNY', initialBalance: 0, description: '现金账户' },
+      { id: generateId(), name: '我的钱包', category: 'cash', currency: 'CNY', initialBalance: 0, description: '现金账户' },
       // 银行卡类
-      { id: '1002', name: '中国工商银行储蓄卡', category: 'bank', currency: 'CNY', initialBalance: 0, description: '工资卡' },
-      { id: '1003', name: '中国建设银行储蓄卡', category: 'bank', currency: 'CNY', initialBalance: 0, description: '日常消费卡' },
+      { id: generateId(), name: '中国工商银行储蓄卡', category: 'bank', currency: 'CNY', initialBalance: 0, description: '工资卡' },
+      { id: generateId(), name: '中国建设银行储蓄卡', category: 'bank', currency: 'CNY', initialBalance: 0, description: '日常消费卡' },
       // 支付宝类
-      { id: '1005', name: '支付宝', category: 'alipay', currency: 'CNY', initialBalance: 0, description: '支付宝余额' },
-      { id: '1006', name: '余额宝', category: 'alipay', currency: 'CNY', initialBalance: 0, description: '支付宝理财产品' },
+      { id: generateId(), name: '支付宝', category: 'alipay', currency: 'CNY', initialBalance: 0, description: '支付宝余额' },
+      { id: generateId(), name: '余额宝', category: 'alipay', currency: 'CNY', initialBalance: 0, description: '支付宝理财产品' },
       // 微信类
-      { id: '1007', name: '微信支付', category: 'wechat', currency: 'CNY', initialBalance: 0, description: '微信零钱' },
-      { id: '1008', name: '微信理财通', category: 'wechat', currency: 'CNY', initialBalance: 0, description: '微信理财' },
-      // 信用卡类
-      { id: '1009', name: '招商银行信用卡', category: 'credit_card', currency: 'CNY', initialBalance: 0, description: '主用信用卡' },
-      // 投资账户类
-      { id: '1011', name: '天天基金账户', category: 'investment', currency: 'CNY', initialBalance: 0, description: '基金投资账户' },
-      { id: '1012', name: '证券账户', category: 'investment', currency: 'CNY', initialBalance: 0, description: '股票投资账户' }
+      { id: generateId(), name: '微信支付', category: 'wechat', currency: 'CNY', initialBalance: 0, description: '微信零钱' },
+      { id: generateId(), name: '微信理财通', category: 'wechat', currency: 'CNY', initialBalance: 0, description: '微信理财' }
     ]
     
     for (const account of defaultAccounts) {
       await this.add('accounts', account)
     }
     
-    // 2. 初始化分类数据
+    // 2. 初始化分类数据（使用完整的收支分类）
     const defaultCategories = [
       // 支出分类（一级）
-      { id: '2001', name: '餐饮', type: 'expense', parentId: null },
-      { id: '2002', name: '购物', type: 'expense', parentId: null },
-      { id: '2003', name: '居住', type: 'expense', parentId: null },
-      { id: '2004', name: '交通', type: 'expense', parentId: null },
-      { id: '2005', name: '医疗', type: 'expense', parentId: null },
-      { id: '2006', name: '教育', type: 'expense', parentId: null },
-      { id: '2007', name: '娱乐', type: 'expense', parentId: null },
-      { id: '2008', name: '人情', type: 'expense', parentId: null },
-      { id: '2009', name: '金融', type: 'expense', parentId: null },
-      { id: '2010', name: '其他', type: 'expense', parentId: null },
-      // 支出分类（二级）
-      { id: '200101', name: '早午晚餐', type: 'expense', parentId: '2001' },
-      { id: '200102', name: '外卖', type: 'expense', parentId: '2001' },
-      { id: '200201', name: '服装鞋包', type: 'expense', parentId: '2002' },
-      { id: '200202', name: '日用百货', type: 'expense', parentId: '2002' },
-      { id: '200301', name: '房租', type: 'expense', parentId: '2003' },
-      { id: '200302', name: '房贷', type: 'expense', parentId: '2003' },
-      { id: '200401', name: '公共交通', type: 'expense', parentId: '2004' },
-      { id: '200402', name: '打车', type: 'expense', parentId: '2004' },
+      { id: generateId(), name: '餐饮', type: 'expense', icon: '🍜', parentId: null },
+      { id: generateId(), name: '交通出行', type: 'expense', icon: '🚗', parentId: null },
+      { id: generateId(), name: '购物', type: 'expense', icon: '🛒', parentId: null },
+      { id: generateId(), name: '日用服务', type: 'expense', icon: '🧹', parentId: null },
+      { id: generateId(), name: '娱乐', type: 'expense', icon: '🎮', parentId: null },
+      { id: generateId(), name: '运动健身', type: 'expense', icon: '💪', parentId: null },
+      { id: generateId(), name: '医疗健康', type: 'expense', icon: '🏥', parentId: null },
+      { id: generateId(), name: '教育', type: 'expense', icon: '📚', parentId: null },
+      { id: generateId(), name: '住房', type: 'expense', icon: '🏠', parentId: null },
+      { id: generateId(), name: '通讯', type: 'expense', icon: '📱', parentId: null },
+      { id: generateId(), name: '人情社交', type: 'expense', icon: '🎁', parentId: null },
+      { id: generateId(), name: '旅游', type: 'expense', icon: '✈️', parentId: null },
+      { id: generateId(), name: '宠物', type: 'expense', icon: '🐶', parentId: null },
+      { id: generateId(), name: '保险', type: 'expense', icon: '🛡️', parentId: null },
+      { id: generateId(), name: '投资理财', type: 'expense', icon: '📈', parentId: null },
+      { id: generateId(), name: '其他', type: 'expense', icon: '📝', parentId: null },
+      // 支出分类（二级）- 餐饮
+      { id: generateId(), name: '早餐', type: 'expense', parentId: null },
+      { id: generateId(), name: '午餐', type: 'expense', parentId: null },
+      { id: generateId(), name: '晚餐', type: 'expense', parentId: null },
+      { id: generateId(), name: '外卖', type: 'expense', parentId: null },
+      { id: generateId(), name: '夜宵', type: 'expense', parentId: null },
+      { id: generateId(), name: '零食', type: 'expense', parentId: null },
+      { id: generateId(), name: '水果', type: 'expense', parentId: null },
+      { id: generateId(), name: '饮料', type: 'expense', parentId: null },
+      // 支出分类（二级）- 交通出行
+      { id: generateId(), name: '公交', type: 'expense', parentId: null },
+      { id: generateId(), name: '地铁', type: 'expense', parentId: null },
+      { id: generateId(), name: '打车', type: 'expense', parentId: null },
+      { id: generateId(), name: '加油', type: 'expense', parentId: null },
+      { id: generateId(), name: '停车', type: 'expense', parentId: null },
+      { id: generateId(), name: '保养', type: 'expense', parentId: null },
+      // 支出分类（二级）- 购物
+      { id: generateId(), name: '服装鞋帽', type: 'expense', parentId: null },
+      { id: generateId(), name: '电子产品', type: 'expense', parentId: null },
+      { id: generateId(), name: '家居用品', type: 'expense', parentId: null },
+      { id: generateId(), name: '美妆护肤', type: 'expense', parentId: null },
+      { id: generateId(), name: '日用品', type: 'expense', parentId: null },
+      // 支出分类（二级）- 住房
+      { id: generateId(), name: '房租', type: 'expense', parentId: null },
+      { id: generateId(), name: '房贷', type: 'expense', parentId: null },
+      { id: generateId(), name: '水费', type: 'expense', parentId: null },
+      { id: generateId(), name: '电费', type: 'expense', parentId: null },
+      { id: generateId(), name: '燃气费', type: 'expense', parentId: null },
+      { id: generateId(), name: '物业费', type: 'expense', parentId: null },
       // 收入分类（一级）
-      { id: '3001', name: '工资', type: 'income', parentId: null },
-      { id: '3002', name: '经营', type: 'income', parentId: null },
-      { id: '3003', name: '投资', type: 'income', parentId: null },
-      { id: '3004', name: '其他收入', type: 'income', parentId: null },
+      { id: generateId(), name: '工资收入', type: 'income', icon: '💰', parentId: null },
+      { id: generateId(), name: '奖金外快', type: 'income', icon: '🎉', parentId: null },
+      { id: generateId(), name: '投资收入', type: 'income', icon: '📈', parentId: null },
+      { id: generateId(), name: '副业收入', type: 'income', icon: '💼', parentId: null },
+      { id: generateId(), name: '经营收入', type: 'income', icon: '🏪', parentId: null },
+      { id: generateId(), name: '礼金收入', type: 'income', icon: '🎁', parentId: null },
+      { id: generateId(), name: '退款回收', type: 'income', icon: '💵', parentId: null },
+      { id: generateId(), name: '其他收入', type: 'income', icon: '📝', parentId: null },
       // 收入分类（二级）
-      { id: '300101', name: '基本工资', type: 'income', parentId: '3001' },
-      { id: '300102', name: '奖金', type: 'income', parentId: '3001' },
-      { id: '300301', name: '基金收益', type: 'income', parentId: '3003' },
-      { id: '300302', name: '股票收益', type: 'income', parentId: '3003' }
+      { id: generateId(), name: '基本工资', type: 'income', parentId: null },
+      { id: generateId(), name: '绩效奖金', type: 'income', parentId: null },
+      { id: generateId(), name: '年终奖', type: 'income', parentId: null },
+      { id: generateId(), name: '股票收益', type: 'income', parentId: null },
+      { id: generateId(), name: '基金分红', type: 'income', parentId: null },
+      { id: generateId(), name: '理财收益', type: 'income', parentId: null },
+      { id: generateId(), name: '租金收入', type: 'income', parentId: null }
     ]
     
     for (const category of defaultCategories) {
@@ -396,10 +432,10 @@ class CoreDataStore {
     
     // 4. 初始化维度数据（成员、商家、标签、支付渠道）
     this._data.value.dimensions = {
-      members: ['我自己', '家人'],
-      merchants: [],
-      tags: ['重要', '日常'],
-      paymentChannels: ['现金', '支付宝', '微信', '银行卡']
+      members: ['我自己', '配偶', '父亲', '母亲', '孩子', '家庭共用'],
+      merchants: ['星巴克', '麦当劳', '肯德基', '美团外卖', '饿了么', '永辉超市', '天猫超市', '京东', '滴滴出行'],
+      tags: ['日常', '紧急', '计划内', '计划外', '重要'],
+      paymentChannels: ['现金', '支付宝', '微信支付', '银行卡', '信用卡', '云闪付']
     }
     // 保存维度数据
     await this._save('dimensions')
@@ -535,6 +571,11 @@ class CoreDataStore {
       this._updateDimensionUsage('add', item)
     }
 
+    // 派发数据变更事件，通知所有监听者
+    window.dispatchEvent(new CustomEvent('dataChanged', {
+      detail: { type: 'add', collection: key, id: item.id, data: item }
+    }))
+
     return item
   }
 
@@ -560,6 +601,11 @@ class CoreDataStore {
     // 更新引用表
     this._updateRef(key, id, data[index])
 
+    // 派发数据变更事件
+    window.dispatchEvent(new CustomEvent('dataChanged', {
+      detail: { type: 'update', collection: key, id, data: data[index] }
+    }))
+
     return data[index]
   }
 
@@ -583,6 +629,11 @@ class CoreDataStore {
     
     // 清理引用表
     this._clearRef(key, id)
+
+    // 派发数据变更事件
+    window.dispatchEvent(new CustomEvent('dataChanged', {
+      detail: { type: 'remove', collection: key, id }
+    }))
 
     return true
   }
@@ -742,6 +793,10 @@ class CoreDataStore {
       }
       // 信用卡还款（收入）减少已用额度
       if (t.type === 'income' && t.isRepayment && String(t.creditCardAccount) === String(accountId)) {
+        used -= t.amount || 0
+      }
+      // 信用卡还款（转账）减少已用额度
+      if (t.type === 'transfer' && t.isRepayment && String(t.toAccount) === String(accountId)) {
         used -= t.amount || 0
       }
     }
@@ -1354,6 +1409,10 @@ class CoreDataStore {
       }
       // 信用卡还款（收入）减少已用额度
       if (t.type === 'income' && t.isRepayment && String(t.creditCard) === String(cardId)) {
+        used -= t.amount || 0
+      }
+      // 信用卡还款（转账）减少已用额度
+      if (t.type === 'transfer' && t.isRepayment && String(t.toAccount) === String(cardId)) {
         used -= t.amount || 0
       }
     }

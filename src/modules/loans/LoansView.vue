@@ -241,6 +241,23 @@ const deleteLoan = async (loanId) => {
 // 还款
 const payRepayment = async (plan) => {
   if (confirm(`确定要偿还 ${plan.loanName} 的还款吗？金额：¥${(plan.remainingAmount || 0).toFixed(2)}`)) {
+    // 获取贷款信息
+    const loan = loans.value.find(l => l.name === plan.loanName)
+    if (!loan) return
+    
+    // 创建还款交易（使用转账类型）
+    await coreDataStore.addTransaction({
+      type: 'transfer',
+      amount: plan.remainingAmount || 0,
+      date: new Date().toISOString().split('T')[0],
+      fromAccount: 'default', // 默认为默认账户，实际应该让用户选择
+      toAccount: loan.id, // 贷款账户
+      isRepayment: true,
+      loanId: loan.id,
+      loanPaymentId: plan.id,
+      description: `偿还 ${plan.loanName} 贷款`
+    })
+    
     // 更新还款计划状态
     await coreDataStore.update('loan_payments', plan.id, {
       paidAmount: plan.amount,
@@ -249,7 +266,6 @@ const payRepayment = async (plan) => {
     })
     
     // 更新贷款剩余金额
-    const loan = loans.value.find(l => l.name === plan.loanName)
     if (loan) {
       await coreDataStore.update('loans', loan.id, {
         remainingAmount: Math.max(0, (loan.remainingAmount || 0) - (plan.remainingAmount || 0))
