@@ -5,10 +5,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        GIT_REPO: https://gitee.com/srcuman/mymoney888.git
-        GIT_BRANCH: main
-    # 从gitee仓库拉取代码构建，支持远程部署
     image: mymoney888:latest
     container_name: mymoney888
     ports:
