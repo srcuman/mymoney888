@@ -1,11 +1,5 @@
 #!/bin/sh
-
-# 升级命令脚本
-# 用于在Docker容器中执行应用升级
-
-echo "========================================="
-echo "MyMoney888 升级命令"
-echo "========================================="
-
-# 执行升级脚本
-/app/scripts/upgrade.sh
+cd /app
+git pull origin main
+npm install
+npm run build
