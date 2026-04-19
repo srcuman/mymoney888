@@ -447,17 +447,16 @@ class CoreDataStore {
    */
   _extractDimensionUsage() {
     const transactions = this._data.value.transactions || []
-    const storedDimensions = this._data.value.dimensions || { members: [], merchants: [], tags: [], paymentChannels: [] }
     
-    // 从已存储的维度数据初始化
+    // 只从交易中提取使用的维度
     const usage = {
-      members: new Set(storedDimensions.members || []),
-      merchants: new Set(storedDimensions.merchants || []),
-      tags: new Set(storedDimensions.tags || []),
-      paymentChannels: new Set(storedDimensions.paymentChannels || [])
+      members: new Set(),
+      merchants: new Set(),
+      tags: new Set(),
+      paymentChannels: new Set()
     }
     
-    // 从交易中提取使用的维度，合并到已存储的维度中
+    // 从交易中提取使用的维度
     for (const t of transactions) {
       if (t.member) usage.members.add(t.member)
       if (t.merchant) usage.merchants.add(t.merchant)
