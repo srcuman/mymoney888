@@ -2,11 +2,11 @@
 
 ## 问题分析
 
-当使用 `docker-compose-nosql.yml` 部署时，容器内部的 `localhost` 指的是容器本身，不是宿主机。因此，如果你在宿主机上运行MySQL服务，直接使用 `localhost` 会导致连接失败。
+当使用 `docker-compose-nosql.yml` 部署时，容器内部的 `localhost` 指的是容器本身，不是宿主机。因此，如果你在宿主机上运行PostgreSQL服务，直接使用 `localhost` 会导致连接失败。
 
 ## 数据库权限要求
 
-**重要**：项目不强制要求root权限，只需要以下权限的MySQL用户即可：
+**重要**：项目不强制要求root权限，只需要以下权限的PostgreSQL用户即可：
 
 - `CREATE DATABASE` - 创建数据库权限
 - `CREATE TABLE` - 创建表结构权限  
@@ -18,17 +18,17 @@
 ### 创建专用用户（推荐）
 
 ```sql
--- 登录MySQL
-mysql -u root -p
+-- 登录PostgreSQL
+psql -U postgres
 
 -- 创建专用数据库用户
-CREATE USER 'mymoney888'@'%' IDENTIFIED BY 'mymoney888';
+CREATE USER mymoney888 WITH PASSWORD 'mymoney888';
 
 -- 授予必要权限
-GRANT ALL PRIVILEGES ON mymoney888.* TO 'mymoney888'@'%';
+GRANT ALL PRIVILEGES ON DATABASE mymoney888 TO mymoney888;
 
--- 刷新权限
-FLUSH PRIVILEGES;
+-- 授予模式权限
+GRANT ALL PRIVILEGES ON SCHEMA public TO mymoney888;
 ```
 
 ### 使用现有用户
@@ -47,8 +47,8 @@ FLUSH PRIVILEGES;
    ```env
    # 数据库配置
    DB_HOST=192.168.1.100  # 替换为你的宿主机IP地址
-   DB_PORT=3306
-   DB_USER=root
+   DB_PORT=5432
+   DB_USER=postgres
    DB_PASSWORD=mymoney888
    DB_NAME=mymoney888
    ```
@@ -85,7 +85,7 @@ FLUSH PRIVILEGES;
 
 ```env
 DB_HOST=10.0.0.5  # 数据库服务器IP
-DB_PORT=3306
+DB_PORT=5432
 DB_USER=your-user
 DB_PASSWORD=your-password
 DB_NAME=mymoney888
@@ -114,11 +114,11 @@ DB_NAME=mymoney888
 在部署前，可以先测试数据库连接：
 
 ```bash
-# 测试MySQL连接
-mysql -h your-db-host -P 3306 -u root -p
+# 测试PostgreSQL连接
+psql -h your-db-host -p 5432 -U postgres
 
 # 测试数据库是否存在
-mysql -h your-db-host -P 3306 -u root -p -e "SHOW DATABASES LIKE 'mymoney888'"
+psql -h your-db-host -p 5432 -U postgres -c "SELECT datname FROM pg_database WHERE datname = 'mymoney888'"
 ```
 
 ## 日志查看

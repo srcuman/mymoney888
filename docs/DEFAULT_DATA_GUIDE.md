@@ -2,7 +2,7 @@
 
 ## 概述
 
-MyMoney888 提供开箱即用的预置数据，包括账户、分类、成员、商家、标签、支付渠道等基础数据。
+发发 提供开箱即用的预置数据，包括账户、分类、成员、商家、标签、支付渠道等基础数据。
 
 ## 核心理念
 
@@ -117,10 +117,10 @@ database/
 
 ```bash
 # 1. 执行数据库初始化
-mysql -u root -p < database/init-db.sql
+psql -U postgres -d mymoney888 -f database/init-db.sql
 
 # 2. 执行预置数据初始化
-mysql -u root -p < database/init-default-data.sql
+psql -U postgres -d mymoney888 -f database/init-default-data.sql
 ```
 
 #### 方式2: 仅初始化预置数据
@@ -225,8 +225,8 @@ SOURCE database/init-default-data.sql;
 ### 场景1: 从其他记账软件迁移
 
 1. 导出原软件数据
-2. 转换为 MyMoney888 格式
-3. 导入到 MySQL（使用 `INSERT IGNORE` 保留预置数据）
+2. 转换为 发发 格式
+3. 导入到 PostgreSQL（使用 `INSERT IGNORE` 保留预置数据）
 4. 用户数据 + 预置数据合并完成
 
 ### 场景2: 换手机/重装应用

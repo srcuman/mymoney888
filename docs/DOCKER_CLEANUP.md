@@ -9,11 +9,11 @@
 这是 **Docker Volumes 的设计特性**：
 
 1. **Docker Volumes 持久化数据**
-   - `docker-compose.yml` 中定义的数据卷 (`mysql_data`, `app_data`) 会持久化存储数据
+   - `docker-compose.yml` 中定义的数据卷 (`postgres_data`, `app_data`) 会持久化存储数据
    - 即使删除容器和镜像，Volumes 中的数据仍然保留
 
 2. **数据存储位置**
-   - MySQL 数据: Docker 管理的匿名/命名卷（位于 Docker 数据目录）
+   - PostgreSQL 数据: Docker 管理的匿名/命名卷（位于 Docker 数据目录）
    - 应用数据: `app_data` 命名卷（挂载到容器内的 `/data`）
 
 ## 解决方案
@@ -39,10 +39,10 @@ docker-compose up --build -d
 
 ### 方案二：选择性清理
 
-只清理 MySQL 数据（保留应用配置）:
+只清理 PostgreSQL 数据（保留应用配置）:
 ```bash
 docker-compose down
-docker volume rm mymoney888_mysql_data
+docker volume rm mymoney888_postgres_data
 docker-compose up -d
 ```
 

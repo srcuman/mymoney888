@@ -1,6 +1,6 @@
 # 数据存储架构设计
 
-## 版本：v3.9.0（数据为核心，标签化存储架构）
+## 版本：v4.0.0（数据为核心，标签化存储架构）
 
 ## 目录
 
@@ -221,7 +221,7 @@ latestValue = MAX(net_value_history where account_id = 'inv_xxx' order by date)
 │  │                                                                     │   │
 │  │   /api/datastore/save ────► DATA_DIR/ledgers/{ledgerId}/*.json      │   │
 │  │                                                                     │   │
-│  │   /api/sync ──────────────► MySQL (远程备份)                         │   │
+│  │   /api/sync ──────────────► PostgreSQL (远程备份)                   │   │
 │  │                                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
@@ -248,7 +248,7 @@ latestValue = MAX(net_value_history where account_id = 'inv_xxx' order by date)
         │                  │
         ▼                  ▼
 ┌───────────────────────────────────────┐
-│         MySQL (异步同步)               │
+│      PostgreSQL (异步同步)             │
 └───────────────────────────────────────┘
 ```
 
@@ -418,8 +418,8 @@ calculateLoanRemaining(loanId) {
 |------|------|------|
 | `/api/datastore/save` | POST | 保存数据到 DATA_DIR |
 | `/api/datastore/load` | GET | 从 DATA_DIR 加载数据 |
-| `/api/sync` | POST | 同步数据到 MySQL |
-| `/api/sync` | GET | 从 MySQL 获取数据 |
+| `/api/sync` | POST | 同步数据到 PostgreSQL |
+| `/api/sync` | GET | 从 PostgreSQL 获取数据 |
 | `/api/sync/all` | GET | 获取用户所有数据 |
 | `/api/backup` | POST | 手动备份到 JSON |
 | `/api/restore/:table` | POST | 从 JSON 恢复 |
