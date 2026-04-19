@@ -13,7 +13,7 @@ WORKDIR /app
 
 # 从gitee仓库拉取代码
 ARG GIT_REPO=https://gitee.com/srcuman/mymoney888.git
-ARG GIT_BRANCH=test
+ARG GIT_BRANCH=main
 RUN git clone --branch ${GIT_BRANCH} ${GIT_REPO} .
 
 # 设置npm镜像源
@@ -30,8 +30,26 @@ RUN npm install --verbose --no-fund --no-audit
 RUN echo "开始构建前端..."
 RUN npm run build --verbose
 
-# 设置脚本执行权限
-RUN chmod +x /app/scripts/start-app.sh /app/scripts/upgrade.sh /app/scripts/upgrade-command.sh
+# 设置脚本执行权限（如果scripts目录不存在则创建）
+RUN if [ ! -d /app/scripts ]; then mkdir -p /app/scripts; fi && \
+    if [ ! -f /app/scripts/start-app.sh ]; then \
+      echo '#!/bin/sh' > /app/scripts/start-app.sh && \
+      echo 'cd /app' >> /app/scripts/start-app.sh && \
+      echo 'node server.js' >> /app/scripts/start-app.sh; \
+    fi && \
+    if [ ! -f /app/scripts/upgrade.sh ]; then \
+      echo '#!/bin/sh' > /app/scripts/upgrade.sh && \
+      echo 'cd /app' >> /app/scripts/upgrade.sh && \
+      echo 'npm run build' >> /app/scripts/upgrade.sh; \
+    fi && \
+    if [ ! -f /app/scripts/upgrade-command.sh ]; then \
+      echo '#!/bin/sh' > /app/scripts/upgrade-command.sh && \
+      echo 'cd /app' >> /app/scripts/upgrade-command.sh && \
+      echo 'git pull origin main' >> /app/scripts/upgrade-command.sh && \
+      echo 'npm install' >> /app/scripts/upgrade-command.sh && \
+      echo 'npm run build' >> /app/scripts/upgrade-command.sh; \
+    fi && \
+    chmod +x /app/scripts/start-app.sh /app/scripts/upgrade.sh /app/scripts/upgrade-command.sh
 
 # 暴露8888端口
 EXPOSE 8888
