@@ -11,10 +11,8 @@ RUN apk add --no-cache bash git
 # 设置工作目录
 WORKDIR /app
 
-# 从gitee仓库拉取代码
-ARG GIT_REPO=https://gitee.com/srcuman/mymoney888.git
-ARG GIT_BRANCH=main
-RUN git clone --branch ${GIT_BRANCH} ${GIT_REPO} .
+# 从本地构建上下文复制代码
+COPY . .
 
 # 设置npm镜像源
 RUN npm config set registry https://registry.npmmirror.com
