@@ -683,19 +683,23 @@ class CoreDataStore {
     let balance = 0
     
     for (const t of transactions) {
-      if (t.type === 'income' && String(t.account) === String(accountId)) {
+      if (t.type === 'income' && String(t.account_id) === String(accountId)) {
         balance += t.amount || 0
-      } else if (t.type === 'expense' && String(t.account) === String(accountId)) {
+      } else if (t.type === 'expense' && String(t.account_id) === String(accountId)) {
         balance -= t.amount || 0
       } else if (t.type === 'transfer') {
-        // 转账：出账账户减少，到账账户增加
         if (String(t.fromAccount) === String(accountId)) {
           balance -= t.amount || 0
         }
-        if (String(t.toAccount) === String(accountId)) {
+        if (String(t.to_account_id) === String(accountId)) {
           balance += t.amount || 0
         }
       }
+    }
+    
+    const account = this.find('accounts', accountId)
+    if (account) {
+      balance += account.initialBalance || 0
     }
     
     return balance

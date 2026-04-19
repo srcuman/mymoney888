@@ -285,13 +285,13 @@ const handleSubmit = async () => {
     id: props.initialData?.id || undefined,
     type: transactionType.value,
     amount: amount,
-    category: transaction.value.category || '',
-    account: transaction.value.account,
-    toAccount: transactionType.value === 'transfer' ? transaction.value.toAccount : null,
+    category_id: transaction.value.category || '',
+    account_id: transaction.value.account,
+    to_account_id: transactionType.value === 'transfer' ? transaction.value.toAccount : null,
     member: transaction.value.member,
     merchant: transaction.value.merchant,
     tags: transaction.value.tags ? [transaction.value.tags] : [],
-    paymentChannel: transaction.value.paymentChannel,
+    payment_channel: transaction.value.paymentChannel,
     description: transaction.value.description,
     date: new Date().toISOString().split('T')[0]
   }

@@ -2,18 +2,22 @@
   <div class="space-y-8">
     <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
       <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">资产概览</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
+          <h3 class="text-sm font-medium text-blue-600 dark:text-blue-400">净资产</h3>
+          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ (totalAssets + totalLiabilities).toFixed(2) }}</p>
+        </div>
         <div class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
           <h3 class="text-sm font-medium text-blue-600 dark:text-blue-400">总资产</h3>
           <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ totalAssets.toFixed(2) }}</p>
         </div>
-        <div class="bg-green-50 dark:bg-green-900/30 p-4 rounded-lg">
-          <h3 class="text-sm font-medium text-green-600 dark:text-green-400">本月收入</h3>
-          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ monthlyIncome.toFixed(2) }}</p>
-        </div>
         <div class="bg-red-50 dark:bg-red-900/30 p-4 rounded-lg">
-          <h3 class="text-sm font-medium text-red-600 dark:text-red-400">本月支出</h3>
-          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ monthlyExpense.toFixed(2) }}</p>
+          <h3 class="text-sm font-medium text-red-600 dark:text-red-400">总负债</h3>
+          <p class="text-2xl font-bold text-red-600 dark:text-red-400">{{ totalLiabilities.toFixed(2) }}</p>
+        </div>
+        <div class="bg-green-50 dark:bg-green-900/30 p-4 rounded-lg">
+          <h3 class="text-sm font-medium text-green-600 dark:text-green-400">本月净收入</h3>
+          <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ (monthlyIncome - monthlyExpense).toFixed(2) }}</p>
         </div>
       </div>
       
@@ -94,13 +98,32 @@ const transactions = computed(() => {
   return coreDataStore.getRaw('transactions') || []
 })
 
-// 计算总资产（排除负债）
+// 计算总资产（包含负债，信用卡欠款为负）
 const totalAssets = computed(() => {
   const version = dataVersion.value
   void version
   return accounts.value
-    .filter(a => a.category !== 'credit_card' && a.category !== 'loan')
-    .reduce((total, account) => total + (account.balance || 0), 0)
+    .reduce((total, account) => {
+      let balance = account.balance || 0
+      // 信用卡显示为负债（已用额度为正，资产中显示为负）
+      if (account.category === 'credit_card') {
+        balance = -balance // 转为负数表示负债
+      }
+      return total + balance
+    }, 0)
+})
+
+// 计算总负债
+const totalLiabilities = computed(() => {
+  const version = dataVersion.value
+  void version
+  return accounts.value
+    .filter(a => a.category === 'credit_card' || a.category === 'loan')
+    .reduce((total, account) => {
+      let balance = account.balance || 0
+      // 信用卡/贷款余额为正（表示欠款），转为正数表示负债
+      return total + Math.abs(balance)
+    }, 0)
 })
 
 // 计算本月收入

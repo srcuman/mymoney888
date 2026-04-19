@@ -81,7 +81,10 @@
                 <div class="ml-4 grid grid-cols-2 md:grid-cols-4 gap-2">
                   <div v-for="child in getSubCategories(parent.id)" :key="child.id" class="flex items-center justify-between bg-gray-50 dark:bg-gray-600 p-2 rounded text-sm">
                     <span>{{ child.name }}</span>
-                    <button @click="deleteCategory(child.id)" class="text-red-500 hover:text-red-700">🗑️</button>
+                    <div>
+                      <button @click="openEditCategoryModal(child)" class="text-blue-500 hover:text-blue-700 mr-1">✏️</button>
+                      <button @click="deleteCategory(child.id)" class="text-red-500 hover:text-red-700">🗑️</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -96,7 +99,10 @@
                 <div class="ml-4 grid grid-cols-2 md:grid-cols-4 gap-2">
                   <div v-for="child in getSubCategories(parent.id)" :key="child.id" class="flex items-center justify-between bg-gray-50 dark:bg-gray-600 p-2 rounded text-sm">
                     <span>{{ child.name }}</span>
-                    <button @click="deleteCategory(child.id)" class="text-red-500 hover:text-red-700">🗑️</button>
+                    <div>
+                      <button @click="openEditCategoryModal(child)" class="text-blue-500 hover:text-blue-700 mr-1">✏️</button>
+                      <button @click="deleteCategory(child.id)" class="text-red-500 hover:text-red-700">🗑️</button>
+                    </div>
                   </div>
                 </div>
               </div>
