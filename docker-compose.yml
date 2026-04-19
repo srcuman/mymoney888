@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # 本地构建镜像，不依赖外部镜像库
     image: mymoney888:latest
     container_name: mymoney888
     ports:
