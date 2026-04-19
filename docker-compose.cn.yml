@@ -4,7 +4,7 @@ version: '3.8'
 services:
   mymoney888:
     build:
-      context: .
+      context: https://gitee.com/srcuman/mymoney888.git
       dockerfile: Dockerfile
     image: mymoney888:latest
     container_name: mymoney888
